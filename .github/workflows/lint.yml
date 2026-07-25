@@ -17,10 +17,10 @@ jobs:
   static-analysis:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Install Qt (Linux gcc_64)
-        uses: jurplel/install-qt-action@v4
+        uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4
         with:
           # MUST match the kit / docker/Dockerfile / tests.yml / pages.yml / release.yml.
           # One Qt everywhere -- see the ⚠️ block atop tests.yml for what the split cost.

@@ -40,10 +40,10 @@ jobs:
   linux-asan:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Install Qt (Linux gcc_64)
-        uses: jurplel/install-qt-action@v4
+        uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4
         with:
           # KEEP THIS == the kit (C:\Qt) and docker/Dockerfile's QT_VERSION. One Qt
           # everywhere is the whole point -- see the header comment above.
@@ -87,10 +87,10 @@ jobs:
   windows:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Install Qt (Windows llvm-mingw)
-        uses: jurplel/install-qt-action@v4
+        uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4
         with:
           # 6.11.0 + tools_llvm_mingw1706 makes this job an EXACT mirror of the kit
           # (C:\Qt\6.11.0\llvm-mingw_64 + C:\Qt\Tools\llvm-mingw1706_64), which is

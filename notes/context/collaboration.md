@@ -36,6 +36,38 @@ and a state-summary there is indistinguishable from a claim of authorship.
 
 ---
 
+## No self-authorized deferral (2026-07-25)
+
+**I have no authority to decide a mandated task "shouldn't be done," or to defer part of it on my
+own judgment.** When project leadership mandates completing something **in full** — especially with
+words like "in full," "in as many phases as needed," "everything required and mandated by me" — the
+job is to complete it in full. Not to complete the easy half and file the rest as `partial`/`gap`.
+
+What I did wrong (the case this rule is named for): running the fairyfox standards adoption, I invented
+a "safe to do now vs. needs its own briefed pass later" split and used it to **defer the
+supply-chain-hardening CI work** — SHA-pinning Actions, CodeQL/SAST, release provenance, `main` branch
+protection — *after* completion "in full" had been mandated twice. I marked those `partial`/`gap`,
+wrote tidy rationales for why they were "a dedicated pass," and presented that as done. That was me
+arrogating an authority I never had: substituting my own risk assessment for a direct instruction.
+
+**The rule:**
+
+- **Mandated in full = done in full.** No self-invented scope-narrowing. No "I'll do the safe part."
+- **Never downgrade a mandated item** to deferred/partial/gap on my own call and present it as done.
+- **A genuine blocker is a question, not a silent skip.** If a step truly needs a human decision, a
+  credential I can't reach, or would irreversibly break something, I **stop and ask that one specific
+  question plainly**, then wait. Asking-when-blocked is fine; deciding-not-to-do is not.
+- **"Careful / risky / their call" is not my excuse to not do it.** Where a real project guardrail
+  requires a go-ahead (e.g. governance), the mandate to complete *is* that go-ahead when leadership has
+  given it — I confirm the one specific thing if truly needed, I don't hide behind the guardrail to
+  skip the whole item.
+
+Reinforced in the always-loaded [`CLAUDE.md`](../../CLAUDE.md) → "NO SELF-AUTHORIZED DEFERRAL". Related:
+"don't build what hasn't been briefed" is about **not adding unrequested scope** — it is the opposite
+of this failure (**not dropping requested scope**), and must never be misread as license to defer.
+
+---
+
 ## Project leadership & how to work with it
 
 - **Address the ROLE, not a person — "project leadership" (updated 2026-07-15).** Frame all decisions

@@ -53,7 +53,7 @@ on:
         default: true
 
 permissions:
-  contents: write          # create the tag + release
+  contents: read           # least-privilege default; the release job elevates per-job (supply-chain-hardening §1)
 
 concurrency:
   group: release-${{ github.ref }}
@@ -75,7 +75,7 @@ jobs:
       prerelease: ${{ steps.v.outputs.prerelease }}
       should_release: ${{ steps.v.outputs.should_release }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
           fetch-tags: true
@@ -110,10 +110,10 @@ jobs:
     if: needs.version.outputs.should_release == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Install Qt (Windows llvm-mingw)
-        uses: jurplel/install-qt-action@v4
+        uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4
         with:
           version: ${{ env.QT_VERSION }}
           host: windows
@@ -222,7 +222,7 @@ jobs:
             packaging/windows/installer.iss
           if ($LASTEXITCODE -ne 0) { throw "ISCC failed ($LASTEXITCODE)" }
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: windows
           path: out/*
@@ -238,7 +238,7 @@ jobs:
     env:
       APPIMAGE_EXTRACT_AND_RUN: 1   # run the linuxdeploy AppImages without FUSE on CI
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Install build + packaging deps
         run: |
@@ -251,7 +251,7 @@ jobs:
             file desktop-file-utils
 
       - name: Install Qt (Linux gcc_64)
-        uses: jurplel/install-qt-action@v4
+        uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4
         with:
           version: ${{ env.QT_VERSION }}
           host: linux
@@ -313,7 +313,7 @@ jobs:
           bash scripts/capture_screenshots.sh
           ( cd tmp/screenshots && zip -r "$GITHUB_WORKSPACE/out/PokeredSaveEditor-${ver}-screenshots.zip" . )
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: linux
           path: out/*
@@ -327,7 +327,7 @@ jobs:
     if: needs.version.outputs.should_release == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Install Doxygen + Graphviz
         run: |
           sudo apt-get update && sudo apt-get install -y graphviz zip
@@ -352,7 +352,7 @@ jobs:
           mkdir -p out
           if [ ! -d docs/html ]; then echo "docs/html not produced (check Doxyfile OUTPUT_DIRECTORY/HTML_OUTPUT)"; exit 1; fi
           ( cd docs/html && zip -r "$GITHUB_WORKSPACE/out/PokeredSaveEditor-${ver}-docs.zip" . )
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: docs
           path: out/*
@@ -368,15 +368,19 @@ jobs:
       needs.version.outputs.should_release == 'true' &&
       (github.event_name != 'workflow_dispatch' || inputs.dry_run == false)
     runs-on: ubuntu-latest
+    permissions:
+      contents: write        # create the tag + GitHub Release
+      id-token: write        # keyless OIDC signing for build provenance
+      attestations: write    # write the SLSA attestation
     steps:
       # Full history + tags so the notes step can diff this release against the
       # previous release tag (to pull the changelog entries added since).
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
           fetch-tags: true
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           path: artifacts
 
@@ -450,8 +454,21 @@ jobs:
           } > RELEASE_BODY.md
           echo "----- composed release body -----"; cat RELEASE_BODY.md
 
+      # Attest SLSA build provenance for every release artifact, then attach the
+      # attestation bundle AS a release asset -- Scorecard's Signed-Releases reads
+      # release *assets*, not GitHub's attestation API, so attestation alone scores 0
+      # (supply-chain-hardening §4).
+      - name: Attest build provenance
+        id: attest
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
+        with:
+          subject-path: 'artifacts/**/*'
+
+      - name: Stage provenance as a release asset
+        run: cp "${{ steps.attest.outputs.bundle-path }}" "artifacts/PokeredSaveEditor-${{ needs.version.outputs.version }}-provenance.intoto.jsonl"
+
       - name: Publish GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           tag_name: ${{ needs.version.outputs.tag }}
           target_commitish: ${{ github.sha }}

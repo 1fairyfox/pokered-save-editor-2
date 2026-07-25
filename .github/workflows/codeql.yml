@@ -1,0 +1,66 @@
+name: codeql
+
+# SAST — CodeQL static analysis for the C++ codebase (fairyfox supply-chain-hardening §8:
+# "SAST outlives toolchain bumps"). Uses a MANUAL build that mirrors the Linux app build in
+# release.yml / pages.yml so the extractor traces real compilation. Qt is pinned to the kit
+# version everywhere — if you bump the kit, bump QT_VERSION here too (see tests.yml ⚠ block).
+#
+# A failing/absent SAST on a release is a blocker, not a deferrable — this job is one of the
+# required-status-check contexts on `main`.
+
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: "27 3 * * 1"   # weekly — keeps the analysis + Scorecard signal fresh
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # MUST match the kit / docker/Dockerfile / tests.yml / lint.yml / pages.yml / release.yml.
+  QT_VERSION: "6.11.0"
+
+jobs:
+  analyze:
+    name: CodeQL
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+      security-events: write   # upload the SARIF analysis results
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Install build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential ninja-build \
+            libgl1-mesa-dev libegl1-mesa-dev libxkbcommon-dev
+
+      - name: Install Qt (Linux gcc_64)
+        uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          host: linux
+          target: desktop
+          arch: linux_gcc_64
+          modules: qtcharts qtmultimedia qtshadertools
+          cache: true
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@4187e74d05793876e9989daffde9c3e66b4acd07 # v3
+        with:
+          languages: c-cpp
+          build-mode: manual
+
+      - name: Build (manual — the real app compilation the extractor traces)
+        run: |
+          cmake -S projects -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build -j --target PokeredSaveEditor
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@4187e74d05793876e9989daffde9c3e66b4acd07 # v3
+        with:
+          category: "/language:c-cpp"
