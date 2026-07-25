@@ -78,10 +78,11 @@ supply-chain (SHA-pin/CodeQL/provenance/Scorecard/**branch protection**),
 engineering-quality/ship-contract, testing (coverage floor gate), mandate-ledger, and
 maintenance-sweep are all `implemented`. **Nothing is deferred.**
 
-**In flight (verify green — not a gap, a confirmation):**
+**Status of the new CI:**
 
-- The new **`codeql.yml`** (and `scorecard.yml`) run on push — confirm the first CodeQL run is
-  green; if the C++ build needs a tweak, that is a fix to finish, not a re-open.
+- **`codeql.yml` is CONFIRMED GREEN** (success on commits `1645202`/`beab224`/`6164e6c`) — the C++
+  manual-build SAST works. `scorecard.yml` runs on `main` push + weekly (not `dev`), so it reports
+  from the next `main` push.
 - **dev CI is currently red from PRE-EXISTING map-states WIP** (`tst_map_states` build +
   3 clang-tidy findings), not this adoption — see the `testing` row. It clears when that WIP
   lands. Because `main` now requires `linux-asan`/`windows`/`static-analysis`/`CodeQL` green,
