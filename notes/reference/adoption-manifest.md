@@ -48,7 +48,7 @@ project's kind — say why).
 | planning | implemented | 1.6.0 / 2d614f0 | 2026-07-25 pass | phase-by-default is a hard `CLAUDE.md` rule; [`notes/plans/`](../plans/next-steps.md) |
 | docs-site | implemented | 1.6.0 / 2d614f0 | 2026-07-25 pass | Doxygen + vendored shared-chrome bundle **2.3.0**; [`documentation.md`](documentation.md), [`deployment.md`](deployment.md) |
 | deployment | implemented | 1.6.0 / 2d614f0 | 2026-07-25 pass | `.github/workflows/release.yml` + `pages.yml`; [`deployment.md`](deployment.md) |
-| testing | implemented | 1.6.1 / 2d614f0 | 2026-07-25 | Docker ASan/UBSan/coverage (~90% line); **a coverage-floor gate is now wired into the coverage build** (`docker/run-tests.sh` → `COVERAGE_FLOOR`); [`plans/testing.md`](../plans/testing.md). ⚠️ **dev CI is currently RED — pre-existing, not this adoption:** `tst_map_states` fails to build (***Not Run) and 3 clang-tidy findings (`mapmodel_states.cpp:376/388`, `abstracthiddenitemdb.cpp:78`) — all in the map-states/hidden-item code that has **active uncommitted WIP**. Left untouched (editing would clobber the WIP). Returns to green when that WIP lands/fixes it. |
+| testing | implemented | 1.6.1 / 2d614f0 | 2026-07-25 (CI green) | Docker ASan/UBSan/coverage (~90% line); **a coverage-floor gate is now wired into the coverage build** (`docker/run-tests.sh` → `COVERAGE_FLOOR`); [`plans/testing.md`](../plans/testing.md). **dev CI is GREEN** (`6ac96ec`: tests + lint + CodeQL all success). The prior red was a pre-existing `tests_all` registration bug (`tst_map_states`/`tst_player` not built by CI) + 3 clang-tidy findings — all now fixed. |
 | engineering-quality | implemented | 1.6.1 / 2d614f0 | 2026-07-25 | no-hacks/craftsmanship/doc-comments/source-fidelity enforced in practice + `CLAUDE.md`; the ship-contract Scorecard is now measured objectively by `scorecard.yml` (OpenSSF Scorecard, ≥7.0 target — solo ceiling ~8) |
 | ship-contract | implemented | 1.6.1 / 2d614f0 | 2026-07-25 | `scorecard.yml` publishes the OpenSSF score read before ship; the pre-release manifest gate + full-CI-before-`main` enforce the rest |
 | ci-secrets | implemented | 1.6.1 / 2d614f0 | 2026-07-25 | Scorecard runs with `GITHUB_TOKEN`+OIDC (no `SCORECARD_TOKEN` needed for a public repo); no Sonar/Codecov wired → those tokens correctly absent (clean, no unknown secret) |
@@ -78,12 +78,9 @@ supply-chain (SHA-pin/CodeQL/provenance/Scorecard/**branch protection**),
 engineering-quality/ship-contract, testing (coverage floor gate), mandate-ledger, and
 maintenance-sweep are all `implemented`. **Nothing is deferred.**
 
-**Status of the new CI:**
+**Status of the new CI:** all green.
 
-- **`codeql.yml` is CONFIRMED GREEN** (success on commits `1645202`/`beab224`/`6164e6c`) — the C++
-  manual-build SAST works. `scorecard.yml` runs on `main` push + weekly (not `dev`), so it reports
-  from the next `main` push.
-- **dev CI is currently red from PRE-EXISTING map-states WIP** (`tst_map_states` build +
-  3 clang-tidy findings), not this adoption — see the `testing` row. It clears when that WIP
-  lands. Because `main` now requires `linux-asan`/`windows`/`static-analysis`/`CodeQL` green,
-  the next release PR will correctly wait on that — which is the gate working as intended.
+- **dev CI is GREEN** on `6ac96ec`: `tests` (linux-asan + windows), `lint` (static-analysis),
+  and `CodeQL` all **success**. The C++ manual-build SAST works; the prior red (a `tests_all`
+  registration bug that left `tst_map_states`/`tst_player` unbuilt in CI, plus 3 clang-tidy findings)
+  is fixed and verified via the exact CI build path. `scorecard.yml` runs on `main` push + weekly.

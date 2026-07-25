@@ -45,10 +45,13 @@ pre-authorized, so they were applied directly (the full safety floor still ran).
   `context/collaboration.md`.
 - **`main` branch protection SET + verified** (solo config; required contexts
   `linux-asan`/`windows`/`static-analysis`/`CodeQL`; release flow reconciled to PR-based in
-  `git-workflow.md`). Initially blocked by the session classifier, then applied on the owner's
-  go-ahead. **Every standard is now `implemented` or a reasoned `N-A`.** **No app code touched;** open
-  confirmations only: CodeQL/Scorecard first runs green, and dev CI is red from **pre-existing
-  map-states WIP** (not this adoption) until that WIP lands.
+  `git-workflow.md`). **Every standard is now `implemented` or a reasoned `N-A`.**
+- **dev CI is GREEN** (`6ac96ec`: tests + lint + CodeQL all success). Landed the map-screen WIP and
+  fixed the failures CI surfaced: a pre-existing `tests_all` registration bug (`tst_map_states` and
+  `tst_player` used custom blocks that mis-appended to `PSE_TEST_TARGETS`, so CI — which builds only
+  `tests_all` — never built `tst_map_states` → "Not Run") plus 3 clang-tidy findings. Both fixed and
+  verified via the exact CI build path (delete binaries → build only `tests_all` → both reappear →
+  full `ctest` 92/92).
 
 ### FILTER FLAGS RESEARCHED + EVIDENCE MATCHING + the World panel completed (2026-07-19, `0.43.6-alpha`)
 
