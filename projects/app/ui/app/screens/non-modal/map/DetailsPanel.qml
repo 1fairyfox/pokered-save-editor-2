@@ -1,5 +1,5 @@
 /*
-  * Copyright 2026 Twilight
+  * Copyright 2026 Fairy Fox
   *
   * Licensed under the Apache License, Version 2.0 (the "License");
   * you may not use this file except in compliance with the License.
@@ -25,7 +25,7 @@
  * clickable); warps, signs and connections join them later, on the same machinery.
  *
  * ⚠️ **REBUILT 2026-07-13.** The first cut was a list of raw byte boxes under headings called Who,
- * Where and When, and Twilight took it apart -- rightly. What changed, and why, is written up in
+ * Where and When, and project leadership took it apart -- rightly. What changed, and why, is written up in
  * MapModel::npcFields (the schema) and SpriteField.qml (the controls). The short version:
  *
  *   * every field declares a **kind**, and the kind picks the control -- a picture is a grid of
@@ -116,9 +116,240 @@ Item {
   readonly property bool connRawEditable: details.connBreakSync
                                         || (details.hasConnection && details.connEdge.synced === false)
 
+  /// The selected SCRIPT TRIGGER's storage-spot index, or -1. One selection at a time (canvas-
+  /// enforced), so it can never be true alongside a sprite / door / sign / connection.
+  readonly property int scriptSpot: canvas ? canvas.selectedScript : -1
+  readonly property bool hasScript: scriptSpot >= 0
+
+  readonly property var scriptData: {
+    details.revision;
+    return details.hasScript ? brg.map.scriptSpotAt(details.scriptSpot) : ({});
+  }
+
+  // ── The BLOCK inspector — every spot on a clicked block, editable inline ──────────────────────
+  //
+  // Clicking a block on the map selects it; this panel then lists everything filed there (the same
+  // spots the canvas tabs draw, uncapped) and lets you change the simple ones — event flags, filter
+  // flags, hidden pickups — right here, with an "open"/"edit" for the ones that have their own
+  // editor. Project leadership, 2026-07-19. @see MapCanvas.selectedBlockSpots
+  readonly property bool hasBlock: canvas ? canvas.hasSelectedBlock : false
+  readonly property var blockSpots: {
+    details.revision; details.worldTick;
+    return details.hasBlock && canvas ? canvas.selectedBlockSpots : [];
+  }
+
+  // The world's flag stores, reached the same way the World panel reaches them. `worldTick` re-reads
+  // a toggle's live value after WE flip it (external edits refresh on the next revision bump).
+  property int worldTick: 0
+  readonly property var worldEvents: (brg.file && brg.file.data && brg.file.data.dataExpanded
+                                      && brg.file.data.dataExpanded.world)
+                                     ? brg.file.data.dataExpanded.world.events : null
+  readonly property var worldMissables: (brg.file && brg.file.data && brg.file.data.dataExpanded
+                                         && brg.file.data.dataExpanded.world)
+                                        ? brg.file.data.dataExpanded.world.missables : null
+  readonly property var worldHidden: (brg.file && brg.file.data && brg.file.data.dataExpanded
+                                      && brg.file.data.dataExpanded.world)
+                                     ? brg.file.data.dataExpanded.world.hidden : null
+
+  /// A small two-state chip for the block inspector's inline flag edits — tap to flip.
+  component FlagChip: Rectangle {
+    id: chip
+    property bool on: false
+    property string onText: "ON"
+    property string offText: "OFF"
+    property color onColor: "#33a866"
+    signal toggled()
+
+    implicitWidth: chipText.implicitWidth + 16
+    implicitHeight: 20
+    radius: 4
+    color: chip.on ? chip.onColor : "#9aa0a6"
+
+    Text {
+      id: chipText
+      anchors.centerIn: parent
+      text: chip.on ? chip.onText : chip.offText
+      font.pixelSize: 9
+      font.bold: true
+      color: "#ffffff"
+    }
+
+    HoverHandler { cursorShape: Qt.PointingHandCursor }
+    TapHandler { onTapped: chip.toggled() }
+  }
+
+  // ── The block inspector's layer grouping (project leadership, 2026-07-19) ───────────────────────────────
+  //
+  // Spots are grouped by their LAYER, in layer order; ENABLED layers show, HIDDEN layers tuck behind
+  // a "more" link. Each spot's layer + on-state comes from brg.mapLayers (the Layers panel's truth).
+
+  function spotLayerOn(s) {
+    switch (s.kind) {
+      case "player":     return brg.mapLayers.showPlayer;
+      case "sprite":     return brg.mapLayers.showNpcs;
+      case "warp":       return brg.mapLayers.showWarps;
+      case "sign":       return brg.mapLayers.showSigns;
+      case "filterFlag": return brg.mapLayers.showFlagBoxes;
+      case "eventFlag":  return brg.mapLayers.showEventFlags;
+      case "script":
+      case "cardKeyDoor":return brg.mapLayers.showScripts;
+      case "hiddenItem":
+      case "hiddenCoin": return brg.mapLayers.showHiddenPickups;
+      case "tileTrait":  return (brg.map.layers & s.ind) !== 0;
+    }
+    return true;
+  }
+
+  function spotLayerName(s) {
+    switch (s.kind) {
+      case "player":     return qsTr("Player");
+      case "sprite":     return qsTr("People");
+      case "warp":       return qsTr("Warps");
+      case "sign":       return qsTr("Signs");
+      case "filterFlag": return qsTr("Filter flags");
+      case "eventFlag":  return qsTr("Event flags");
+      case "script":
+      case "cardKeyDoor":return qsTr("Scripts");
+      case "hiddenItem":
+      case "hiddenCoin": return qsTr("Hidden pickups");
+      case "tileTrait":  return s.section === "wild" ? qsTr("Wild Pokémon") : qsTr("Tiles");
+    }
+    return qsTr("Other");
+  }
+
+  // The Layers panel's order (Objects, then the Meaning family, then Tiles).
+  function spotLayerOrder(s) {
+    const order = { "player": 0, "sprite": 1, "warp": 2, "sign": 3,
+                    "filterFlag": 4, "eventFlag": 5, "script": 6, "cardKeyDoor": 6,
+                    "hiddenItem": 7, "hiddenCoin": 7, "tileTrait": 8 };
+    return order[s.kind] !== undefined ? order[s.kind] : 9;
+  }
+
+  /// The selected block's spots, grouped by layer name, each group carrying its on-state + order.
+  readonly property var blockGroups: {
+    details.worldTick;
+    const spots = details.blockSpots || [];
+    const by = {};
+    for (let i = 0; i < spots.length; i++) {
+      const s = spots[i];
+      const name = details.spotLayerName(s);
+      if (by[name] === undefined)
+        by[name] = { name: name, on: details.spotLayerOn(s), order: details.spotLayerOrder(s), spots: [] };
+      by[name].spots.push(s);
+    }
+    const arr = [];
+    for (const k in by)
+      arr.push(by[k]);
+    arr.sort((a, b) => a.order - b.order);
+    return arr;
+  }
+  readonly property var blockGroupsShown: (details.blockGroups || []).filter(g => g.on);
+  readonly property var blockGroupsHidden: (details.blockGroups || []).filter(g => !g.on);
+  readonly property int blockHiddenCount: {
+    let n = 0;
+    const g = details.blockGroupsHidden || [];
+    for (let i = 0; i < g.length; i++) n += g[i].spots.length;
+    return n;
+  }
+
+  /// Whether the hidden-layer groups are expanded (the "more" link). Reset per block.
+  property bool blockShowHidden: false
+  onHasBlockChanged: details.blockShowHidden = false
+
+  /// One row of the block inspector — a spot with its inline flag chip / Open button.
+  component BlockSpotRow: RowLayout {
+    id: bsr
+    property var spot: ({})
+    Layout.fillWidth: true
+    Layout.topMargin: 1
+    spacing: 6
+
+    Rectangle {
+      Layout.preferredWidth: 9
+      Layout.preferredHeight: 9
+      radius: 4.5
+      color: bsr.spot.ink !== undefined ? bsr.spot.ink : brg.settings.dividerColor
+    }
+
+    Label {
+      Layout.fillWidth: true
+      text: bsr.spot.name !== undefined ? bsr.spot.name : qsTr("(spot)")
+      font.pixelSize: 11
+      color: brg.settings.textColorDark
+      wrapMode: Text.Wrap
+    }
+
+    FlagChip {
+      visible: bsr.spot.kind === "eventFlag" && details.worldEvents !== null
+      on: { details.worldTick; return details.worldEvents ? details.worldEvents.eventsAt(bsr.spot.ind) : false }
+      onText: qsTr("ON"); offText: qsTr("OFF")
+      onToggled: {
+        if (!details.worldEvents) return;
+        details.worldEvents.eventsSet(bsr.spot.ind, !details.worldEvents.eventsAt(bsr.spot.ind));
+        details.worldTick++;
+      }
+    }
+
+    FlagChip {
+      visible: bsr.spot.kind === "filterFlag" && details.worldMissables !== null
+      on: { details.worldTick; return details.worldMissables ? !details.worldMissables.missablesAt(bsr.spot.ind) : false }
+      onText: qsTr("SHOWN"); offText: qsTr("HIDDEN"); onColor: "#0072b2"
+      onToggled: {
+        if (!details.worldMissables) return;
+        details.worldMissables.missablesSet(bsr.spot.ind, !details.worldMissables.missablesAt(bsr.spot.ind));
+        details.worldTick++;
+      }
+    }
+
+    FlagChip {
+      visible: bsr.spot.kind === "hiddenItem" && details.worldHidden !== null
+      on: { details.worldTick; return details.worldHidden ? details.worldHidden.hItemsAt(bsr.spot.ind) : false }
+      onText: qsTr("GOT"); offText: qsTr("THERE"); onColor: "#9aa0a6"
+      onToggled: {
+        if (!details.worldHidden) return;
+        details.worldHidden.hItemsSet(bsr.spot.ind, !details.worldHidden.hItemsAt(bsr.spot.ind));
+        details.worldTick++;
+      }
+    }
+
+    FlagChip {
+      visible: bsr.spot.kind === "hiddenCoin" && details.worldHidden !== null
+      on: { details.worldTick; return details.worldHidden ? details.worldHidden.hCoinsAt(bsr.spot.ind) : false }
+      onText: qsTr("GOT"); offText: qsTr("THERE"); onColor: "#9aa0a6"
+      onToggled: {
+        if (!details.worldHidden) return;
+        details.worldHidden.hCoinsSet(bsr.spot.ind, !details.worldHidden.hCoinsAt(bsr.spot.ind));
+        details.worldTick++;
+      }
+    }
+
+    Button {
+      visible: bsr.spot.kind === "sprite" || bsr.spot.kind === "player"
+               || bsr.spot.kind === "warp" || bsr.spot.kind === "sign"
+               || bsr.spot.kind === "script" || bsr.spot.kind === "cardKeyDoor"
+      flat: true
+      font.pixelSize: 10
+      text: qsTr("Open")
+      onClicked: {
+        if (!details.canvas) return;
+        if (bsr.spot.kind === "script" || bsr.spot.kind === "cardKeyDoor")
+          details.canvas.selectedScript = bsr.spot.ind;
+        else
+          details.canvas.selectSpot(bsr.spot.kind, bsr.spot.ind);
+      }
+    }
+
+    Label {
+      visible: bsr.spot.kind === "tileTrait"
+      text: bsr.spot.section === "wild" ? qsTr("wild") : qsTr("tile")
+      font.pixelSize: 9
+      opacity: 0.5
+    }
+  }
+
   // (The map's warp STATE lives in its own right-dock panel -- @see WarpStatePanel.qml.)
 
-  /// The player is slot 0. He is selectable and draggable like anybody else (Twilight, 2026-07-13),
+  /// The player is slot 0. He is selectable and draggable like anybody else (project leadership, 2026-07-13),
   /// but he has no NPC record -- his bytes live in the save's player block, not the sprite table --
   /// so he gets his own short list rather than an empty one.
   readonly property bool hasPlayer: slot === 0
@@ -167,7 +398,7 @@ Item {
   }
 
   // ⚠️ These strings must match MapModel::npcFields' group names EXACTLY -- they are what the rows
-  // are filtered by. (Was Who / Where / When, which Twilight called "really really dumb", and she is
+  // are filtered by. (Was Who / Where / When, which project leadership called "really really dumb", and she is
   // right: they told you nothing about what was under them.)
   readonly property var groupOrder: ["Character", "Where", "Movement", "Talking to it",
                                      "Right now", "The drawing"]
@@ -209,7 +440,7 @@ Item {
         Layout.margins: 10
         spacing: 6
         visible: !details.hasSprite && !details.hasPlayer && !details.hasDoor && !details.hasSign
-                 && !details.hasConnection
+                 && !details.hasConnection && !details.hasScript && !details.hasBlock
 
         Label {
           text: brg.map.mapName
@@ -300,9 +531,9 @@ Item {
           // ── The PROGRESSION STATE — the researched stages of this map's story ────────────────
           //
           // Fed by the map-state blueprints (notes/reference/map-states.md): resting stages read
-          // "1. First ambush armed", genuine branches "2a."/"2b.", and the transient cutscene
-          // values are SHOWN too (leadership: "if it's a valid option it needs to be shown"),
-          // flagged as mid-cutscene. Picking one applies the stage's WHOLE save block (script
+          // "1. First ambush armed", genuine branches "2a."/"2b.". Cutscene (transient) values are
+          // NOT listed here (leadership, 2026-07-19: "remove cutscenes from the map state"); the raw
+          // step controls below still reach any script byte. Picking one applies the stage's WHOLE save block (script
           // byte + events + this map's missables + badges); ◀ ▶ roll one stage at a time.
           Label {
             Layout.fillWidth: true
@@ -341,8 +572,7 @@ Item {
                                desc: s.desc, kind: s.kind });
                     continue;
                   }
-                  const tag = s.kind === "transient" ? qsTr(" (mid-cutscene)")
-                            : s.derived ? qsTr(" (derived)") : "";
+                  const tag = s.derived ? qsTr(" (derived)") : "";
                   out.push({ id: s.id, label: s.id + ". " + s.name + tag,
                              desc: s.desc, kind: s.kind });
                 }
@@ -369,7 +599,7 @@ Item {
                     Layout.fillWidth: true
                     text: modelData.label
                     font.pixelSize: 12
-                    font.italic: modelData.kind === "transient" || modelData.kind === "step"
+                    font.italic: modelData.kind === "step"
                     color: brg.settings.textColorDark
                     elide: Text.ElideRight
                   }
@@ -740,11 +970,165 @@ Item {
         }
 
         // (⇄ WARP STATE used to be appended here, at the bottom of the map's own details. It is now
-        //  its OWN PANEL, in the RIGHT dock -- which is where Twilight asked for it (2026-07-14: "I
+        //  its OWN PANEL, in the RIGHT dock -- which is where project leadership asked for it (2026-07-14: "I
         //  will place them in the right panel as warp state") and which is simply better: down here
         //  it sat below the fold, behind a scroll past six rows of map facts. The right dock is
         //  where the things you edit ABOUT THE MAP live; the Details panel is for what is SELECTED.
         //  @see WarpStatePanel.qml)
+      }
+
+      // ══ ▦ A BLOCK SELECTED — the block inspector ═══════════════════════════════════════════
+      //
+      // Everything filed on the clicked block, in one list, editable inline where it is a simple
+      // value (project leadership, 2026-07-19: *"clicking a block automatically brings up all the details …
+      // instead of taking you to event flags why not offer to still take you there but change it
+      // directly there"*). Flags flip right here; objects and scripts get an Edit/Open that selects
+      // them into their own editor above.
+      ColumnLayout {
+        Layout.fillWidth: true
+        Layout.margins: 10
+        spacing: 8
+        visible: details.hasBlock
+
+        RowLayout {
+          Layout.fillWidth: true
+          spacing: 8
+
+          Rectangle {
+            Layout.preferredWidth: 30
+            Layout.preferredHeight: 30
+            radius: 4
+            color: "transparent"
+            border.width: 2
+            border.color: brg.settings.dividerColor
+            Text { anchors.centerIn: parent; text: "▦"; font.pixelSize: 15; color: brg.settings.textColorMid }
+          }
+
+          ColumnLayout {
+            Layout.fillWidth: true
+            spacing: 0
+            Label {
+              Layout.fillWidth: true
+              text: qsTr("Block")
+              font.bold: true
+              font.pixelSize: 14
+              elide: Text.ElideRight
+            }
+            Label {
+              Layout.fillWidth: true
+              text: (details.canvas && details.canvas.selectedBlockMapX >= 0
+                     && details.canvas.selectedBlockMapY >= 0)
+                    ? qsTr("at %1, %2").arg(details.canvas.selectedBlockMapX).arg(details.canvas.selectedBlockMapY)
+                    : qsTr("in the border ring")
+              font.pixelSize: 10
+              opacity: 0.6
+            }
+          }
+        }
+
+        Label {
+          Layout.fillWidth: true
+          visible: (details.blockSpots || []).length === 0
+          text: qsTr("Nothing is filed on this block.")
+          wrapMode: Text.Wrap
+          font.pixelSize: 11
+          color: brg.settings.textColorMid
+        }
+
+        Label {
+          Layout.fillWidth: true
+          visible: (details.blockGroupsShown || []).length > 0
+          text: qsTr("Flip a flag right here, or open the rest in its own editor.")
+          wrapMode: Text.Wrap
+          font.pixelSize: 10
+          opacity: 0.55
+        }
+
+        // ── The ENABLED-layer groups, in layer order ───────────────────────────────────────
+        Repeater {
+          model: details.blockGroupsShown
+
+          delegate: ColumnLayout {
+            required property var modelData
+            Layout.fillWidth: true
+            Layout.topMargin: 4
+            spacing: 2
+
+            Label {
+              text: modelData.name
+              font.pixelSize: 11
+              font.bold: true
+              opacity: 0.55
+              Layout.fillWidth: true
+            }
+
+            Repeater {
+              model: modelData.spots
+              delegate: BlockSpotRow {
+                required property var modelData
+                Layout.fillWidth: true
+                spot: modelData
+              }
+            }
+          }
+        }
+
+        // ── The HIDDEN-layer groups, behind a "more" link ──────────────────────────────────
+        Label {
+          Layout.fillWidth: true
+          Layout.topMargin: 6
+          visible: details.blockHiddenCount > 0
+          text: details.blockShowHidden
+                ? qsTr("Hide layers that are off")
+                : qsTr("%n more on hidden layers…", "", details.blockHiddenCount)
+          font.pixelSize: 10
+          color: brg.settings.accentColor
+          MouseArea {
+            anchors.fill: parent
+            cursorShape: Qt.PointingHandCursor
+            onClicked: details.blockShowHidden = !details.blockShowHidden
+          }
+        }
+
+        Repeater {
+          model: details.blockShowHidden ? details.blockGroupsHidden : []
+
+          delegate: ColumnLayout {
+            required property var modelData
+            Layout.fillWidth: true
+            Layout.topMargin: 4
+            spacing: 2
+
+            RowLayout {
+              Layout.fillWidth: true
+              spacing: 5
+              Label {
+                text: modelData.name
+                font.pixelSize: 11
+                font.bold: true
+                opacity: 0.45
+              }
+              // A quiet marker that this layer is currently OFF on the map.
+              Label {
+                text: qsTr("· layer off")
+                font.pixelSize: 9
+                font.italic: true
+                opacity: 0.4
+              }
+              Item { Layout.fillWidth: true }
+            }
+
+            Repeater {
+              model: modelData.spots
+              delegate: BlockSpotRow {
+                required property var modelData
+                Layout.fillWidth: true
+                spot: modelData
+                opacity: 0.85
+              }
+            }
+          }
+        }
       }
 
       // ══ ⇄ A DOOR SELECTED ══════════════════════════════════════════════════════════════════
@@ -1357,6 +1741,232 @@ Item {
         }
       }
 
+      // ══ ⟐ A SCRIPT TRIGGER SELECTED ════════════════════════════════════════════════════════
+      //
+      // A dashed script box on the canvas. It has NO editable bytes of its own — it is a place where
+      // the map's script runs — so this is a READING: what sets it off, what it changes (the event
+      // and filter flags it writes, each with direction + phase), and where the sequence goes next.
+      // The data is the extracted storage spot (MapModel::scriptSpotAt). It shows what the script
+      // *changes*; what it *reads* to decide is not tracked.
+      ColumnLayout {
+        Layout.fillWidth: true
+        Layout.margins: 10
+        spacing: 8
+        visible: details.hasScript
+
+        RowLayout {
+          Layout.fillWidth: true
+          spacing: 8
+
+          Rectangle {
+            Layout.preferredWidth: 30
+            Layout.preferredHeight: 30
+            radius: 4
+            color: "transparent"
+            border.width: 2
+            border.color: brg.map.ink("script")
+            Text {
+              anchors.centerIn: parent
+              text: details.scriptData.isCardKey ? "▤" : "⟐"
+              font.pixelSize: 14
+              color: brg.map.ink("script")
+            }
+          }
+
+          ColumnLayout {
+            Layout.fillWidth: true
+            spacing: 0
+            Label {
+              Layout.fillWidth: true
+              text: details.scriptData.title || qsTr("Script trigger")
+              font.bold: true
+              font.pixelSize: 14
+              elide: Text.ElideRight
+            }
+            Label {
+              Layout.fillWidth: true
+              // Shape-aware: a row/column trigger has no single (x, y). (A scriptRow carries x = −1.)
+              text: details.scriptData.shape === "scriptRow" ? qsTr("row %1").arg(details.scriptData.y || 0)
+                  : details.scriptData.shape === "scriptCol" ? qsTr("column %1").arg(details.scriptData.x || 0)
+                  : qsTr("at %1, %2").arg(details.scriptData.x || 0).arg(details.scriptData.y || 0)
+              font.pixelSize: 10
+              opacity: 0.6
+            }
+          }
+        }
+
+        // What sets it off.
+        Label {
+          Layout.fillWidth: true
+          visible: (details.scriptData.trigger || "") !== ""
+          text: details.scriptData.trigger || ""
+          wrapMode: Text.Wrap
+          font.pixelSize: 11
+          color: brg.settings.textColorMid
+        }
+
+        // The pret routine that owns it — the exact thing, for anyone who wants it.
+        RowLayout {
+          Layout.fillWidth: true
+          spacing: 6
+          visible: (details.scriptData.routine || "") !== ""
+          Label { text: qsTr("Routine"); font.pixelSize: 10; opacity: 0.6 }
+          Label {
+            Layout.fillWidth: true
+            text: details.scriptData.routine || ""
+            font.pixelSize: 10
+            font.family: "monospace"
+            color: brg.settings.textColorMid
+            elide: Text.ElideMiddle
+          }
+        }
+
+        Rectangle { Layout.fillWidth: true; Layout.topMargin: 2; implicitHeight: 1; color: brg.settings.dividerColor }
+
+        // ── Event flags it changes ─────────────────────────────────────────────────────────
+        Label {
+          Layout.fillWidth: true
+          visible: (details.scriptData.events || []).length > 0
+          text: qsTr("Event flags it changes")
+          font.pixelSize: 11
+          font.bold: true
+          opacity: 0.6
+        }
+        Repeater {
+          model: details.scriptData.events || []
+          delegate: ColumnLayout {
+            required property var modelData
+            Layout.fillWidth: true
+            spacing: 1
+
+            RowLayout {
+              Layout.fillWidth: true
+              spacing: 6
+              // Direction chip: set = turns ON (green), reset = turns OFF (grey).
+              Rectangle {
+                Layout.preferredWidth: 30
+                Layout.preferredHeight: 16
+                radius: 3
+                color: modelData.action === "set" ? "#33a866" : "#9aa0a6"
+                Text {
+                  anchors.centerIn: parent
+                  text: modelData.action === "set" ? qsTr("ON") : qsTr("OFF")
+                  font.pixelSize: 9
+                  font.bold: true
+                  color: "#ffffff"
+                }
+              }
+              Label {
+                Layout.fillWidth: true
+                text: modelData.name
+                font.pixelSize: 11
+                color: brg.settings.textColorDark
+                wrapMode: Text.Wrap
+              }
+            }
+            // The phase that does it, and whether it fires later in the sequence.
+            Label {
+              Layout.fillWidth: true
+              Layout.leftMargin: 36
+              visible: (modelData.stepName || "") !== "" || modelData.viaChain === true
+              text: (modelData.viaChain === true ? qsTr("later in the sequence") : qsTr("here"))
+                    + ((modelData.stepName || "") !== "" ? " · " + modelData.stepName : "")
+              font.pixelSize: 9
+              opacity: 0.5
+              wrapMode: Text.Wrap
+            }
+          }
+        }
+
+        // ── Filter flags (people/objects it shows or hides) ────────────────────────────────
+        Label {
+          Layout.fillWidth: true
+          Layout.topMargin: 2
+          visible: (details.scriptData.filters || []).length > 0
+          text: qsTr("People & objects it shows or hides")
+          font.pixelSize: 11
+          font.bold: true
+          opacity: 0.6
+        }
+        Repeater {
+          model: details.scriptData.filters || []
+          delegate: ColumnLayout {
+            required property var modelData
+            Layout.fillWidth: true
+            spacing: 1
+
+            RowLayout {
+              Layout.fillWidth: true
+              spacing: 6
+              Rectangle {
+                Layout.preferredWidth: 38
+                Layout.preferredHeight: 16
+                radius: 3
+                color: modelData.action === "show" ? "#0072b2" : "#9aa0a6"
+                Text {
+                  anchors.centerIn: parent
+                  text: modelData.action === "show" ? qsTr("SHOW") : qsTr("HIDE")
+                  font.pixelSize: 9
+                  font.bold: true
+                  color: "#ffffff"
+                }
+              }
+              Label {
+                Layout.fillWidth: true
+                text: modelData.name
+                font.pixelSize: 11
+                color: brg.settings.textColorDark
+                wrapMode: Text.Wrap
+              }
+            }
+            Label {
+              Layout.fillWidth: true
+              Layout.leftMargin: 44
+              visible: (modelData.stepName || "") !== "" || modelData.viaChain === true
+              text: (modelData.viaChain === true ? qsTr("later in the sequence") : qsTr("here"))
+                    + ((modelData.stepName || "") !== "" ? " · " + modelData.stepName : "")
+              font.pixelSize: 9
+              opacity: 0.5
+              wrapMode: Text.Wrap
+            }
+          }
+        }
+
+        // Where the sequence goes next.
+        Label {
+          Layout.fillWidth: true
+          Layout.topMargin: 2
+          visible: (details.scriptData.chain || []).length > 0
+          text: qsTr("Continues into: %1").arg((details.scriptData.chain || []).join(", "))
+          wrapMode: Text.Wrap
+          font.pixelSize: 10
+          opacity: 0.55
+        }
+
+        // Nothing tracked to change.
+        Label {
+          Layout.fillWidth: true
+          visible: (details.scriptData.events || []).length === 0
+                   && (details.scriptData.filters || []).length === 0
+          text: qsTr("This trigger doesn't change any event or filter flag we track — it runs the "
+                     + "map's own script for its current step.")
+          wrapMode: Text.Wrap
+          font.pixelSize: 10
+          opacity: 0.55
+        }
+
+        // The honest boundary of what we know.
+        Label {
+          Layout.fillWidth: true
+          Layout.topMargin: 6
+          text: qsTr("This shows what the script changes. Whether it also reads a flag to decide "
+                     + "isn't tracked.")
+          wrapMode: Text.Wrap
+          font.pixelSize: 9
+          opacity: 0.45
+        }
+      }
+
       // ── The PLAYER selected ──────────────────────────────────────────────────────────────
       //
       // He is slot 0, he is selectable and draggable like anybody else -- and he does not live in
@@ -1512,7 +2122,7 @@ Item {
             }
 
             // ⚠️ THE REWRITE GROUP IS A DIFFERENT KIND OF GROUP, so it says so rather than being a
-            // plain heading -- exactly like the warp panel's "Fields that do nothing". Twilight,
+            // plain heading -- exactly like the warp panel's "Fields that do nothing". Project leadership,
             // 2026-07-14: *"which ones were regenerated or rewritten on save load with little
             // exclamation points grouped below and hidden behind a switch."*
             Rectangle {
@@ -1659,7 +2269,7 @@ Item {
 
         // ⚠️ A DELETE BUTTON THAT SAYS DELETE.
         //
-        // It was a "✕" ToolButton with a tooltip. Twilight: *"The x button deletes — it's not
+        // It was a "✕" ToolButton with a tooltip. Project leadership: *"The x button deletes — it's not
         // self-explanatory, should be delete button."* A destructive action gets a word, not a glyph
         // you have to hover to identify.
         Button {
@@ -1695,13 +2305,13 @@ Item {
         }
 
         // (A big yellow BLOCK saying "this map hasn't loaded this character's picture" sat here.
-        //  REMOVED 2026-07-13 -- Twilight: *"don't have it also as a big yellow block on the details
+        //  REMOVED 2026-07-13 -- project leadership: *"don't have it also as a big yellow block on the details
         //  page."* And she is right: the picture picker two rows below already carries the yellow "!"
         //  on exactly that character, with the sentence in its tooltip. Saying it a second time, in a
         //  paragraph, in a coloured box, above the fields you came to edit, is the panel shouting.)
 
         // (A blue "this map's cast no longer matches the game's" notice sat here. REMOVED 2026-07-13
-        // -- Twilight: "do not have notice on cast no longer matches". It fired on every edit, said
+        // -- project leadership: "do not have notice on cast no longer matches". It fired on every edit, said
         // the same thing every time, and pushed the fields you were editing down the panel. The fact
         // it carried -- the game rebuilds a map's cast from ROM when you walk back in -- is still
         // true, and it is written down where a fact belongs: notes/reference/sprites.md, Part 6.)

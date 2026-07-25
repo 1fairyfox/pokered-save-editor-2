@@ -75,7 +75,7 @@ void AbstractHiddenItemDB::load()
   // The index is handed to the entry because it is not decoration: the row's POSITION is the
   // save bit the game tests (FindHiddenItemOrCoinsIndex). Losing it would leave a pickup unable
   // to say which flag it owns.
-  for(const QJsonValue& jsonEntry : jsonData.array())
+  for(const auto& jsonEntry : jsonData.array())
   {
     auto entry = new HiddenItemDBEntry(jsonEntry, store.size(), isCoin);
     store.append(entry);

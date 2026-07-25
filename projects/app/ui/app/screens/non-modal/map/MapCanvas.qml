@@ -1,5 +1,5 @@
 /*
-  * Copyright 2026 Twilight
+  * Copyright 2026 Fairy Fox
   *
   * Licensed under the Apache License, Version 2.0 (the "License");
   * you may not use this file except in compliance with the License.
@@ -72,10 +72,75 @@ Item {
   /// MapConnection.qml. Same one-selection-at-a-time rule as the doors and signs.
   property int selectedConnection: -1
 
-  onSelectedNpcChanged: if (canvasRoot.selectedNpc >= 0) { canvasRoot.selectedWarp = -1; canvasRoot.selectedSign = -1; canvasRoot.selectedConnection = -1; }
-  onSelectedWarpChanged: if (canvasRoot.selectedWarp >= 0) { canvasRoot.selectedNpc = -1; canvasRoot.selectedSign = -1; canvasRoot.selectedConnection = -1; }
-  onSelectedSignChanged: if (canvasRoot.selectedSign >= 0) { canvasRoot.selectedNpc = -1; canvasRoot.selectedWarp = -1; canvasRoot.selectedConnection = -1; }
-  onSelectedConnectionChanged: if (canvasRoot.selectedConnection >= 0) { canvasRoot.selectedNpc = -1; canvasRoot.selectedWarp = -1; canvasRoot.selectedSign = -1; }
+  /// The SCRIPT TRIGGER currently selected -- its storage-spot index, or -1 for nothing. A dashed
+  /// script box, selected into the Details panel (which reads brg.map.scriptSpotAt(index)). Same
+  /// one-selection-at-a-time rule as everything else.
+  property int selectedScript: -1
+
+  /// The selected BLOCK's buffer-block coords (matching storageBlocks' blockX/blockY), or -1. A
+  /// click on the bare map selects the block and opens the block inspector in Details — its full
+  /// list of everything filed there (project leadership, 2026-07-19). Same one-selection rule as the rest.
+  property int selectedBlockX: -1
+  property int selectedBlockY: -1
+
+  onSelectedNpcChanged: if (canvasRoot.selectedNpc >= 0) { canvasRoot.selectedWarp = -1; canvasRoot.selectedSign = -1; canvasRoot.selectedConnection = -1; canvasRoot.selectedScript = -1; canvasRoot.selectedBlockX = -1; }
+  onSelectedWarpChanged: if (canvasRoot.selectedWarp >= 0) { canvasRoot.selectedNpc = -1; canvasRoot.selectedSign = -1; canvasRoot.selectedConnection = -1; canvasRoot.selectedScript = -1; canvasRoot.selectedBlockX = -1; }
+  onSelectedSignChanged: if (canvasRoot.selectedSign >= 0) { canvasRoot.selectedNpc = -1; canvasRoot.selectedWarp = -1; canvasRoot.selectedConnection = -1; canvasRoot.selectedScript = -1; canvasRoot.selectedBlockX = -1; }
+  onSelectedConnectionChanged: if (canvasRoot.selectedConnection >= 0) { canvasRoot.selectedNpc = -1; canvasRoot.selectedWarp = -1; canvasRoot.selectedSign = -1; canvasRoot.selectedScript = -1; canvasRoot.selectedBlockX = -1; }
+  onSelectedScriptChanged: if (canvasRoot.selectedScript >= 0) { canvasRoot.selectedNpc = -1; canvasRoot.selectedWarp = -1; canvasRoot.selectedSign = -1; canvasRoot.selectedConnection = -1; canvasRoot.selectedBlockX = -1; }
+  onSelectedBlockXChanged: if (canvasRoot.selectedBlockX >= 0) { canvasRoot.selectedNpc = -1; canvasRoot.selectedWarp = -1; canvasRoot.selectedSign = -1; canvasRoot.selectedConnection = -1; canvasRoot.selectedScript = -1; }
+
+  readonly property bool hasSelectedBlock: canvasRoot.selectedBlockX >= 0
+
+  /// Everything filed on the selected block, UNFILTERED by the layer toggles — so the block
+  /// inspector in Details can show the enabled-layer spots and tuck the hidden-layer ones behind a
+  /// "more" link (project leadership, 2026-07-19). The storage kinds + tile traits come from blockHotspots;
+  /// the movable objects are added unfiltered (their canvas lists are layer-gated, these are not).
+  readonly property var selectedBlockSpots: {
+    canvasRoot.revision;
+    if (canvasRoot.selectedBlockX < 0)
+      return [];
+    const bx = canvasRoot.selectedBlockX, by = canvasRoot.selectedBlockY;
+    const px = 32;
+    const out = [];
+
+    // ROM/storage/tile spots. blockHotspots returns the storage kinds regardless of their layer
+    // (the tab strip is what filters those), so an off storage layer still shows up here.
+    const rom = brg.map.blockHotspots(brg.map.layers);
+    for (let i = 0; i < rom.length; i++)
+      if (rom[i].blockX === bx && rom[i].blockY === by)
+        for (let j = 0; j < rom[i].spots.length; j++)
+          out.push(rom[i].spots[j]);
+
+    // The movable objects, UNFILTERED — so a hidden People/Warps/Signs layer still lists behind
+    // "more". Placed from their walk-grid coords, never the 4px-lifted sprite rect.
+    function obj(list, kind, key, name) {
+      for (let i = 0; i < list.length; i++) {
+        const o = list[i];
+        const ex = canvasRoot.mapBorderPx + o.x * 16;
+        const ey = canvasRoot.mapBorderPx + o.y * 16;
+        if (Math.floor(ex / px) === bx && Math.floor(ey / px) === by)
+          out.push({ kind: kind, ind: key(o), section: "details", name: name(o),
+                     ink: brg.map.ink(kind) });
+      }
+    }
+    obj(brg.map.npcList(),  "sprite", o => o.slot, o => o.name !== undefined ? o.name : qsTr("Person"));
+    obj(brg.map.warpList(), "warp",   o => o.ind,  o => qsTr("Door → %1").arg(o.destName !== undefined ? o.destName : "?"));
+    obj(brg.map.signList(), "sign",   o => o.ind,  o => qsTr("Sign"));
+    if (brg.map.valid) {
+      const pxx = canvasRoot.mapBorderPx + brg.map.playerX * 16;
+      const pyy = canvasRoot.mapBorderPx + brg.map.playerY * 16;
+      if (Math.floor(pxx / px) === bx && Math.floor(pyy / px) === by)
+        out.push({ kind: "player", ind: 0, section: "details", name: qsTr("Player"),
+                   ink: brg.map.ink("player") });
+    }
+    return out;
+  }
+
+  /// Where the selected block sits on the MAP (not the buffer), for the inspector's title. -1 in the
+  /// 3-block border ring.
+  readonly property int selectedBlockMapX: canvasRoot.selectedBlockX - mapBorderPx / 32
+  readonly property int selectedBlockMapY: canvasRoot.selectedBlockY - mapBorderPx / 32
 
   /// The ✎ button on a selected sprite -- the Map screen opens the Details panel on it.
   signal editRequested(int slot)
@@ -89,7 +154,7 @@ Item {
 
   // ── The MAKER TOOLS ───────────────────────────────────────────────────────────────────────
   //
-  // Twilight, 2026-07-14: *"we would need the top toolbar to ironically contain actual tools and
+  // project leadership, 2026-07-14: *"we would need the top toolbar to ironically contain actual tools and
   // this is one of them, a create random sprite here tool, and a create warp here tool."*
   //
   // A tool that MAKES something is a different animal from one that selects: it needs a cursor that
@@ -116,6 +181,9 @@ Item {
   /// panel-adjacent gesture returns before this fires, switching panels, re-clicking the same tab
   /// or working the rail can never accidentally close anything.
   signal groundClicked()
+
+  /// A block was clicked — open the block inspector in Details (the selected block's full spot list).
+  signal blockInspectRequested()
 
   // ── PROXY DRAG — dragging a TAB drags the THING it points at ─────────────────────────────
   //
@@ -214,7 +282,7 @@ Item {
   //
   // It decides what you are over by intersecting the **dragged item's geometry** with the drop
   // area's -- so it needs the drag source to physically be over the target, which meant reparenting
-  // ghosts into the window, and it broke twice in ways that were invisible until Twilight tried it.
+  // ghosts into the window, and it broke twice in ways that were invisible until project leadership tried it.
   // Two rounds of "dragging and dropping doesn't work" is enough.
   //
   // So the drop is a FUNCTION CALL with a scene coordinate. The dragger asks "is this point over
@@ -245,7 +313,7 @@ Item {
   /// ⚠️ Dragging a sprite asks *where the cursor is* and puts the sprite there. It does NOT
   /// accumulate a delta from the press point -- that drifts, because the sprite's own coordinate
   /// moves under you while the press point stays put, and after a tile or two the two disagree and
-  /// the sprite skitters. (Twilight: *"moving main character around is very glitchy."*)
+  /// the sprite skitters. (project leadership: *"moving main character around is very glitchy."*)
   function tileAtGlobal(sx, sy) {
     const p = canvas.mapFromGlobal(sx, sy);
 
@@ -396,7 +464,7 @@ Item {
     // ⚠️ `id` is the SELECTION KEY, and the two lists do not agree on its name: a sprite is
     // identified by its SLOT (`npcList` emits `slot`, 1-15), a warp/sign by its `ind`. Reading
     // `o.ind` off a sprite yields **undefined**, which coerces to **0** -- and slot 0 IS THE PLAYER.
-    // That is exactly Twilight's *"if i manage to click a tab trying to select an npc it sometimes
+    // That is exactly project leadership's *"if i manage to click a tab trying to select an npc it sometimes
     // selects the player"*: not "sometimes" at all -- every sprite tab selected the player, and it
     // only looked intermittent because the player is often who you wanted anyway.
     //
@@ -425,7 +493,7 @@ Item {
     //    drag him anywhere on the map. He is drawn by his own MapSprite (slot 0) rather than being
     //    in `npcs`, and being drawn separately is exactly how he ended up being the one thing on the
     //    map with no way in. He is a spot like everything else.
-    if (brg.mapLayers.showPlayer && brg.map.valid) {
+    if (brg.mapLayers.showPlayer && brg.map.valid && canvasRoot.previewShowsPlayer) {
       // ⚠️ His WALK-GRID coords, never `playerRectX/Y`. Those are his SPRITE's position, which the
       // console draws **4 px above** his tile row (the OAM bias, notes/reference/sprites.md) -- so
       // near a block's top edge the lifted rect files him on the block ABOVE the one he stands on,
@@ -456,7 +524,7 @@ Item {
   /// `DragThreshold` policy, so it takes **no exclusive grab** and nothing stops that walk. A tab is
   /// a MouseArea — an ITEM — and the item pass happens *after* the handler pass. So the ground won
   /// every race: clicking a tab selected the block underneath it instead, which is precisely the
-  /// *"clicking on things too is often buggy or glitchy"* Twilight hit.
+  /// *"clicking on things too is often buggy or glitchy"* project leadership hit.
   ///
   /// Hover is the honest test here (rather than `overPanel`'s geometry): the tabs already track it,
   /// there can be hundreds of them, and no grab policy can defeat a plain boolean.
@@ -518,6 +586,8 @@ Item {
       canvasRoot.selectedWarp = ind;
     else if (kind === "sign")
       canvasRoot.selectedSign = ind;
+    else if (kind === "script" || kind === "cardKeyDoor")
+      canvasRoot.selectedScript = ind;   // the dashed script box -> Details
   }
 
   /// Which storage kinds the Layers panel is currently showing -- what the tab strip is allowed to
@@ -598,14 +668,14 @@ Item {
   }
 
   // (The "universal object stacking" feature — a group box for objects sharing a tile — was REMOVED
-  //  2026-07-15 at Twilight's request: *"it never worked well and there's no point fixing it because I
+  //  2026-07-15 at project leadership's request: *"it never worked well and there's no point fixing it because I
   //  only added it from a misunderstanding."* Overlapping objects now simply draw over each other, each
   //  its own selectable/draggable chip, which is the ordinary behaviour and the one that works.)
 
   // ── The two boxes follow the player LIVE ───────────────────────────────────────────────────
   //
   // The screen box and the draw area are both computed FROM the player's position -- so while you
-  // are dragging him they should move with him, not snap into place when you let go (Twilight,
+  // are dragging him they should move with him, not snap into place when you let go (project leadership,
   // 2026-07-13). The player's MapSprite publishes the tile under the cursor here; -1 means "not
   // being dragged", and the boxes fall back to where he actually is.
   property int livePlayerX: -1
@@ -622,7 +692,7 @@ Item {
 
   // ── Zoom ────────────────────────────────────────────────────────────────────────────────────
   //
-  // CONTINUOUS, not integer (Twilight, 2026-07-13: "it's too clunky"). It used to snap to whole
+  // CONTINUOUS, not integer (project leadership, 2026-07-13: "it's too clunky"). It used to snap to whole
   // multiples because a fractional scale ruins pixel art -- at 2.37x, nearest-neighbour gives some
   // Game Boy pixels two screen pixels and others three, and the map ripples as you zoom.
   //
@@ -632,7 +702,7 @@ Item {
   // zoom can be any real number, and it is.
   // ── The range ────────────────────────────────────────────────────────────────────────────────
   //
-  // Effectively "infinite" both ways (Twilight, 2026-07-14), but deliberately BOUNDED, because the
+  // Effectively "infinite" both ways (project leadership, 2026-07-14), but deliberately BOUNDED, because the
   // brief in the same breath was *"there doesn't need to be any lag or crashing or fragility... at
   // all on the infinite zoom — prioritise the UX."* A hard, generous clamp is the stable choice:
   //   * `minZoom` 0.05 -- the map shrinks into the well until a 78-block route is a thumbnail;
@@ -653,7 +723,7 @@ Item {
   // The catch is the MOUSE WHEEL. A wheel reports 120 units per detent and there is no such thing as
   // half a click -- the hardware simply does not have sub-notch data to give us. So a wheel notch is
   // ALWAYS a jump, and the only choices are to make the jump smaller (which is what the first attempt
-  // did, and which Twilight correctly called "still choppy, just finer steps") or to bridge it.
+  // did, and which project leadership correctly called "still choppy, just finer steps") or to bridge it.
   //
   // So:
   //
@@ -661,7 +731,7 @@ Item {
   //     THROUGH, with **no animation whatsoever**. It is already sub-pixel; interpolating it would
   //     only add lag.
   //   * **A wheel notch** gets a 90ms bridge, and nothing else does. That is the "between pixel
-  //     sizes, frame to frame" case Twilight allowed -- it exists purely because the hardware left
+  //     sizes, frame to frame" case project leadership allowed -- it exists purely because the hardware left
   //     a gap, not to make anything look fancy.
   //
   // `anchorMap` is the map point that stays under the cursor. It is re-pinned on EVERY frame the
@@ -712,7 +782,7 @@ Item {
                  view.height / brg.map.imageHeight)))
     : 1
 
-  /// THE OPENING VIEW (Twilight): the Game Boy's own screen, plus **one block of breathing room on
+  /// THE OPENING VIEW (project leadership): the Game Boy's own screen, plus **one block of breathing room on
   /// every side**, with the player centred. You open the map looking at what the player is looking
   /// at -- not at a postage stamp of the whole route.
   ///
@@ -728,7 +798,7 @@ Item {
 
   // ── The infinite well (camera-only) ────────────────────────────────────────────────────────
   //
-  // Twilight, 2026-07-14: *"the map should have infinite scroll — just infinite invalid area. Things
+  // project leadership, 2026-07-14: *"the map should have infinite scroll — just infinite invalid area. Things
   // can't be dragged there, this is just for the camera, and it fixes the problem of panels covering
   // things up and not wanting to reflow or resize anything because of panels."*
   //
@@ -758,9 +828,48 @@ Item {
   Shortcut {
     sequences: ["Escape"]
     onActivated: {
+      // While a preview is up, Esc is its ✗ — drop the preview before touching selection.
+      if (brg.map.mapPreviewActive) {
+        brg.map.cancelMapPreview();
+        return;
+      }
       canvasRoot.cancelDrag++;
       canvasRoot.selectedNpc = -1;
       canvasRoot.selectedConnection = -1;
+      canvasRoot.selectedScript = -1;
+      canvasRoot.selectedBlockX = -1;
+    }
+  }
+
+  // ── The map-change PREVIEW ────────────────────────────────────────────────────────────────
+  //
+  // Picking a map in the picker opens a preview (MapModel::beginMapPreview): the destination is
+  // constructed for real, but nothing is committed. The card in the top-right corner carries the
+  // decision. Stage 0 asks "keep it?" (✗ / ✓); ✓ advances to stage 1, "Normal or Manual" (with a
+  // way back). The PLAYER is deliberately not drawn while stage 0 is up — the illusion is a
+  // temporary reconstruction, and the player only stands on the map you actually commit to
+  // (leadership, 2026-07-19).
+  property int previewStage: 0
+
+  /// Draw the player? Not while a preview is still on its first question. Once ✓ is pressed
+  /// (stage ≥ 1), or the preview is gone, he is shown as normal.
+  readonly property bool previewShowsPlayer: !brg.map.mapPreviewActive || canvasRoot.previewStage >= 1
+
+  Connections {
+    target: brg.map
+    // A preview starting (or ending) resets the wizard to its first question. On START it also
+    // clears the selection — whatever was selected belonged to the map you were on, not this
+    // reconstruction.
+    function onMapPreviewChanged() {
+      canvasRoot.previewStage = 0;
+      if (brg.map.mapPreviewActive) {
+        canvasRoot.selectedNpc = -1;
+        canvasRoot.selectedWarp = -1;
+        canvasRoot.selectedSign = -1;
+        canvasRoot.selectedConnection = -1;
+        canvasRoot.selectedScript = -1;
+        canvasRoot.selectedBlockX = -1;
+      }
     }
   }
 
@@ -824,7 +933,7 @@ Item {
 
       // ── The full NEIGHBOUR maps (Phase 7b part 2) ────────────────────────────────────────────
       //
-      // Twilight: *"I think it might be better to have the full connecting map on there to make it
+      // project leadership: *"I think it might be better to have the full connecting map on there to make it
       // easier to slide around."* So each connection renders its neighbour map, bleeding off the edge,
       // aligned so the neighbour's shared edge meets ours (shifted by the offset). It sits BEHIND our
       // own map image (z −0.5), which is opaque, so our buffer (ring + bled strip) covers the overlap
@@ -848,7 +957,7 @@ Item {
           opacity: 0.45
 
           // The live frame, so the neighbour's water and flowers animate in step with our map
-          // (Twilight, 2026-07-15). Cached per frame; re-renders ~3x a second like the main map.
+          // (project leadership, 2026-07-15). Cached per frame; re-renders ~3x a second like the main map.
           source: present ? ("image://map/" + e.toMap + "/" + e.toTileset + "/" + brg.map.frame + "/"
                              + brg.map.contrast + "/-1/-1/-1") : ""
 
@@ -875,7 +984,7 @@ Item {
           width: present ? (nbTW + 2 * ring) * canvasRoot.zoom : 0
           height: present ? (nbTH + 2 * ring) * canvasRoot.zoom : 0
 
-          // The neighbour's own sprites, STATIC (Twilight: "sprites there, just not moving"). From the
+          // The neighbour's own sprites, STATIC (project leadership: "sprites there, just not moving"). From the
           // DB/ROM (a neighbour isn't in the save). Children of the dimmed neighbour image, so they
           // inherit its 45% opacity and read as context. Positioned in the neighbour's own map: its map
           // area starts at the 3-block ring (96 px), and a sprite step is 16 px (with the 4 px OAM lift).
@@ -1061,11 +1170,11 @@ Item {
       // ── The PLAYER ────────────────────────────────────────────────────────────────────────
       //
       // He is slot 0, and he is a sprite like any other: click him, drag him. There was never a
-      // reason he should be the one thing on the map you could not pick up (Twilight, 2026-07-13).
+      // reason he should be the one thing on the map you could not pick up (project leadership, 2026-07-13).
       MapSprite {
-        // Gated on his layer only. (He used to also hide when stacked under another object; the
-        // stacking feature was removed 2026-07-15.)
-        visible: brg.mapLayers.showPlayer
+        // Gated on his layer — AND on the preview: while a map is being previewed (before ✓), the
+        // player is not drawn, so the reconstruction reads as temporary. @see previewShowsPlayer.
+        visible: brg.mapLayers.showPlayer && canvasRoot.previewShowsPlayer
 
         canvas: canvasRoot
         slot: 0
@@ -1083,7 +1192,7 @@ Item {
       // map. Same geometry as the player (they ARE the player's geometry), same OBJECT palette,
       // same "there is no right-facing art" rule.
       //
-      // Click one to select it. The ground is NOT clickable (Twilight): blocks and tiles are edited
+      // Click one to select it. The ground is NOT clickable (project leadership): blocks and tiles are edited
       // in their panels, and the canvas should not compete with them.
       Repeater {
         model: canvasRoot.npcs      // @see canvasRoot.revision -- a plain npcList() never re-asked
@@ -1204,7 +1313,7 @@ Item {
         }
       }
 
-      // (The MapObjectStack "group box" for overlapping objects was REMOVED 2026-07-15 — Twilight:
+      // (The MapObjectStack "group box" for overlapping objects was REMOVED 2026-07-15 — project leadership:
       //  the feature never worked well and was added from a misunderstanding. Overlapping chips just
       //  draw over each other now, each independently selectable.)
 
@@ -1262,7 +1371,7 @@ Item {
 
       // ── Pointing at things ──────────────────────────────────────────────────────────────────
       //
-      // ⚠️ The GROUND IS NOT SELECTABLE (Twilight, 2026-07-13). Clicking a block used to mark it;
+      // ⚠️ The GROUND IS NOT SELECTABLE (project leadership, 2026-07-13). Clicking a block used to mark it;
       // it no longer does anything at all. Blocks and tiles are edited in their own panels, and a
       // clickable floor only fights the thing that should be clickable. **Sprites are, for now,
       // the only selectable object on the map** -- warps, signs and connections join them later,
@@ -1334,7 +1443,7 @@ Item {
           // ⚠️ A POPUP IS OPEN OVER US -- so this tap is not somebody clicking the ground, it is the
           // press that dismissed the popup, arriving here afterwards.
           //
-          // That is the bug Twilight hit: open the picture picker from the Details panel and you were
+          // That is the bug project leadership hit: open the picture picker from the Details panel and you were
           // dropped straight back to the map's details, because the picker's overlay leaked its
           // dismiss-press down onto this handler, which cleared the selection the panel was editing.
           //
@@ -1406,14 +1515,15 @@ Item {
             return;
           }
 
-          // Clicking the ground clears the selection -- and tells Map.qml, which closes the open
-          // dock panel (*"if a click opens a panel clicking off should close it"*). Every
-          // panel-adjacent gesture returned above, so this only ever fires on the bare map.
-          canvasRoot.selectedNpc = -1;
-          canvasRoot.selectedWarp = -1;
-          canvasRoot.selectedSign = -1;
-          canvasRoot.selectedConnection = -1;
-          canvasRoot.groundClicked();
+          // ⭐ Clicking a BLOCK selects it and opens the block inspector in Details — its full list
+          // of everything filed there (project leadership, 2026-07-19: *"clicking a block automatically brings
+          // up all the details about it including all the tabs it would have"*). Selecting the block
+          // clears any object selection (the exclusivity rule). If the tap ALSO landed on an object,
+          // that object's own MouseArea fires next and re-selects it — so pointing at a thing still
+          // gives you the thing, and pointing at bare ground gives you the block.
+          canvasRoot.selectedBlockX = Math.floor(px / brg.map.blockSize);
+          canvasRoot.selectedBlockY = Math.floor(py / brg.map.blockSize);
+          canvasRoot.blockInspectRequested();
         }
       }
 
@@ -1522,7 +1632,7 @@ Item {
   // ── The one zoom API ──────────────────────────────────────────────────────────────────────
   //
   // Everything that zooms goes through here: the slider, the Go-to entries, the wheel, the pinch.
-  // There is exactly one zoom in this screen and this is it (Twilight: "I just don't want multiple
+  // There is exactly one zoom in this screen and this is it (project leadership: "I just don't want multiple
   // places where zoom is").
 
   /// Zoom, keeping the middle of the view where it is. What the slider drives.
@@ -1534,7 +1644,7 @@ Item {
 
   // ── The opening view ──────────────────────────────────────────────────────────────────────
   //
-  // You open a map looking at what the PLAYER is looking at (Twilight): the Game Boy's screen with
+  // You open a map looking at what the PLAYER is looking at (project leadership): the Game Boy's screen with
   // a block of breathing room round it, him in the middle. Not a postage stamp of a 78-block route.
   //
   // `framed` is a one-shot per map: after that the view is yours, and re-centring it under you every
@@ -1559,7 +1669,7 @@ Item {
   /// The map we last framed. MapModel publishes one `changed()` for everything, so we watch the id
   /// ourselves rather than re-framing the view on every animation frame.
   ///
-  /// 🐞 **THE CAMERA JUMP.** Twilight: *"anytime something is committed to the data … the camera
+  /// 🐞 **THE CAMERA JUMP.** project leadership: *"anytime something is committed to the data … the camera
   /// seems to reset to the default position when you first open it"*, and *"sometimes"*.
   ///
   /// Both halves were exact, and the mechanism is this pair of variables disagreeing:
@@ -1637,5 +1747,200 @@ Item {
       return;
 
     brg.map.selectAtPixel(parseInt(p[0]), parseInt(p[1]));
+  }
+
+  // ══ THE MAP-CHANGE PREVIEW CARD ══════════════════════════════════════════════════════════════
+  //
+  // Pinned to the TOP-RIGHT of the well (a sibling of the Flickable, not inside it, so it stays put
+  // while the map scrolls). Two stages: keep/discard, then normal/manual. @see previewStage,
+  // MapModel::beginMapPreview / cancelMapPreview / confirmMapPreviewNormal / confirmMapPreviewManual.
+  Rectangle {
+    id: previewBox
+    objectName: "mapPreviewBox"   // the DEBUG harness / screenshot review reaches it by name
+
+    visible: brg.map.mapPreviewActive
+    z: 60
+
+    anchors.top: parent.top
+    anchors.right: parent.right
+    anchors.topMargin: 10
+    anchors.rightMargin: 10
+
+    // A pretty, somewhat-translucent white VECTOR overlay (leadership, 2026-07-19) — the map reads
+    // faintly through it, a thin hairline draws the edge, no heavy card/shadow. Compact on purpose.
+    width: 198
+    radius: 9
+    color: Qt.rgba(1, 1, 1, 0.82)
+    border.width: 1
+    border.color: Qt.rgba(1, 1, 1, 0.72)
+    implicitHeight: previewCol.implicitHeight + 18
+
+    Column {
+      id: previewCol
+      x: 11
+      y: 9
+      width: parent.width - 22
+      spacing: 6
+
+      // Eyebrow + destination name + a one-line subtitle that changes with the stage — all in ONE
+      // tight column (spacing 1), so the subtitle sits right under the title with no gap
+      // (leadership, 2026-07-19: "way too much space after the preview title text and the
+      // description").
+      Column {
+        width: parent.width
+        spacing: 1
+
+        Text {
+          text: qsTr("PREVIEW")
+          font.pixelSize: 8
+          font.bold: true
+          font.letterSpacing: 1.5
+          color: brg.settings.accentColor
+        }
+
+        Text {
+          width: parent.width
+          text: brg.map.mapPreviewName
+          font.pixelSize: 14
+          font.bold: true
+          color: brg.settings.textColorDark
+          elide: Text.ElideRight
+        }
+
+        Text {
+          width: parent.width
+          text: canvasRoot.previewStage === 0
+                ? qsTr("A temporary reconstruction — nothing is saved yet.")
+                : qsTr("How should the map change?")
+          wrapMode: Text.Wrap
+          font.pixelSize: 9
+          color: brg.settings.textColorMid
+        }
+      }
+
+      // ── Stage 0: keep or discard ─────────────────────────────────────────────────────────────
+      Column {
+        width: parent.width
+        spacing: 7
+        visible: canvasRoot.previewStage === 0
+
+        Row {
+          width: parent.width
+          spacing: 6
+
+          // ✕ discard — back to the map you were on.
+          Rectangle {
+            width: (parent.width - 6) / 2
+            height: 28
+            radius: 6
+            color: xHover.hovered ? Qt.rgba(0, 0, 0, 0.07) : "transparent"
+            border.width: 1
+            border.color: Qt.rgba(0, 0, 0, 0.20)
+
+            Row {
+              anchors.centerIn: parent
+              spacing: 4
+              Text { anchors.verticalCenter: parent.verticalCenter; text: "✕"; font.pixelSize: 11; color: brg.settings.textColorDark }
+              Text { anchors.verticalCenter: parent.verticalCenter; text: qsTr("Discard"); font.pixelSize: 10; color: brg.settings.textColorDark }
+            }
+
+            HoverHandler { id: xHover; cursorShape: Qt.PointingHandCursor }
+            TapHandler { onTapped: brg.map.cancelMapPreview() }
+          }
+
+          // ✓ keep — advance to the normal/manual question.
+          Rectangle {
+            width: (parent.width - 6) / 2
+            height: 28
+            radius: 6
+            color: vHover.hovered ? Qt.rgba(0.17, 0.58, 0.34, 0.95) : Qt.rgba(0.20, 0.66, 0.40, 0.88)
+
+            Row {
+              anchors.centerIn: parent
+              spacing: 4
+              Text { anchors.verticalCenter: parent.verticalCenter; text: "✓"; font.pixelSize: 11; color: "#ffffff" }
+              Text { anchors.verticalCenter: parent.verticalCenter; text: qsTr("Keep"); font.pixelSize: 10; font.bold: true; color: "#ffffff" }
+            }
+
+            HoverHandler { id: vHover; cursorShape: Qt.PointingHandCursor }
+            TapHandler { onTapped: canvasRoot.previewStage = 1 }
+          }
+        }
+      }
+
+      // ── Stage 1: normal or manual ────────────────────────────────────────────────────────────
+      Column {
+        width: parent.width
+        spacing: 5
+        visible: canvasRoot.previewStage === 1
+
+        // Normal — the full migration.
+        Rectangle {
+          width: parent.width
+          radius: 6
+          color: nHover.hovered ? Qt.rgba(0.20, 0.66, 0.40, 0.14) : Qt.rgba(1, 1, 1, 0.5)
+          border.width: 1
+          border.color: nHover.hovered ? Qt.rgba(0.20, 0.66, 0.40, 0.8) : Qt.rgba(0, 0, 0, 0.14)
+          implicitHeight: nCol.implicitHeight + 12
+
+          Column {
+            id: nCol
+            x: 9
+            y: 6
+            width: parent.width - 18
+            spacing: 1
+            Text { text: qsTr("Normal"); font.pixelSize: 11; font.bold: true; color: brg.settings.textColorDark }
+            Text {
+              width: parent.width
+              text: qsTr("Rebuild everything — sprites, signs, warps, connections and all map state.")
+              wrapMode: Text.Wrap
+              font.pixelSize: 9
+              color: brg.settings.textColorMid
+            }
+          }
+
+          HoverHandler { id: nHover; cursorShape: Qt.PointingHandCursor }
+          TapHandler { onTapped: brg.map.confirmMapPreviewNormal() }
+        }
+
+        // Manual — the map id only.
+        Rectangle {
+          width: parent.width
+          radius: 6
+          color: mHover.hovered ? Qt.rgba(0, 0, 0, 0.06) : Qt.rgba(1, 1, 1, 0.5)
+          border.width: 1
+          border.color: Qt.rgba(0, 0, 0, 0.14)
+          implicitHeight: mCol.implicitHeight + 12
+
+          Column {
+            id: mCol
+            x: 9
+            y: 6
+            width: parent.width - 18
+            spacing: 1
+            Text { text: qsTr("Manual"); font.pixelSize: 11; font.bold: true; color: brg.settings.textColorDark }
+            Text {
+              width: parent.width
+              text: qsTr("Change only the map id — everything else is left untouched.")
+              wrapMode: Text.Wrap
+              font.pixelSize: 9
+              color: brg.settings.textColorMid
+            }
+          }
+
+          HoverHandler { id: mHover; cursorShape: Qt.PointingHandCursor }
+          TapHandler { onTapped: brg.map.confirmMapPreviewManual() }
+        }
+
+        // ‹ Back to the keep/discard question.
+        Text {
+          text: qsTr("‹ Back")
+          font.pixelSize: 9
+          color: brg.settings.accentColor
+          HoverHandler { cursorShape: Qt.PointingHandCursor }
+          TapHandler { onTapped: canvasRoot.previewStage = 0 }
+        }
+      }
+    }
   }
 }

@@ -1,5 +1,5 @@
 /*
-  * Copyright 2026 Twilight
+  * Copyright 2026 Fairy Fox
   *
   * Licensed under the Apache License, Version 2.0 (the "License");
   * you may not use this file except in compliance with the License.
@@ -87,6 +87,7 @@ private slots:
   void roll_walksTheProgressionBothWays();
   void gymStage_movesItsBadge_andOnlyItsBadge();
   void changeMapConstructed_buildsTheDestination();
+  void mapPreview_roundTripsByteExact();
 
 private:
   QByteArray m_orig;
@@ -106,7 +107,8 @@ private:
                           area->preloadedSprites, area->sprites, area->warps,
                           r->sf.dataExpanded->world->general, area->signs, area->pokemon,
                           r->sf.dataExpanded->world, area,
-                          r->sf.dataExpanded->player->basics);
+                          r->sf.dataExpanded->player->basics,
+                          &r->sf);   // the SaveFile — so the map-change preview can snapshot/restore
     return r;
   }
 };
@@ -169,11 +171,11 @@ void TestMapStates::stateList_readsTheProgression()
   QVERIFY(list.size() >= 3);
   QCOMPARE(list.first().toMap().value("id").toString(), QStringLiteral("1"));
 
-  bool sawTransient = false;
+  // Cutscenes are OUT of the map state (leadership, 2026-07-19: "remove cutscenes from the map
+  // state") — no transient stage may appear in the list. This reverses the 2026-07-17 call.
   for (const QVariant& v : list)
-    if (v.toMap().value("kind").toString() == QLatin1String("transient"))
-      sawTransient = true;
-  QVERIFY2(sawTransient, "transient cutscene values must be SHOWN (leadership, 2026-07-17)");
+    QVERIFY2(v.toMap().value("kind").toString() != QLatin1String("transient"),
+             "cutscenes (transients) must NOT be listed (leadership, 2026-07-19)");
 
   // ⚠️ BaseSAV is a PLAYED save, and its Pallet Town sits genuinely BETWEEN stages 2 and 3
   // (Daisy walks, the Town Map is given — but the Poke Balls were never collected).
@@ -393,6 +395,64 @@ void TestMapStates::changeMapConstructed_buildsTheDestination()
   // Outdoors: `wLastMap` is the map itself -- the $FF doors mean "back to here".
   QCOMPARE(r->map->lastMap(), dest);
 
+  delete r;
+}
+
+/// The map-change PREVIEW is snapshot-backed, and byte-fidelity is sacred: DISCARD must put
+/// every byte back exactly, and MANUAL must move ONLY the map id. We compare flatten-to-flatten
+/// so the check is about the preview's own restore, not whether the fixture round-trips.
+void TestMapStates::mapPreview_roundTripsByteExact()
+{
+  Rig* r = makeRig();
+
+  const int origMap = r->map->mapInd();
+  const int dest = (origMap == 1) ? 2 : 1;   // a different, constructible, scripted map
+
+  // Canonical baseline: the loaded save folded to raw.
+  r->sf.flattenData();
+  const QByteArray before = snapshot(r->sf);
+
+  // ── DISCARD restores every byte ────────────────────────────────────────────────────────
+  r->map->beginMapPreview(dest);
+  QVERIFY2(r->map->mapPreviewActive(), "a preview must be up after beginMapPreview");
+  QCOMPARE(r->map->mapInd(), dest);            // the destination is genuinely constructed
+  QCOMPARE(r->map->mapPreviewInd(), dest);
+
+  r->map->cancelMapPreview();
+  QVERIFY(!r->map->mapPreviewActive());
+  QCOMPARE(r->map->mapInd(), origMap);         // back on the map we started on
+  // cancel memcpy's the snapshot straight back into the raw buffer, so it already equals the
+  // baseline with no re-flatten needed — the restore itself is what we are proving.
+  QCOMPARE(snapshot(r->sf), before);           // byte-for-byte identical
+
+  // ── MANUAL moves ONLY the map id byte ──────────────────────────────────────────────────
+  r->map->beginMapPreview(dest);
+  QVERIFY(r->map->mapPreviewActive());
+  r->map->confirmMapPreviewManual();
+  QVERIFY(!r->map->mapPreviewActive());
+  QCOMPARE(r->map->mapInd(), dest);
+  r->sf.flattenData();
+  const QByteArray afterManual = snapshot(r->sf);
+
+  const QVector<int> diffs = diffOffsets(before, afterManual);
+  QCOMPARE(diffs.size(), 1);                    // exactly one byte moved
+  QCOMPARE(int(quint8(before[diffs.first()])), origMap);
+  QCOMPARE(int(quint8(afterManual[diffs.first()])), dest);
+
+  // ── NORMAL keeps the whole construction ────────────────────────────────────────────────
+  Rig* r2 = makeRig();
+  const int dest2 = (r2->map->mapInd() == 1) ? 2 : 1;
+  r2->map->beginMapPreview(dest2);
+  r2->map->confirmMapPreviewNormal();
+  QVERIFY(!r2->map->mapPreviewActive());
+  QCOMPARE(r2->map->mapInd(), dest2);
+  QVERIFY2(r2->map->headerMatches(), "a kept (Normal) construction has a coherent header");
+
+  // ── Previewing the map you're already on is a no-op ─────────────────────────────────────
+  r2->map->beginMapPreview(r2->map->mapInd());
+  QVERIFY2(!r2->map->mapPreviewActive(), "re-previewing the current map does nothing");
+
+  delete r2;
   delete r;
 }
 

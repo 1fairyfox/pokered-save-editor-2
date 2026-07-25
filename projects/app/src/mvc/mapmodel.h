@@ -1,5 +1,5 @@
 /*
-  * Copyright 2026 Twilight
+  * Copyright 2026 Fairy Fox
   *
   * Licensed under the Apache License, Version 2.0 (the "License");
   * you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
 */
 #pragma once
 
+#include <QByteArray>
 #include <QObject>
 #include <QString>
 #include <QVariantList>
@@ -37,6 +38,7 @@ class WorldGeneral;
 class World;
 class Area;
 class PlayerBasics;
+class SaveFile;
 
 /**
  * @brief The loaded map, ready to draw: one image URL and four rectangles.
@@ -77,7 +79,7 @@ class MapModel : public QObject
    * panel for, and stacking them under the fields that DO matter is the difference between a panel
    * and a hex dump.
    *
-   * **OFF by default** (Twilight, 2026-07-13). Off, @ref npcFields does not emit them **at all** --
+   * **OFF by default** (project leadership, 2026-07-13). Off, @ref npcFields does not emit them **at all** --
    * not greyed, not collapsed: absent. On, they appear, each wearing its yellow "!". The switch is
    * hard right on the map's toolbar.
    *
@@ -116,6 +118,23 @@ class MapModel : public QObject
   /// and pointers are separate bytes in the save, and rewriting them behind the user's back is
   /// exactly what this editor does not do. @see headerMatches / fixMapHeader.
   Q_PROPERTY(int mapInd READ mapInd WRITE setMapInd NOTIFY changed)
+
+  // ── The map-change PREVIEW (the picker's non-committing confirm flow) ──────────
+  //
+  // ⚠️ notes/plans/map-states.md → "The preview". Picking a map no longer commits: it enters a
+  // PREVIEW. The whole map is constructed for real (@ref changeMapConstructed) so what you see is
+  // exactly what you would get — but the save is snapshotted first, so the two "no" exits (✗, and
+  // "Manual") restore it byte-for-byte. Only committing keeps it. The PLAYER is deliberately not
+  // drawn while the preview is still being decided (leadership, 2026-07-19: "give the illusion that
+  // this is a temporary reconstruction — the player is only on the real map"); the canvas reads
+  // @ref mapPreviewActive for that.
+
+  /// Is a map-change preview currently up (constructed, snapshot held, awaiting a decision)?
+  Q_PROPERTY(bool mapPreviewActive READ mapPreviewActive NOTIFY mapPreviewChanged)
+  /// The destination map's display name — what the preview box shows.
+  Q_PROPERTY(QString mapPreviewName READ mapPreviewName NOTIFY mapPreviewChanged)
+  /// The destination map id being previewed, or -1 when no preview is up.
+  Q_PROPERTY(int mapPreviewInd READ mapPreviewInd NOTIFY mapPreviewChanged)
 
   /// Loaded tileset id (`wCurMapTileset`) -- where the map's GRAPHICS come from.
   Q_PROPERTY(int tilesetInd READ tilesetInd WRITE setTilesetInd NOTIFY changed)
@@ -509,7 +528,8 @@ public:
            AreaLoadedSprites* sprites = nullptr, AreaSprites* npcs = nullptr,
            AreaWarps* warps = nullptr, WorldGeneral* world = nullptr,
            AreaSign* signs = nullptr, AreaPokemon* pokemon = nullptr,
-           World* worldAll = nullptr, Area* area = nullptr, PlayerBasics* basics = nullptr);
+           World* worldAll = nullptr, Area* area = nullptr, PlayerBasics* basics = nullptr,
+           SaveFile* saveFile = nullptr);
 
   // ── MAP STATES — the per-map progression blueprints ───────────────────────────
   //
@@ -573,10 +593,37 @@ public:
    * missables, script bytes) is already global and is NOT rewritten — which is exactly why
    * the result reads as the map at its current story position.
    *
-   * This is the map picker's default path. The old one-byte write (`mapInd = …`) remains
-   * for the power path — both are deliberate acts, and each says what it does.
+   * This is what the map picker's PREVIEW builds (@ref beginMapPreview) and what committing
+   * "Normal" keeps. The old one-byte write (`mapInd = …` / committing "Manual") remains the power
+   * path — both are deliberate acts, and each says what it does.
    */
   Q_INVOKABLE void changeMapConstructed(int mapInd);
+
+  // ── The map-change preview lifecycle ──────────────────────────────────────────
+  //
+  // ⚠️ notes/plans/map-states.md → "The preview". Snapshot-backed, so every "no" exit is byte-exact.
+
+  /// Begin previewing @p newMapInd: snapshot the whole save, then construct the destination for
+  /// real (@ref changeMapConstructed) so the canvas shows exactly what committing "Normal" gives.
+  /// Nothing is committed — the snapshot lets @ref cancelMapPreview / @ref confirmMapPreviewManual
+  /// put every byte back. A no-op for the map already loaded (with no preview up). If a preview is
+  /// already up it is cancelled first, so the snapshot is always the pre-preview save.
+  Q_INVOKABLE void beginMapPreview(int newMapInd);
+
+  /// Drop the preview (the ✗): restore the snapshot exactly and go back to the map you were on.
+  Q_INVOKABLE void cancelMapPreview();
+
+  /// Commit the preview as a NORMAL migration: keep the full construction (sprites, signs, warps,
+  /// connections, the map's own progression) exactly as previewed. The snapshot is released.
+  Q_INVOKABLE void confirmMapPreviewNormal();
+
+  /// Commit the preview MANUALLY: restore the snapshot (undo the construction), then write ONLY the
+  /// map id (`wCurMap`). Everything else is left exactly as it was — the one-byte power path.
+  Q_INVOKABLE void confirmMapPreviewManual();
+
+  bool mapPreviewActive() const;
+  QString mapPreviewName() const;
+  int mapPreviewInd() const;
 
   bool valid() const;
   QString source() const;
@@ -635,14 +682,14 @@ public:
   /// arrows, the neighbour render, the interactive strip and the inspector all read.
   Q_INVOKABLE QVariantList connectionEditList() const;
 
-  /// The connecting map's own sprites, STATIC — for drawing them on the neighbour render (Twilight,
+  /// The connecting map's own sprites, STATIC — for drawing them on the neighbour render (project leadership,
   /// 2026-07-15: *"I do want the sprites there just not moving"*). From the **DB/ROM** (we don't hold a
   /// neighbour's save state), one entry per sprite: `{ picture, x, y, source }` — `x`/`y` in the
   /// neighbour's own map steps, `source` the sprite art through the object palette. Empty if @p dir has
   /// no connection.
   Q_INVOKABLE QVariantList neighbourSprites(int dir) const;
 
-  /// The neighbour-map picker for edge @p dir, ordered for the job (Twilight, 2026-07-15):
+  /// The neighbour-map picker for edge @p dir, ordered for the job (project leadership, 2026-07-15):
   /// `{ value, name, size, group, isDefault }`. The map ROM actually connects here is the **Default**,
   /// on top; then the maps that have a connection on their **opposite** edge (they abut cleanly),
   /// under a heading naming that edge; then everything else. `size` is "W×H" in blocks (grey, right).
@@ -1131,6 +1178,22 @@ public:
   Q_INVOKABLE QVariantList blockHotspots(quint32 tileLayers = 0) const;
 
   /**
+   * @brief Everything known about ONE script trigger, for the Details panel when a dashed script
+   *        box is selected. @p spot is the trigger's index in this map's storage-spot list (the
+   *        `spot` field a script hotspot carries).
+   *
+   * `{ valid, shape, isCardKey, x, y, routine, chain, scriptInd, scriptName, title, trigger,
+   *    what, events:[{ind,name,desc,caution,action,step,stepName,viaChain}],
+   *    filters:[{ind,name,action,step,stepName,viaChain}] }`
+   *
+   * The events/filters are the flags this trigger's script (chain-unioned) WRITES — each keeps its
+   * direction (`set`/`reset`, `show`/`hide`), the phase (`stepName`) that does it, and whether it
+   * fires later in the sequence (`viaChain`). It is a map of what the script *changes*; what it
+   * *reads* to decide is not tracked. @see MapDBEntryStorageSpot, blockHotspots' section 3.
+   */
+  Q_INVOKABLE QVariantMap scriptSpotAt(int spot) const;
+
+  /**
    * @brief The map's story, PHASE BY PHASE: what each script step turns on, off, shows and hides.
    *
    * Leadership, 2026-07-17: *"they need to keep track of which script phases a map goes through
@@ -1286,7 +1349,7 @@ signals:
    * ⚠️ Deliberately NOT `changed()`. `changed()` is wired to `sourceChanged()`, and `source` is the
    * map's render URL -- so emitting it **re-renders the whole map image**. The walk simulation moves
    * somebody ~60 times a second; routing that through `changed()` re-rendered the entire map ~60
-   * times a second to shift one 16x16 sprite, and the frame rate collapsed (Twilight, 2026-07-13).
+   * times a second to shift one 16x16 sprite, and the frame rate collapsed (project leadership, 2026-07-13).
    *
    * A sprite moving does not change one pixel of the map. Only the canvas's sprite layer listens
    * here. An *edit* (add / move / delete / a field write) emits `changed()` **as well**, because
@@ -1326,6 +1389,8 @@ signals:
   void overlayChanged();
   /// The selected block changed.
   void selectionChanged();
+  /// A map-change preview started, changed target, or ended. @see mapPreviewActive.
+  void mapPreviewChanged();
 
 private:
   /// Rebuild the selection when the map changes under it.
@@ -1371,6 +1436,14 @@ private:
   World* worldAll = nullptr;      ///< The whole World node -- scripts/events/missables (may be null in tests).
   Area* area = nullptr;           ///< The whole Area node -- for map-change construction (may be null in tests).
   PlayerBasics* basics = nullptr; ///< The trainer's basics -- the badge bits (may be null in tests).
+
+  /// The one save file, so the preview can snapshot + restore the whole 32 KB (may be null in tests).
+  SaveFile* saveFile = nullptr;
+  /// The pre-preview save, captured when a preview begins; empty when no preview is up. Restoring it
+  /// is what makes the ✗ and "Manual" exits byte-exact. @see beginMapPreview.
+  QByteArray previewSnapshot;
+  /// The map id being previewed, or -1. @see mapPreviewInd.
+  int previewInd = -1;
   AreaMap* map = nullptr;         ///< The save's live map.
   AreaPlayer* player = nullptr;   ///< The save's live player position.
   AreaTileset* tileset = nullptr; ///< The save's live tileset.
@@ -1380,7 +1453,7 @@ private:
   /// The Tiles overlays shown, as a `MapEngine::Layer` bit set. A VIEW setting -- it touches
   /// nothing in the save.
   ///
-  /// ⭐ **The save-data rule** (Twilight, 2026-07-17): *"anything related to the save file is on by
+  /// ⭐ **The save-data rule** (project leadership, 2026-07-17): *"anything related to the save file is on by
   /// default"* — and, explicitly, *"even the rom-only tiles like grass and water need to be turned
   /// on by default because you can change the pokemon in them and also change whats grass in the
   /// map state"*.

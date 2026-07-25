@@ -1,5 +1,5 @@
 /*
-  * Copyright 2026 Twilight
+  * Copyright 2026 Fairy Fox
   *
   * Licensed under the Apache License, Version 2.0 (the "License");
   * you may not use this file except in compliance with the License.
@@ -76,6 +76,16 @@ Item {
   readonly property var tileSpots: strip.spots.filter(s => s.unit === "tile")
   readonly property var gridSpots: strip.spots.filter(s => s.unit !== "tile")
 
+  /// ⭐ CAP the tabs a block draws on the canvas (project leadership, 2026-07-19: a dense block overflows —
+  /// the strip shows a MAX, and the block inspector in Details holds the full list). Grid spots take
+  /// the budget first, then tile traits; a "+N" tab opens the inspector for the rest.
+  readonly property int maxTabs: 7
+  readonly property bool overflow: strip.spots.length > strip.maxTabs
+  readonly property int budget: strip.overflow ? strip.maxTabs - 1 : strip.spots.length
+  readonly property var shownGrid: strip.gridSpots.slice(0, Math.min(strip.gridSpots.length, strip.budget))
+  readonly property var shownTile: strip.tileSpots.slice(0, Math.max(0, strip.budget - strip.shownGrid.length))
+  readonly property int overflowCount: strip.spots.length - (strip.shownGrid.length + strip.shownTile.length)
+
   /// The withdraw rule, unchanged: pointing at a movable OBJECT in this cell gets you the object
   /// (its own outline, ready to drag); pointing at the cell around it gets the tabs. Unless the
   /// object fills the cell, in which case the tabs are the only way in and stay.
@@ -139,15 +149,61 @@ Item {
     spacing: 1
 
     // NON-TILE first (left): the walk-grid family. Then the gap, then the tile traits (right).
-    Repeater { model: strip.gridSpots; delegate: tabDelegate }
+    // Both are CAPPED (@see budget) so a dense block never sprays tabs across the map.
+    Repeater { model: strip.shownGrid; delegate: tabDelegate }
 
     Item {
-      visible: strip.tileSpots.length > 0 && strip.gridSpots.length > 0
+      visible: strip.shownTile.length > 0 && strip.shownGrid.length > 0
       height: 1
       width: Math.max(4, Math.round(4 * strip.canvas.zoom))
     }
 
-    Repeater { model: strip.tileSpots; delegate: tabDelegate }
+    Repeater { model: strip.shownTile; delegate: tabDelegate }
+
+    // The overflow tab: "+N". The block holds more than the strip shows — open the block inspector
+    // in Details for the full, editable list.
+    Rectangle {
+      visible: strip.overflowCount > 0
+      width: moreText.implicitWidth + 8
+      height: Math.max(7, Math.round(6 * strip.canvas.zoom))
+      radius: 2
+      color: moreHit.containsMouse ? "#111111" : "#333333"
+      border.width: 1
+      border.color: "#ffffff"
+
+      Text {
+        id: moreText
+        anchors.centerIn: parent
+        text: "+" + strip.overflowCount
+        font.pixelSize: 8
+        font.bold: true
+        color: "#ffffff"
+      }
+
+      MouseArea {
+        id: moreHit
+        anchors.fill: parent
+        hoverEnabled: true
+        cursorShape: Qt.PointingHandCursor
+        preventStealing: true
+        onEntered: strip.canvas.overTab = true
+        onExited: strip.canvas.overTab = false
+        onClicked: {
+          if (strip.entry === null)
+            return;
+          strip.canvas.selectedBlockX = strip.entry.blockX;
+          strip.canvas.selectedBlockY = strip.entry.blockY;
+          strip.canvas.blockInspectRequested();
+        }
+      }
+
+      MapToolTip {
+        shown: moreHit.containsMouse
+        followGlobalSetting: false
+        delay: 200
+        text: qsTr("%n more on this block — open the inspector", "", strip.overflowCount)
+      }
+    }
   }
 
   Component {

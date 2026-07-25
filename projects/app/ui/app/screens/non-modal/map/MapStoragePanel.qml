@@ -1,5 +1,5 @@
 /*
-  * Copyright 2026 Twilight
+  * Copyright 2026 Fairy Fox
   *
   * Licensed under the Apache License, Version 2.0 (the "License");
   * you may not use this file except in compliance with the License.
@@ -35,7 +35,7 @@
  *      flags here; storage bytes elsewhere). **Placeholder Flags** (spare bits the game never reads)
  *      come last. Nothing about conflicts is shown -- that system is shelved.
  *      See notes/reference/event-flags.md.
- *   4. **The map's FILTER FLAGS** (Twilight's term; pret/the game call them "missables") -- its
+ *   4. **The map's FILTER FLAGS** (project leadership's term; pret/the game call them "missables") -- its
  *      hide/show object bits (`wToggleableObjectFlags`, 32 bytes at save 0x2852, `world.missables`;
  *      bit SET = HIDDEN). Each a Shown switch with a description,
  *      pret's known-issue oddities flagged amber, and the linked event flags surfaced live -- read-only
@@ -124,7 +124,7 @@ Item {
 
   // ── The pages: every map with storage (script progress, minigame bytes, or missables) ─────────
   // Built by MapModel::storagePages(): one page per script-progress entry (97), plus missable-only
-  // maps, with the legacy trio merged in (Safari COMBINED — Twilight, 2026-07-15).
+  // maps, with the legacy trio merged in (Safari COMBINED — project leadership, 2026-07-15).
   readonly property var storageMaps: { panel.revision; return brg.map.storagePages(); }
 
   property int page: 0   // index into storageMaps -- which map's storage is shown
@@ -613,7 +613,7 @@ Item {
           }
         }
 
-        // ── THE MAP'S SCRIPT (top — Twilight, 2026-07-16) ─────────────────────────────────────
+        // ── THE MAP'S SCRIPT (top — project leadership, 2026-07-16) ─────────────────────────────────────
         // The per-map script-progress value (w<Map>CurScript). The dropdown reads like a story:
         // each named step describes what's happening at that stage of the map's events.
         ColumnLayout {
@@ -654,8 +654,7 @@ Item {
             MapInfoIcon {
               text: qsTr("How far this map's story has progressed, as researched stages in order — "
                          + "picking one writes that stage's save values (the same picker as the "
-                         + "Details panel). Mid-cutscene values are real but resume inside a "
-                         + "cutscene. \"Something else…\" sets the raw step byte.")
+                         + "Details panel). \"Something else…\" sets the raw step byte.")
             }
           }
 
@@ -665,7 +664,8 @@ Item {
           // there a better map state menu … get rid of inconsistencies"*). This used to list the
           // raw SCRIPT_* step names ("Noop" -- her exact exhibit) while the Details panel listed
           // the researched stages. Both read the blueprints now: numbered stages in story order
-          // with plain names, branches lettered, transients flagged.
+          // with plain names, branches lettered. Cutscenes (transients) are NOT listed (leadership,
+          // 2026-07-19: "remove cutscenes from the map state").
           readonly property int stateMapId: panel.curPage !== undefined && panel.curPage.ids.length > 0
                                             ? panel.curPage.ids[0] : -1
           readonly property bool hasStates: {
@@ -696,8 +696,7 @@ Item {
                              desc: s.desc, kind: s.kind });
                   continue;
                 }
-                const tag = s.kind === "transient" ? qsTr(" (mid-cutscene)") : "";
-                out.push({ id: s.id, label: s.id + ". " + s.name + tag, desc: s.desc, kind: s.kind });
+                out.push({ id: s.id, label: s.id + ". " + s.name, desc: s.desc, kind: s.kind });
               }
               return out;
             }
@@ -1289,7 +1288,7 @@ Item {
                   // instantiate and Map Storage opens completely BLANK -- on every map, not just the
                   // one with the mistake. It shipped past tst_qml_screens because the panel lives in
                   // a dock Loader that only builds when the dock is opened, and the smoke test never
-                  // opens it. Found by Twilight in seconds. See notes/reference/qt-patterns.md.
+                  // opens it. Found by project leadership in seconds. See notes/reference/qt-patterns.md.
                   MapSwitch {
                     checked: hrow.collected
                     onToggled: {
@@ -1335,7 +1334,7 @@ Item {
         // ── FILTER FLAGS — who's on this map at all ────────────────────────────────────────────
         // The map's hide/show object bits (wToggleableObjectFlags, save 0x2852; bit SET = HIDDEN,
         // so the switch shows the intuitive direction: checked = on the map). "Filter Flags" is
-        // Twilight's preferred term (2026-07-16, cased as a proper name) for what the game/pret
+        // project leadership's preferred term (2026-07-16, cased as a proper name) for what the game/pret
         // calls missables — the model classes keep the pret name; the UI says Filter Flags.
         // Sorted into its own group;
         // pret's known-issue oddballs wear an amber note; linked event flags surfaced live.

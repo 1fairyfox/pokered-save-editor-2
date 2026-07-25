@@ -1,5 +1,5 @@
 /*
-  * Copyright 2026 Twilight
+  * Copyright 2026 Fairy Fox
   *
   * Licensed under the Apache License, Version 2.0 (the "License");
   * you may not use this file except in compliance with the License.
@@ -29,12 +29,13 @@
   and a console draws exactly what they say -- so they get two separate controls, and a save that
   disagrees with itself is SHOWN doing so, never quietly tidied up.
 
-  ⚠️ Picking a map CONSTRUCTS it by default (leadership, 2026-07-17: seamless, "as though the map
-  has always been loaded") -- the whole Area block is rebuilt from the destination's own ROM data,
-  the player lands on the first warp, and the map resumes its own stored progression. That is a
-  deliberate, labelled act, and the switch right under the combo turns it off -- OFF, picking a map
-  writes ONE byte (`wCurMap`), says the stored size is stale, and offers the fix: the power path,
-  exactly as before. Neither mode rewrites anything quietly.
+  ⚠️ Picking a map no longer COMMITS anything (leadership, 2026-07-19). It starts a PREVIEW: the
+  destination is constructed for real so you see exactly what you would get, but the save is
+  snapshotted first and nothing is written until you decide. The Preview box (top-right of the
+  canvas) carries the decision -- ✗ drops it, ✓ asks "Normal or Manual": Normal keeps the whole
+  construction (sprites, signs, warps, connections, the map's own progression), Manual restores the
+  snapshot and writes ONLY the map id. So the old "Construct on change" switch is gone -- there is
+  no mode to set up front; you look, then choose. @see MapModel::beginMapPreview, MapCanvas' box.
 */
 import QtQuick
 import QtQuick.Controls
@@ -52,9 +53,91 @@ Item {
   property bool openState: false
   onOpenStateChanged: openState ? pop.open() : pop.close()
 
-  // The map NAME moved out to a bold label on the far left of the bar (Twilight, 2026-07-14: it was
-  // "littered all over the top bar"). This button is now just the ICON that opens the map / tileset /
-  // blocks picker. Its glyph is a grid-in-a-frame -- a map is a grid of blocks.
+  /// Tileset + blockset are advanced overrides behind a disclosure link (project leadership, 2026-07-19) —
+  /// the map is the thing you pick; these two are the power path, collapsed until asked for.
+  property bool advancedOpen: false
+
+  // ── A "Designated Maps" row: a label, a grouped map combo, and a one-line blurb ────────────────
+  //
+  // Reused for "Outside is…" (wLastMap) and "Wake up at…" (wLastBlackoutMap) — both moved off the
+  // toolbar into this panel (project leadership, 2026-07-19). The combo is the SAME grouped map list the title
+  // picker uses; 248 names flat is a wall, so it groups by the map's own tileset.
+  component DesignatedMapRow: ColumnLayout {
+    id: dmr
+    property string label: ""
+    property string blurb: ""
+    property int value: 0
+    signal picked(int v)
+    spacing: 3
+
+    Text { text: dmr.label; font.pixelSize: 10; color: brg.settings.textColorMid }
+
+    ComboBox {
+      id: dmrCombo
+      Layout.fillWidth: true
+      Layout.preferredHeight: 30
+      font.pixelSize: 12
+      model: brg.map.mapList()
+      textRole: "name"
+      valueRole: "ind"
+      currentIndex: {
+        const l = model;
+        for (let i = 0; i < l.length; i++)
+          if (l[i].ind === dmr.value) return i;
+        return -1;
+      }
+      onActivated: dmr.picked(currentValue)
+
+      delegate: ItemDelegate {
+        required property var modelData
+        required property int index
+        width: dmrCombo.width
+        height: (modelData.group !== "" ? 20 : 0) + 26
+        highlighted: dmrCombo.highlightedIndex === index
+        contentItem: ColumnLayout {
+          spacing: 0
+          Text {
+            visible: modelData.group !== ""
+            Layout.fillWidth: true
+            text: modelData.group
+            font.pixelSize: 10; font.bold: true
+            color: brg.settings.textColorMid
+          }
+          RowLayout {
+            Layout.fillWidth: true
+            spacing: 6
+            Text {
+              text: modelData.ind
+              font.pixelSize: 10; font.family: "monospace"
+              color: brg.settings.textColorMid
+              Layout.minimumWidth: 22
+            }
+            Text {
+              Layout.fillWidth: true
+              text: modelData.name
+              font.pixelSize: 12
+              color: brg.settings.textColorDark
+              elide: Text.ElideRight
+            }
+          }
+        }
+      }
+    }
+
+    Text {
+      Layout.fillWidth: true
+      visible: dmr.blurb !== ""
+      text: dmr.blurb
+      font.pixelSize: 10
+      color: brg.settings.textColorMid
+      opacity: 0.8
+      wrapMode: Text.WordWrap
+    }
+  }
+
+  // The map SELECTOR is the title now (MapNamePicker.qml). This ⊞ button opens the map's EXTRAS: the
+  // designated maps (Outside is / Wake up at) and the tileset/blocks override. Its glyph is a
+  // grid-in-a-frame — a map is a grid of blocks.
   MapBarButton {
     id: trigger
     anchors.fill: parent
@@ -63,9 +146,7 @@ Item {
     open: root.openState
     onToggle: root.openState = !root.openState
 
-    tip: brg.map.valid
-           ? qsTr("Map, tileset & blocks — %1 · %2").arg(brg.map.mapName).arg(brg.map.tilesetName)
-           : qsTr("Pick a map")
+    tip: qsTr("Map options — designated maps, tileset & blocks")
 
     // Reactive state: the map's blocks come from a different tileset than its graphics (rare, legal,
     // and worth flagging), or its stored size no longer matches the map. A little amber dot, so the
@@ -105,138 +186,43 @@ Item {
       anchors.fill: parent
       spacing: 8
 
-      // ── Map ─────────────────────────────────────────────────────────────────────────────────
+      // ── Designated Maps — the "where the world puts you" bytes ────────────────────────────────
+      //
+      // (The map SELECTOR moved to the title — MapNamePicker.qml — so this panel is the extras: the
+      // designated maps, and the tileset/blocks override below. Project leadership, 2026-07-19.)
+      //
+      // Both live in WorldGeneral and both re-home the player: Outside is (wLastMap) is where every
+      // "back outside" ($FF) door lands — change it and every such door on the canvas re-labels at
+      // once; Wake up at (wLastBlackoutMap) is where blacking out, DIG and an ESCAPE ROPE drop you.
       Text {
-        text: qsTr("Map")
+        text: qsTr("Designated Maps")
         font.pixelSize: 11
         font.bold: true
         color: brg.settings.textColorMid
       }
 
-      ComboBox {
-        id: mapCombo
+      DesignatedMapRow {
         Layout.fillWidth: true
-        Layout.preferredHeight: 32
-        font.pixelSize: 12
-
-        model: brg.map.mapList()
-        textRole: "name"
-        valueRole: "ind"
-
-        currentIndex: {
-          const list = model;
-          for (let i = 0; i < list.length; i++)
-            if (list[i].ind === brg.map.mapInd)
-              return i;
-          return -1;
-        }
-
-        onActivated: {
-          if (constructSwitch.checked)
-            brg.map.changeMapConstructed(currentValue);   // seamless: build the whole Area
-          else
-            brg.map.mapInd = currentValue;                // the power path: ONE byte
-        }
-
-        // Every one of the 248 ids, glitch and half-baked included -- GROUPED, like the music list
-        // (Twilight, 2026-07-13). The group is the map's own tileset, which is real data out of
-        // maps.json rather than a category we invented; the unfinished copies gather at the end.
-        // 248 names in one flat list is a wall.
-        delegate: ItemDelegate {
-          required property var modelData
-          required property int index
-
-          width: mapCombo.width
-          height: (modelData.group !== "" ? 20 : 0) + 26
-          highlighted: mapCombo.highlightedIndex === index
-
-          contentItem: ColumnLayout {
-            spacing: 0
-
-            // The heading rides on the first entry of its group (the model puts it there), so there
-            // is one list and one model rather than two that can drift.
-            Text {
-              visible: modelData.group !== ""
-              Layout.fillWidth: true
-              text: modelData.group
-              font.pixelSize: 10
-              font.bold: true
-              color: brg.settings.textColorMid
-            }
-
-            RowLayout {
-              Layout.fillWidth: true
-              spacing: 6
-
-              Text {
-                text: modelData.ind
-                font.pixelSize: 10
-                font.family: "monospace"
-                color: brg.settings.textColorMid
-                Layout.minimumWidth: 22
-              }
-
-              Text {
-                Layout.fillWidth: true
-                text: modelData.name
-                font.pixelSize: 12
-                color: brg.settings.textColorDark
-                elide: Text.ElideRight
-              }
-
-              // A fact, not an alarm: this id has no map of its own, so the game draws the one it is
-              // an unfinished copy of.
-              Text {
-                visible: modelData.isCopy
-                text: qsTr("→ %1").arg(modelData.copyOf)
-                font.pixelSize: 10
-                font.italic: true
-                color: brg.settings.textColorMid
-              }
-            }
-          }
-        }
+        label: qsTr("Outside is…")
+        blurb: qsTr("Designated map when a warp goes back outside.")
+        value: brg.map.lastMap
+        onPicked: (v) => brg.map.lastMap = v
       }
 
-      // ── Construct on change — the seamless default (leadership, 2026-07-17) ─────────────────
+      DesignatedMapRow {
+        Layout.fillWidth: true
+        label: qsTr("Wake up at…")
+        blurb: qsTr("Designated black out, DIG, and ESCAPE ROPE map.")
+        value: brg.map.lastBlackoutMap
+        onPicked: (v) => brg.map.lastBlackoutMap = v
+      }
+
+      Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: brg.settings.dividerColor }
+
+      // The size the save stores is a DIFFERENT set of bytes from the map id. If some earlier edit
+      // left them stale, the doctrine says SHOW it and offer the fix -- never rewrite it quietly.
       //
-      // ON (the default): picking a map rebuilds the whole Area block from the destination's ROM
-      // data — header, tileset, cast, warps, signs, wild tables — lands the player on the first
-      // warp, and resumes the map's own stored progression. "As though the map has always been
-      // loaded." OFF: the old one-byte write, for power users assembling something deliberate.
-      RowLayout {
-        Layout.fillWidth: true
-        spacing: 6
-
-        Text {
-          Layout.fillWidth: true
-          text: qsTr("Construct the map on change")
-          font.pixelSize: 11
-          color: brg.settings.textColorDark
-        }
-
-        MapSwitch {
-          id: constructSwitch
-          checked: true
-          onToggled: checked = !checked
-        }
-      }
-      Text {
-        Layout.fillWidth: true
-        text: constructSwitch.checked
-              ? qsTr("The whole map is built properly — sprites, doors, signs, wild Pokémon — and "
-                     + "you land on its first warp, at the map's current story state.")
-              : qsTr("Only the map id byte changes. Everything else stays as it lies.")
-        font.pixelSize: 10
-        color: brg.settings.textColorMid
-        wrapMode: Text.WordWrap
-      }
-
-      // The size the save stores is a DIFFERENT set of bytes from the map id, and picking a map
-      // with construction OFF leaves them stale. The doctrine says SHOW it and offer the fix --
-      // never rewrite it quietly.
-      //
-      // But it is not an ERROR, so it is not red (Twilight, 2026-07-13: "you have red text everywhere,
+      // But it is not an ERROR, so it is not red (project leadership, 2026-07-13: "you have red text everywhere,
       // even to indicate information, which is bad"). Red means *something is broken*. This is a
       // notice, so it reads as a notice: a muted amber line with a button that does the thing.
       RowLayout {
@@ -262,13 +248,53 @@ Item {
 
       Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: brg.settings.dividerColor }
 
-      // ── Tileset (the graphics) + what animates ──────────────────────────────────────────────
-      Text {
-        text: qsTr("Tileset — the graphics")
-        font.pixelSize: 11
-        font.bold: true
-        color: brg.settings.textColorMid
+      // ── Tileset & blocks — the power path, behind a link ─────────────────────────────────────
+      //
+      // The map is what you pick; the tileset (graphics) and blockset (blocks) are advanced
+      // overrides most people never touch, so they collapse behind a disclosure link — the same
+      // "Something else…" idiom the Details panel uses (project leadership, 2026-07-19). A quiet amber dot on
+      // the link surfaces when a save's graphics and blocks disagree, so the fact is never buried.
+      RowLayout {
+        Layout.fillWidth: true
+        spacing: 6
+
+        // "Override…" (not just "Tileset & blocks") so the link reads as MANUAL control — you are
+        // overriding what the map would otherwise use — rather than "more useful options hidden in a
+        // menu" (project leadership, 2026-07-19).
+        Text {
+          text: root.advancedOpen ? qsTr("Override tileset & blocks ▾")
+                                   : qsTr("Override tileset & blocks ▸")
+          font.pixelSize: 11
+          color: brg.settings.accentColor
+          MouseArea {
+            anchors.fill: parent
+            cursorShape: Qt.PointingHandCursor
+            onClicked: root.advancedOpen = !root.advancedOpen
+          }
+        }
+
+        Rectangle {
+          visible: !brg.map.blocksetIsTileset
+          width: 6; height: 6; radius: 3
+          color: "#e69f00"
+        }
+
+        Item { Layout.fillWidth: true }
       }
+
+      ColumnLayout {
+        Layout.fillWidth: true
+        Layout.topMargin: 2
+        spacing: 8
+        visible: root.advancedOpen
+
+        // ── Tileset (the graphics) + what animates ────────────────────────────────────────────
+        Text {
+          text: qsTr("Tileset — the graphics")
+          font.pixelSize: 11
+          font.bold: true
+          color: brg.settings.textColorMid
+        }
 
       ComboBox {
         Layout.fillWidth: true
@@ -337,7 +363,7 @@ Item {
         }
       }
 
-      // What the chosen one DOES, said underneath and changing as you pick (Twilight, 2026-07-13) --
+      // What the chosen one DOES, said underneath and changing as you pick (project leadership, 2026-07-13) --
       // rather than hidden in a tooltip you have to go hunting for. This is the whole reason the
       // control exists: "Indoor" is not a place, it is *nothing animates*.
       Text {
@@ -405,6 +431,7 @@ Item {
         font.pixelSize: 10
         color: brg.settings.textColorMid
         wrapMode: Text.WordWrap
+        }
       }
     }
   }

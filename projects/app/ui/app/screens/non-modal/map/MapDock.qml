@@ -1,5 +1,5 @@
 /*
-  * Copyright 2026 Twilight
+  * Copyright 2026 Fairy Fox
   *
   * Licensed under the Apache License, Version 2.0 (the "License");
   * you may not use this file except in compliance with the License.
@@ -17,10 +17,10 @@
 /*
   MapDock.qml -- an icon RAIL and, at most, ONE open panel. There are two of them now.
 
-    * the LEFT dock holds LAYERS -- the map's legend and its navigation (Twilight, 2026-07-13);
+    * the LEFT dock holds LAYERS -- the map's legend and its navigation (project leadership, 2026-07-13);
     * the RIGHT dock holds the panels that EDIT things.
 
-  The rules, and each one is a rule Twilight asked for:
+  The rules, and each one is a rule project leadership asked for:
 
     * PANELS DO NOT STACK. One panel at a time, in the same place, every time. Nothing is ever
       evicted behind your back (the first cut had an eviction QUEUE -- a workaround for a layout
@@ -30,7 +30,7 @@
 
   ⚠️ **The panel always floats.** It used to be seated *beside* the map when there was room and float
   only when there wasn't, and the cost of that was: open a panel and the canvas resized, so the map
-  re-laid-out and jumped under the cursor. Twilight, 2026-07-13: *"Map does not need to resize on
+  re-laid-out and jumped under the cursor. Project leadership, 2026-07-13: *"Map does not need to resize on
   panel changes."* It doesn't. The dock takes the RAIL's width out of the row and nothing else; the
   panel is drawn over the canvas edge with a shadow, and swallows its own clicks, wheel and hover so
   nothing falls through to the map behind.
@@ -62,7 +62,7 @@ Item {
   /// Optional content rendered at the TOP of the rail, above the panel icons.
   ///
   /// The left dock uses it to carry the TOOLS (select / pan / zoom) and the MAKERS (place a door,
-  /// place a person) — Twilight, 2026-07-14: *"move the tools onto the left toolbar above the
+  /// place a person) — project leadership, 2026-07-14: *"move the tools onto the left toolbar above the
   /// panels, and the maker buttons below that above the panels."* A rail is the natural home for
   /// them: they are what your off hand reaches for, and the top bar goes back to saying what is
   /// LOADED. The component is declared in the SCREEN (so it can see `mapScreen`, `canvas`, the
@@ -89,7 +89,7 @@ Item {
   property int panelWidth: 240
   readonly property int railWidth: 40
   readonly property int minPanelWidth: 190
-  readonly property int maxPanelWidth: 380
+  readonly property int maxPanelWidth: 680
 
   /// ⚠️ ALWAYS. The panel is never seated in the row -- see the note at the top of this file. Opening
   /// one must not move the map.
@@ -218,7 +218,7 @@ Item {
           //
           // A panel declares `panelInfo` and gets one. It is where the PARAGRAPHS went: these panels
           // used to open with two or three of them stacked over the controls, which is a wall you
-          // have to read past every time to reach what you came for (Twilight, 2026-07-13: "remove
+          // have to read past every time to reach what you came for (project leadership, 2026-07-13: "remove
           // all the text below Sprite Set — it's way too much to read").
           //
           // ONE per panel. Don't litter them; the mark only means something while it is rare.
@@ -233,7 +233,7 @@ Item {
           // ── The panel's ONE title-bar action ─────────────────────────────────────────────────
           //
           // A panel can put a single control up here by declaring a `headerAction` Component -- the
-          // Layers panel's Clear (Twilight: "Clear button on layers should be at top, actually in the
+          // Layers panel's Clear (project leadership: "Clear button on layers should be at top, actually in the
           // pull-out panel title on the right side").
           //
           // ONE. A title bar that grows a toolbar is a toolbar, and this app does not have those.
@@ -302,31 +302,40 @@ Item {
       blocking: true
     }
 
-    // Drag the panel's map-facing edge to resize it. A splitter without a 1998 splitter handle: the
-    // cursor changes, and that is the whole affordance.
+    // ── Drag the panel's map-facing edge to resize it ──────────────────────────────────────────
+    //
+    // ⚠️ The width is computed from the CURSOR's global X against the RAIL's fixed edge — NOT from a
+    // delta on this MouseArea. The splitter sits on the panel edge, which MOVES as the panel grows,
+    // so a delta measured on a moving item feeds back and jitters. The rail never moves, so
+    // (rail edge − cursor) is a stable, direct width. A faint grip appears on hover so it is
+    // discoverable — it is genuinely draggable, not just a cursor change.
     MouseArea {
-      x: dock.isLeft ? parent.width - 3 : -3
-      width: 7
+      id: splitter
+      x: dock.isLeft ? parent.width - 4 : -4
+      width: 8
       height: parent.height
+      hoverEnabled: true
       cursorShape: Qt.SizeHorCursor
-
-      property int pressX: 0
-      property int pressW: 0
-
-      onPressed: (mouse) => {
-        pressX = mapToItem(null, mouse.x, 0).x;
-        pressW = dock.panelWidth;
-      }
 
       onPositionChanged: (mouse) => {
         if (!pressed)
           return;
+        const gx = mapToGlobal(mouse.x, 0).x;
+        const w = dock.isLeft ? (gx - rail.mapToGlobal(rail.width, 0).x)
+                              : (rail.mapToGlobal(0, 0).x - gx);
+        dock.panelWidth = Math.max(dock.minPanelWidth, Math.min(dock.maxPanelWidth, w));
+      }
 
-        const raw = mapToItem(null, mouse.x, 0).x - pressX;
-        const dx = dock.isLeft ? raw : -raw;   // both edges grow the panel by dragging OUTWARD
-
-        dock.panelWidth = Math.max(dock.minPanelWidth,
-                                   Math.min(dock.maxPanelWidth, pressW + dx));
+      // The grip: three faint dots, on hover or while dragging. Vector, quiet, discoverable.
+      Column {
+        anchors.centerIn: parent
+        spacing: 3
+        opacity: (splitter.containsMouse || splitter.pressed) ? 0.9 : 0.0
+        Behavior on opacity { NumberAnimation { duration: 90 } }
+        Repeater {
+          model: 3
+          Rectangle { width: 3; height: 3; radius: 1.5; color: brg.settings.textColorMid }
+        }
       }
     }
   }
@@ -374,7 +383,7 @@ Item {
       }
 
       // The panel icons -- separate buttons (layers / characters / details). They are NOT collapsed
-      // into a group: Twilight, 2026-07-14, asked for the panels ungrouped. (The tools and makers
+      // into a group: project leadership, 2026-07-14, asked for the panels ungrouped. (The tools and makers
       // above them are still each one flyout group; see Map.qml → railHeader.)
       Repeater {
         model: dock.panels

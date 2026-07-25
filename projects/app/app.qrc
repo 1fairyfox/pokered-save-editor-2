@@ -615,6 +615,8 @@
         <file>ui/app/screens/non-modal/map/MapIdentityBar.qml</file>
         <file>ui/app/screens/non-modal/map/MapPicker.qml</file>
         <file>ui/app/screens/non-modal/map/ContrastPicker.qml</file>
+        <file>ui/app/screens/non-modal/map/ColourPicker.qml</file>
+        <file>ui/app/screens/non-modal/map/MapNamePicker.qml</file>
         <file>ui/app/screens/non-modal/map/MapSwitch.qml</file>
         <file>ui/app/screens/non-modal/map/MapCanvas.qml</file>
         <file>ui/app/screens/non-modal/map/MapDock.qml</file>
@@ -655,7 +657,6 @@
         <file>ui/app/screens/non-modal/map/MapStoragePanel.qml</file>
         <file>ui/app/screens/non-modal/map/WildMonList.qml</file>
         <file>ui/app/screens/non-modal/map/PlayerField.qml</file>
-        <file>ui/app/screens/non-modal/map/OutsideIsPicker.qml</file>
         <file>assets/icons/fontawesome/map.svg</file>
         <file>assets/icons/fontawesome/cog.svg</file>
         <file>assets/icons/fontawesome/bicycle.svg</file>

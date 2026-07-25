@@ -1,5 +1,5 @@
 /*
-  * Copyright 2020 Twilight
+  * Copyright 2020 Fairy Fox
   *
   * Licensed under the Apache License, Version 2.0 (the "License");
   * you may not use this file except in compliance with the License.
@@ -76,7 +76,10 @@ Bridge::Bridge(FileManagement* file)
                      // basics (the badge bits). See notes/plans/map-states.md.
                      file->data->dataExpanded->world,
                      file->data->dataExpanded->area,
-                     file->data->dataExpanded->player->basics)),
+                     file->data->dataExpanded->player->basics,
+                     // The one SaveFile — the preview snapshots + restores the whole 32 KB through it
+                     // (flatten/expand), so every "no" exit of the map-change preview is byte-exact.
+                     file->data)),
     mapLayers(new MapLayersModel(map)),
     mapClock(new MapClock(map)),
     mapSim(new MapSim(map))

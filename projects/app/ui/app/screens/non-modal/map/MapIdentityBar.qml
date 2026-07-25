@@ -1,5 +1,5 @@
 /*
-  * Copyright 2026 Twilight
+  * Copyright 2026 Fairy Fox
   *
   * Licensed under the Apache License, Version 2.0 (the "License");
   * you may not use this file except in compliance with the License.
@@ -17,7 +17,7 @@
 /*
   MapIdentityBar.qml -- the top bar: THE TOOLS, then WHAT IS LOADED, then THE PALETTE.
 
-  Twilight's call (2026-07-13): the tools moved up here from a left-hand rail, and the whole left
+  Project leadership's call (2026-07-13): the tools moved up here from a left-hand rail, and the whole left
   edge went back to the map. What used to be three read-only chips (map name, tileset, size) is now
   ONE control you can actually drive:
 
@@ -43,7 +43,7 @@ Rectangle {
 
   // ⚠️ THE TOOLS AND THE MAKERS ARE NOT HERE ANY MORE (2026-07-14).
   //
-  // They moved to the LEFT RAIL (Twilight: *"move the tools onto the left toolbar above the panels,
+  // They moved to the LEFT RAIL (project leadership: *"move the tools onto the left toolbar above the panels,
   // and the maker buttons below that"*). This bar is back to what it should always have been: a
   // statement of WHAT IS LOADED. `tool` is owned by the screen now (`mapScreen.tool`), the rail sets
   // it, and the canvas reads it. See Map.qml → the left dock's `railHeader`.
@@ -52,7 +52,7 @@ Rectangle {
   property alias mapPickerOpen: mapPicker.openState
   property alias contrastPickerOpen: contrastPicker.openState
   property alias contrastShowGlitch: contrastPicker.showGlitch
-  property alias outsideOpen: outsidePicker.openState
+  property alias colourPickerOpen: colourPicker.openState
 
   implicitHeight: 36
   color: "#f7f7f7"
@@ -70,24 +70,16 @@ Rectangle {
     anchors.rightMargin: 10
     spacing: 7
 
-    // ── The map's NAME, in bold — a LABEL, not a button ───────────────────────────────────────
+    // ── The map's NAME — and it IS the map selector ───────────────────────────────────────────
     //
-    // Twilight, 2026-07-14: *"'Pallet Town' is littered all over the toolbar and we're cramped. Have
-    // the map name in bold like it is now on the left, but not in a button — as a label."*
-    //
-    // It used to appear THREE times (the map chip, "Outside is Pallet Town", "♪ Pallet Town"). Now
-    // it is said once, here, and everything else is a compact icon.
+    // project leadership, 2026-07-19: *"make the map title a button with a down arrow … clicking the map name
+    // directly lets you select a different map, no panel opening needed."* So the bold title is a
+    // flat dropdown (MapNamePicker) that opens the map PREVIEW on pick. The tileset/blocks override
+    // and the designated maps live in the ⊞ panel beside it.
     RowLayout {
       spacing: 6
 
-      Label {
-        text: brg.map.valid ? brg.map.mapName : qsTr("No map")
-        font.pixelSize: 14
-        font.bold: true
-        color: brg.settings.textColorDark
-        elide: Text.ElideRight
-        Layout.maximumWidth: 190
-      }
+      MapNamePicker { id: mapNamePicker }
 
       // A fact, not an alarm: this id has no map of its own, so the game draws the one it copies.
       Label {
@@ -111,42 +103,28 @@ Rectangle {
 
     // ── The CONFIG buttons: Map · Warp · Contrast ────────────────────────────────────────────
     //
-    // Compact icon tool-buttons, each with a ▾ that says "I drop a menu" (Twilight). Where a reactive
+    // Compact icon tool-buttons, each with a ▾ that says "I drop a menu" (project leadership). Where a reactive
     // icon is natural it is one: Contrast IS its live four-shade swatch, the Map icon carries an amber
     // dot when the map's blocks/size don't match. They share MapBarButton, so they read as a family.
     // (Music used to be here too; it moved to the SIMULATION group below, with the other things you
     // play.)
 
-    // ── Map (⊞): which map, its tileset, its blockset ────────────────────────────────────────
+    // ── Map options (⊞): designated maps (Outside is / Wake up at), tileset & blocks override ───
+    //
+    // The map SELECTOR is the title (MapNamePicker); this panel holds the extras. "Outside is…" moved
+    // in here from its own toolbar chip (project leadership, 2026-07-19) — it re-labels every "back outside"
+    // ($FF) door on the canvas at once, live, when changed.
     MapPicker { id: mapPicker; objectName: "mapPickerControl" }
 
-    // ── ⭐ "Outside is…" — the map a `back outside` door returns you to (wLastMap) ─────────────
+    // ── Contrast ─────────────────────────────────────────────────────────────────────────────
     //
-    // It sits in the TOOLBAR, with what is loaded, and not in a panel — and that is a deliberate
-    // call, not a convenience.
-    //
-    // Every building's exit warp is `$FF`, which does NOT name a map: it means "put me back on
-    // whatever map I last stood on outdoors", and THIS byte is that map. So changing it re-labels
-    // every "back outside" door on the canvas AT ONCE — and watching that happen is the entire point.
-    // A control that changes what a dozen other things MEAN does not belong three clicks deep.
-    //
-    // ⚠️ Twilight reached for this as "From map". The byte actually called that
-    // (`wWarpedFromWhichMap`) is DEAD — the game writes it on every warp and nothing anywhere reads
-    // it. This is the one she meant. See notes/reference/warps.md §4.
-    OutsideIsPicker { id: outsidePicker }
-
-    // ── Contrast (+ Colour) ──────────────────────────────────────────────────────────────────
-    //
-    // ⚠️ The COLOUR filter used to be its own chip beside this one. It is now folded INTO this
-    // dropdown, below the glitch-contrast switch (Twilight, 2026-07-14). They are the palette pair —
-    // contrast picks *which of the four shades* a pixel becomes, colour picks *what those four
-    // shades are painted* — so a person setting one is usually thinking about the other, and two
-    // chips for one idea was a chip too many.
+    // Just contrast now — the COLOUR palette moved to its own chip on the right of the bar
+    // (ColourPicker, project leadership, 2026-07-19). Contrast is a save byte; colour is a view setting.
     ContrastPicker { id: contrastPicker }
 
     // ══ THE SIMULATION GROUP — the three things you PLAY ══════════════════════════════════════
     //
-    // Twilight, 2026-07-14: *"the music button, the tile-animation button and the walk button need to
+    // project leadership, 2026-07-14: *"the music button, the tile-animation button and the walk button need to
     // all be icon buttons with an optional dropdown — a play/pause button next to a symbol, with a
     // little dropdown arrow. Those three are all SIMULATION and go in the group to the RIGHT of the
     // config buttons."* So they sit together, past a divider, each a MapSimButton (▶/⏸ + a symbol +
@@ -160,7 +138,7 @@ Rectangle {
     }
 
     // ⚠️ The three sim buttons sit in their OWN tight RowLayout, so they read as a GROUP -- close
-    // together, and clearly apart from the config buttons across the divider (Twilight, 2026-07-14:
+    // together, and clearly apart from the config buttons across the divider (project leadership, 2026-07-14:
     // *"make the simulation buttons look like a proper grouping with proper spacing"*). With the ▾
     // now INSIDE each button, they are compact enough to cluster.
     RowLayout {
@@ -171,7 +149,7 @@ Rectangle {
 
     // ── SIMULATION — one icon-text button, one panel ────────────────────────────────────────
     //
-    // Twilight, 2026-07-14: *"move the walking button into the animation button, use the walking
+    // project leadership, 2026-07-14: *"move the walking button into the animation button, use the walking
     // symbol not the flower, make it an icon-text button, name the panel Simulation and put the tile
     // animation and the walking options together nicely in one panel."*
     //
@@ -250,7 +228,7 @@ Rectangle {
             smooth: true
           }
 
-          // Icon only — no text (Twilight). Just the ▾ to say it drops a menu.
+          // Icon only — no text (project leadership). Just the ▾ to say it drops a menu.
           Text {
             anchors.verticalCenter: parent.verticalCenter
             text: "⌄"
@@ -432,9 +410,23 @@ Rectangle {
 
     Item { Layout.fillWidth: true }
 
+    // ── Colour (the output palette) — its own chip, right side ──────────────────────────────────
+    //
+    // project leadership, 2026-07-19: *"the color picker goes in the top bar at the right."* Its face is the
+    // four colours it is currently painting with. A VIEW setting — no save byte.
+    ColourPicker { id: colourPicker }
+
+    Rectangle {
+      implicitWidth: 1
+      implicitHeight: 18
+      color: brg.settings.dividerColor
+      Layout.leftMargin: 2
+      Layout.rightMargin: 2
+    }
+
     // ── The clutter switch, hard right ────────────────────────────────────────────────────────
     //
-    // ⚠️ Twilight, 2026-07-13, and it is a good idea: *"Have a switch right-aligned on the top
+    // ⚠️ project leadership, 2026-07-13, and it is a good idea: *"Have a switch right-aligned on the top
     // toolbar that toggles on values that will be overwritten as options to change. Have it OFF by
     // default, give it a good label. When it's off, the fields that relate to things there's no
     // point in changing will not be present and add clutter."*
@@ -446,7 +438,7 @@ Rectangle {
     //
     // Off: they simply are not there. On: they are, each wearing its yellow "!".
     //
-    // ⚠️ AN ICON, NOT A LABELLED SWITCH. It was "Reloaded values" + a Switch, and Twilight:
+    // ⚠️ AN ICON, NOT A LABELLED SWITCH. It was "Reloaded values" + a Switch, and project leadership:
     // *"it's way too long -- don't put a long label to the left of it, do something else, maybe an
     // icon of sorts."* She is right: a sentence of chrome sitting permanently in the toolbar to
     // describe a thing you touch once. It is a chip with a mark on it now, and the words are in its

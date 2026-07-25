@@ -1,5 +1,5 @@
 /*
-  * Copyright 2026 Twilight
+  * Copyright 2026 Fairy Fox
   *
   * Licensed under the Apache License, Version 2.0 (the "License");
   * you may not use this file except in compliance with the License.
@@ -103,9 +103,9 @@ QVariantMap option(int value, const QString& name, bool hack = false);
 MapModel::MapModel(AreaMap* map, AreaPlayer* player, AreaTileset* tileset, AreaGeneral* general,
                    AreaLoadedSprites* sprites, AreaSprites* npcs, AreaWarps* warps,
                    WorldGeneral* world, AreaSign* signs, AreaPokemon* pokemon,
-                   World* worldAll, Area* area, PlayerBasics* basics)
+                   World* worldAll, Area* area, PlayerBasics* basics, SaveFile* saveFile)
   : sprites(sprites), npcs(npcs), warps(warps), signsData(signs), world(world),
-    worldAll(worldAll), area(area), basics(basics),
+    worldAll(worldAll), area(area), basics(basics), saveFile(saveFile),
     map(map), player(player), tileset(tileset), general(general), pokemon(pokemon)
 {
   // The doors get their own signal for exactly the reason the cast does: `changed()` re-renders the
@@ -133,7 +133,7 @@ MapModel::MapModel(AreaMap* map, AreaPlayer* player, AreaTileset* tileset, AreaG
   // the whole of Route 17 if that is where you are.
   //
   // The walk simulation moves somebody **~60 times a second**. It was therefore re-rendering the
-  // whole map ~60 times a second, to move one 16x16 sprite. Twilight: *"the framerate plummets."*
+  // whole map ~60 times a second, to move one 16x16 sprite. Project leadership: *"the framerate plummets."*
   //
   // A sprite moving does not change one pixel of the MAP. It gets `castChanged()` -- which the
   // canvas's sprite layer listens to and nothing else does.
@@ -473,7 +473,7 @@ QVariantList MapModel::connectionEditList() const
       m["toH"] = toH;
       m["toTileset"] = MapEngine::tilesetOf(c->mapPtr);   // for the full-neighbour render on the canvas
 
-      // The landmark offsets a drag snaps to (Twilight, 2026-07-15): flush at 0, centred, and the
+      // The landmark offsets a drag snaps to (project leadership, 2026-07-15): flush at 0, centred, and the
       // far edges flush. N/S snap along width; E/W along height. Computed from the two maps' sizes,
       // deduped, and named so the context bar can say which one you are on.
       const bool ns = (dir == MapDBEntryConnect::ConnectDir::NORTH ||
@@ -788,7 +788,7 @@ bool MapModel::spriteSetMatchesMap() const
 // ⚠️ This is the routine the whole "will my sprite render?" question turns on, and until 2026-07-13
 // we answered it WRONG -- we asked the save's cached sprite set, which the game **throws away**.
 //
-// Twilight: *"No matter what sprite set is set to, the map should render exactly and completely
+// project leadership: *"No matter what sprite set is set to, the map should render exactly and completely
 // accurately, like the game would after loading a modified save file."* So we do what the game does.
 // The whole of `engine/overworld/map_sprites.asm`, in two halves:
 //
@@ -1231,7 +1231,7 @@ QVariantList MapModel::mapList() const
   // DB entry fields are protected -- always the getters, never the members (a standing rule; see
   // CLAUDE.md).
   //
-  // GROUPED, like the music list (Twilight, 2026-07-13). 248 names in one flat list is a wall. The
+  // GROUPED, like the music list (project leadership, 2026-07-13). 248 names in one flat list is a wall. The
   // group is the map's own TILESET -- which is real data out of maps.json, not a category we made up:
   // "Overworld" gathers the towns and routes, "Cave" the caves, "Pokecenter" every Poké Center, and
   // so on. The unfinished copies get their own group, because that is what they are.
@@ -1406,7 +1406,7 @@ QVariantList MapModel::contrastShades(int contrast) const
 
   // ⚠️ THE REAL PALETTE, not a decoration. The contrast segments used to be painted in the app's
   // accent blue (and the glitch ones in yellow) -- which told you *that* a value was unusual and
-  // nothing whatever about what it would do to the map. Twilight: *"coloured segments matching the
+  // nothing whatever about what it would do to the map. Project leadership: *"coloured segments matching the
   // current colours."* So each segment now wears the four shades that value actually renders in, and
   // sliding along the strip shows you the map going dark before the map does.
   //
@@ -1473,7 +1473,7 @@ QVariantMap MapModel::viewBoxesAt(int x, int y) const
 {
   // ⚠️ The same MapEngine routines the bound properties use, just asked about a position that is not
   // (yet) the player's. That is what lets the two boxes follow him **while you are dragging him**
-  // rather than snapping into place on release (Twilight, 2026-07-13: "Can the camera box and draw
+  // rather than snapping into place on release (project leadership, 2026-07-13: "Can the camera box and draw
   // area box update live as player is moved around" -- they can, and now they do).
   //
   // One source of truth: if these boxes are ever wrong, they are wrong in MapEngine, together.
@@ -1565,7 +1565,7 @@ QVariantList MapModel::npcList() const
     // ⚠️ Sprites TELEPORTED between tiles, and this is why. `TryWalking` moves mapX/mapY to the
     // DESTINATION immediately and then slides the sprite 1 pixel a frame for 16 frames -- so the
     // tile coordinate is where it is GOING, not where it IS. Drawing straight from mapX/mapY
-    // skipped the entire step. (Twilight: "when they walk they don't slide or move or animate
+    // skipped the entire step. (project leadership: "when they walk they don't slide or move or animate
     // properly, it still looks bad.")
     //
     // The offset is exact, and it needs no reconstruction of the console's screen-pixel fields:
@@ -1751,7 +1751,7 @@ QVariantList MapModel::spriteCatalog() const
       const bool ok = pictureWouldRenderIfAdded(int(e->ind));
       m["inSpriteSet"] = ok;
 
-      // ⚠️ SHORT. Twilight: *"the yellow exclamation point needs a shorter tooltip -- why not 'This
+      // ⚠️ SHORT. Project leadership: *"the yellow exclamation point needs a shorter tooltip -- why not 'This
       // sprite is not expected on this map so it would come off garbled'."* One sentence. The long
       // version is what the panel's "?" is for.
       if (!ok) {
@@ -2332,7 +2332,7 @@ QVariantList MapModel::signTextList() const
   if (m == nullptr)
     return {};
 
-  // Three sections, in the order Twilight asked for: the map's own SIGN text first, then the PEOPLE's
+  // Three sections, in the order project leadership asked for: the map's own SIGN text first, then the PEOPLE's
   // dialogue, then everything else. Each row shows the real words. The header rides on the first row
   // of its section (the same mechanism the item picker's `sectioned()` uses), so QML groups on it.
   QVariantList signs, people, other;
@@ -2862,7 +2862,7 @@ QVariantList MapModel::playerFields() const
 
   // ── ⚠️💀 Rewritten on load, or never read — behind the switch ────────────────────────────────
   //
-  // Twilight, 2026-07-14: *"it would be wonderful to know which ones were regenerated or rewritten
+  // project leadership, 2026-07-14: *"it would be wonderful to know which ones were regenerated or rewritten
   // on save load with little exclamation points grouped below and hidden behind a switch."* This is
   // that. Ten the game rewrites, three it never reads -- and they are DIFFERENT facts, said apart.
   const QString nothing = tr("Rewritten on load, or never read");
@@ -3059,7 +3059,7 @@ QVariantMap MapModel::zoomTarget(const QString& kind)
   }
 
   if (kind == "xy") {
-    // The centre of a random BLOCK -- not a tile and not a pixel (Twilight). A block is the unit a
+    // The centre of a random BLOCK -- not a tile and not a pixel (project leadership). A block is the unit a
     // map is actually built out of, so it is the unit that is worth landing on.
     if (blocksWide() <= 0 || blocksHigh() <= 0)
       return target(false);
@@ -3112,7 +3112,7 @@ namespace {
 // ── The Details panel's field schema ─────────────────────────────────────────────────────────────
 //
 // ⚠️ REWRITTEN 2026-07-13. The first version emitted one row per byte, each a number box with a
-// paragraph next to it, under headings called "Who", "Where" and "When". Twilight, verbatim:
+// paragraph next to it, under headings called "Who", "Where" and "When". Project leadership, verbatim:
 //
 //   > *"the Who When Where is really really dumb, don't do it. The fields are all just raw values —
 //   > exactly what I said not to do. I don't know what most of those numbers mean on sprite details,
@@ -3138,7 +3138,7 @@ namespace {
 //
 // `scratch` marks a byte the console recomputes when it loads the save. It gets a yellow "!".
 // Not hidden, not refused, not silently normalised -- just labelled, so nobody spends an afternoon
-// setting a value the game throws away. (Twilight: "animation scratch ... needs to be explained --
+// setting a value the game throws away. (project leadership: "animation scratch ... needs to be explained --
 // a yellow exclamation point next to it, when moused over, would say it's reloaded on game load.")
 
 // (The default arguments live on the forward declaration at the top of the file -- the warp fields
@@ -3177,7 +3177,7 @@ QVariantMap option(int value, const QString& name, bool hack)
 /// Sort an option list into TWO SECTIONS -- the clean values first, the flagged ones after -- and put
 /// a heading on the first row of each.
 ///
-/// ⚠️ Twilight, 2026-07-13: *"If it has an exclamation on it, it probably needs a group above it that
+/// ⚠️ project leadership, 2026-07-13: *"If it has an exclamation on it, it probably needs a group above it that
 /// has those without. I don't want duplicates above — I think there's so many of them they get lost.
 /// This needs to be organised better."*
 ///
@@ -3260,7 +3260,7 @@ QVariantList MapModel::mapTextList() const
 
   // The map's OWN scripts, out of the cartridge -- who each one belongs to. A text id is an index
   // into this map's text-pointer table, so "Text 3" means nothing on its own; "Text 3 — Fisher 2"
-  // is a thing you can actually choose. (Twilight: "Text id needs to reference whatever it's
+  // is a thing you can actually choose. (project leadership: "Text id needs to reference whatever it's
   // supposed to... it needs to show real data.")
   QMap<int, QString> named;
 
@@ -3293,7 +3293,7 @@ QVariantList MapModel::mapTextList() const
   // ⚠️ ONLY THE SCRIPTS THIS MAP REALLY HAS.
   //
   // It used to offer all 64 ids, with the 50-odd unused ones listed as "this map has no script 37".
-  // That is fifty rows of nothing, and they buried the handful that mean something. Twilight:
+  // That is fifty rows of nothing, and they buried the handful that mean something. Project leadership:
   // *"Empty sign script slots need to rely on Something else."* -- and they do: the raw box is one
   // click away and reaches every one of the 64, so nothing is lost except the noise.
   ret.append(option(0, tr("Nothing to say")));
@@ -3350,7 +3350,7 @@ QVariantList MapModel::npcFields(int slot) const
   //
   // Roughly a third of a sprite is bytes the console works out again the moment it loads the save --
   // the walk state, the on-screen pixels, the VRAM slot. Every one is real and every one is editable,
-  // and the toolbar's "Reloaded values" switch turns them on. It is **off by default** (Twilight):
+  // and the toolbar's "Reloaded values" switch turns them on. It is **off by default** (project leadership):
   //
   //   *"When it's off, the fields that relate to things there's no point in changing will not be
   //    present and add clutter."*
@@ -3367,7 +3367,7 @@ QVariantList MapModel::npcFields(int slot) const
   // ── Character ──────────────────────────────────────────────────────────────────────────────
   //
   // A PICKER, with the artwork in it. You choose a character by looking at them, not by knowing
-  // that 37 is a Fisherman. (Twilight: "If you need to select a picture, have a menu to select
+  // that 37 is a Fisherman. (project leadership: "If you need to select a picture, have a menu to select
   // from pictures.")
   const QString character = tr("Character");
 
@@ -3376,7 +3376,7 @@ QVariantList MapModel::npcFields(int slot) const
 
   // ── Where ──────────────────────────────────────────────────────────────────────────────────
   //
-  // X and Y are ONE fact, so they are one control (Twilight: "x and y can probably be grouped into
+  // X and Y are ONE fact, so they are one control (project leadership: "x and y can probably be grouped into
   // 1 box"). The +4 bias comes off here and goes back on in setNpcField -- one conversion, one place.
   add(field(tr("Where"), "mapXY", tr("Standing at"),
                    tr("Where on the map, in tiles, counting from the top-left. (The save keeps "
@@ -3412,7 +3412,7 @@ QVariantList MapModel::npcFields(int slot) const
     option(0xD3, tr("Facing right")),
     option(0xFF, tr("Nowhere at all")),
   };
-  // ⚠️ *"Isn't wander supposed to let you pick how far they can walk?"* -- Twilight. The honest answer
+  // ⚠️ *"Isn't wander supposed to let you pick how far they can walk?"* -- project leadership. The honest answer
   // is **no**, and it is worth saying out loud rather than leaving her to wonder.
   //
   // This byte picks an AXIS and nothing else: anywhere / up-and-down / left-and-right. There IS a
@@ -3457,13 +3457,13 @@ QVariantList MapModel::npcFields(int slot) const
   //
   // ⚠️ THE KIND IS THE TEXT BYTE'S TOP TWO BITS, and it decides which of the fields below exist at
   // all. A Pokéball has no trainer roster; a Bug Catcher has no item. Neither of them should be
-  // looking at a box for one. THIS is what Twilight meant by "the combo box value is going to
+  // looking at a box for one. THIS is what project leadership meant by "the combo box value is going to
   // determine if the raw textbox is even needed to be there or not".
   const QString talk = tr("Talking to it");
   const int textByte = s->getTextID();
   const int kind = kindOf(textByte);
 
-  // ⚠️ "Both at once" -- which Twilight quite reasonably read as *"both of WHAT? there are three
+  // ⚠️ "Both at once" -- which project leadership quite reasonably read as *"both of WHAT? there are three
   // other options."* It means both bits set at the same time, which is a thing no real game writes
   // and the console does something confused with. So it says what it is.
   const QVariantList kinds = {
@@ -3521,7 +3521,7 @@ QVariantList MapModel::npcFields(int slot) const
                    s->movementStatus, 0, 255, "enum", statuses, true));
 
   // Not a number and not a sentence explaining what a number means. A DURATION, drawn as one.
-  // (Twilight: "What is 'delay until next move'? What does that mean, how is it measured? Don't
+  // (project leadership: "What is 'delay until next move'? What does that mean, how is it measured? Don't
   // tell them with text — tell them with a beautiful, polished, clean UI/UX.")
   add(field(live, "movementDelay", tr("Then waits"),
                    tr("How long before it may move again. The game counts this down one per frame, "
@@ -3883,7 +3883,7 @@ void MapModel::setGrassEnabled(bool on)
   // Off → 0 (no wild grass) — and NOTHING ELSE. Disabling never clears a slot: the ten stay in
   // memory (and, since save() skips the list when the rate is 0, the disk bytes are left untouched),
   // so re-enabling brings the exact same table back. On → keep a positive rate, defaulting to 25
-  // (Route 1's) if it was 0. (Twilight, 2026-07-15: "unchecking just disables, never removes data.")
+  // (Route 1's) if it was 0. (project leadership, 2026-07-15: "unchecking just disables, never removes data.")
   setGrassRate(on ? (pokemon->grassRate > 0 ? pokemon->grassRate : 25) : 0);
 }
 
@@ -4086,7 +4086,7 @@ QSet<int> idSet(const QVariantList& mapIds)
 
 QVariantList MapModel::storagePages() const
 {
-  // The Safari Zone is COMBINED (Twilight, 2026-07-15): its sub-maps share one counter set.
+  // The Safari Zone is COMBINED (project leadership, 2026-07-15): its sub-maps share one counter set.
   static const QVector<int> safariIds{ 0x9C, 0xD9, 0xDA, 0xDB, 0xDC, 0xDD, 0xDE, 0xDF, 0xE0, 0xE1 };
 
   QVector<QVariantMap> pages;
@@ -4538,7 +4538,9 @@ QVariantList MapModel::blockHotspots(quint32 tileLayers) const
   const ScriptDBEntry* mapScript = map->getToScript();
   const int mapScriptInd = (mapScript != nullptr) ? int(mapScript->ind) : -1;
 
-  for (const MapDBEntryStorageSpot& sp : map->getStorageSpots()) {
+  const auto& allStorageSpots = map->getStorageSpots();
+  for (int si = 0; si < allStorageSpots.size(); ++si) {
+    const MapDBEntryStorageSpot& sp = allStorageSpots[si];
     // The spot's true extent. A range is a REAL extent -- and it is NOT a box: it is highlight
     // geometry that happens to be wide. It gets no hit target of its own; the blocks it crosses
     // are the hit targets, and it appears as a tab on each.
@@ -4555,7 +4557,11 @@ QVariantList MapModel::blockHotspots(quint32 tileLayers) const
 
     QVariantMap v;
     v["kind"]    = (kind == "cardKeyDoor") ? QStringLiteral("cardKeyDoor") : QStringLiteral("script");
-    v["ind"]     = mapScriptInd;
+    // `ind` is the SELECTION KEY the tab carries — the spot's index in this map's storage-spot
+    // list, so a click opens Details on exactly THIS trigger (scriptSpotAt reads the same index).
+    // The map's own script byte stays available separately as `scriptInd`.
+    v["ind"]     = si;
+    v["scriptInd"] = mapScriptInd;
     v["unit"]    = "halfBlock";
     v["section"] = "script";
     v["name"]    = (kind == "cardKeyDoor") ? tr("Card Key door") : tr("Script trigger");
@@ -4652,7 +4658,7 @@ QVariantList MapModel::blockHotspots(quint32 tileLayers) const
         // meaning "no Map Storage row to open" -- and because both the tab and the block's hit area
         // are enabled ONLY when a section exists, that one empty string made **water and grass
         // completely inert**: no hover, no tooltip, no click, on the majority of a water route.
-        // Twilight: *"clicking water doesnt even bring up wild mons it should at least have that"*.
+        // project leadership: *"clicking water doesnt even bring up wild mons it should at least have that"*.
         //
         // She is right, and it is not a special case -- it is the standard. A trait is not a dead
         // fact: GRASS and WATER are where the wild Pokémon are, and those tables are editable, so
@@ -4705,6 +4711,86 @@ QVariantList MapModel::blockHotspots(quint32 tileLayers) const
     b["spots"]  = it.value();
     out.append(b);
   }
+
+  return out;
+}
+
+QVariantMap MapModel::scriptSpotAt(int spot) const
+{
+  QVariantMap out;
+  if (!valid())
+    return out;
+  MapDBEntry* m = MapsDB::inst()->getIndAt(QString::number(mapInd()));
+  if (m == nullptr)
+    return out;
+  const auto& spots = m->getStorageSpots();
+  if (spot < 0 || spot >= spots.size())
+    return out;
+  const MapDBEntryStorageSpot& sp = spots[spot];
+
+  const bool cardKey = (sp.kind == QLatin1String("cardKeyDoor"));
+  out[QStringLiteral("valid")]     = true;
+  out[QStringLiteral("shape")]     = sp.kind;
+  out[QStringLiteral("isCardKey")] = cardKey;
+  out[QStringLiteral("x")]         = sp.x;
+  out[QStringLiteral("y")]         = sp.y;
+  out[QStringLiteral("routine")]   = sp.routine;
+  out[QStringLiteral("chain")]     = sp.chain;
+
+  const ScriptDBEntry* ms = m->getToScript();
+  out[QStringLiteral("scriptInd")]  = (ms != nullptr) ? int(ms->ind) : -1;
+  out[QStringLiteral("scriptName")] = QString();
+
+  out[QStringLiteral("title")] = cardKey ? tr("Card Key door") : tr("Script trigger");
+
+  // What sets it off, in words — the geometry the console tests.
+  if (sp.kind == QLatin1String("scriptRow"))
+    out[QStringLiteral("trigger")] =
+        tr("Runs whenever the player stands anywhere on row %1.").arg(sp.y);
+  else if (sp.kind == QLatin1String("scriptCol"))
+    out[QStringLiteral("trigger")] =
+        tr("Runs whenever the player stands anywhere in column %1.").arg(sp.x);
+  else if (cardKey)
+    out[QStringLiteral("trigger")] = tr("The tile the Card Key opens, at %1, %2.").arg(sp.x).arg(sp.y);
+  else
+    out[QStringLiteral("trigger")] = tr("Runs when the player steps on tile %1, %2.").arg(sp.x).arg(sp.y);
+
+  // The EVENT FLAGS the script writes (chain-unioned), each keeping its direction + phase.
+  QVariantList events;
+  for (const MapDBEntryFlagWrite& w : sp.events) {
+    EventDBEntry* ev = EventsDB::inst()->getStoreAt(w.ind);
+    QVariantMap o;
+    o[QStringLiteral("ind")]      = w.ind;
+    o[QStringLiteral("name")]     = (ev != nullptr) ? ev->getName() : tr("Event flag #%1").arg(w.ind);
+    o[QStringLiteral("desc")]     = (ev != nullptr) ? ev->getDesc() : QString();
+    o[QStringLiteral("caution")]  = (ev != nullptr) ? ev->getCaution() : QString();
+    o[QStringLiteral("action")]   = w.action;      // "set" / "reset"
+    o[QStringLiteral("step")]     = w.step;
+    o[QStringLiteral("stepName")] = w.stepName;
+    o[QStringLiteral("viaChain")] = w.viaChain;
+    events.append(o);
+  }
+  out[QStringLiteral("events")] = events;
+
+  // The FILTER FLAGS it shows/hides (chain-unioned) — a missable bit each.
+  QVariantList filters;
+  for (const MapDBEntryFlagWrite& w : sp.filters) {
+    MissableDBEntry* mi = MissablesDB::inst()->getStoreAt(w.ind);
+    if (mi != nullptr && int(mi->getInd()) != w.ind)
+      mi = nullptr;   // the store isn't bit-indexed here -> resolve by searching for the bit
+    if (mi == nullptr)
+      for (auto* e : MissablesDB::inst()->getStore())
+        if (int(e->getInd()) == w.ind) { mi = e; break; }
+    QVariantMap o;
+    o[QStringLiteral("ind")]      = w.ind;
+    o[QStringLiteral("name")]     = (mi != nullptr) ? mi->getName() : tr("Filter flag #%1").arg(w.ind);
+    o[QStringLiteral("action")]   = w.action;      // "show" / "hide"
+    o[QStringLiteral("step")]     = w.step;
+    o[QStringLiteral("stepName")] = w.stepName;
+    o[QStringLiteral("viaChain")] = w.viaChain;
+    filters.append(o);
+  }
+  out[QStringLiteral("filters")] = filters;
 
   return out;
 }

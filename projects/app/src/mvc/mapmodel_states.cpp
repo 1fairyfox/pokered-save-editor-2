@@ -1,5 +1,5 @@
 /*
-  * Copyright 2026 Twilight
+  * Copyright 2026 Fairy Fox
   *
   * Licensed under the Apache License, Version 2.0 (the "License");
   * you may not use this file except in compliance with the License.
@@ -29,11 +29,15 @@
  */
 
 #include <climits>
+#include <cstring>
 
+#include <QByteArray>
 #include <QHash>
 #include <QSet>
 #include <QVariantList>
 #include <QVariantMap>
+
+#include <pse-savefile/savefile.h>
 
 #include <pse-db/mapsdb.h>
 #include <pse-db/mapstatesdb.h>
@@ -228,7 +232,8 @@ QList<QPair<int, QString>> uncoveredScriptValues(const MapStateBlueprint* bp)
   QList<QPair<int, QString>> out;
   QSet<int> covered;
   for (const auto& st : bp->getStages())
-    covered.insert(st.script);
+    if (st.kind != QLatin1String("transient"))
+      covered.insert(st.script);  // a transient's value is NOT a state — it falls through to a raw step
   for (const QVariant& v : bp->getScriptValues()) {
     const QVariantMap m = v.toMap();
     const int val = m.value(QStringLiteral("value")).toInt();
@@ -322,6 +327,12 @@ QVariantList MapModel::stateList(int mapIndArg) const
     return out;
   const QString cur = currentStateId(ind);
   for (const auto& st : bp->getStages()) {
+    // Cutscenes are OUT of the map state (leadership, 2026-07-19). A transient carries only a
+    // script byte, and its value — a real table value — still reaches you as a raw "Step N" entry
+    // below (uncoveredScriptValues no longer counts transients as covered). This supersedes the
+    // 2026-07-17 "transient cutscene values must be shown" call.
+    if (st.kind == QLatin1String("transient"))
+      continue;
     QVariantMap m;
     m[QStringLiteral("id")] = st.id;
     m[QStringLiteral("kind")] = st.kind;
@@ -362,16 +373,15 @@ QString MapModel::currentStateId(int mapIndArg) const
   if (bp == nullptr || worldAll == nullptr)
     return QString();
 
-  // A byte parked mid-cutscene is the literal current state — the transients first.
+  // Cutscenes are OUT of the map state (leadership, 2026-07-19): a byte parked on a transient
+  // value is no longer answered with the transient id — it falls through to the resting
+  // determination and, failing that, to the raw-step branch below (its value is uncovered now).
   const auto& stages = bp->getStages();
   const int byte = liveScriptByteFor(bp, worldAll, map, mapInd());
-  for (const auto& st : stages)
-    if (st.kind == QLatin1String("transient") && st.script == byte)
-      return st.id;
 
   // The resting determination: the LATER of exact-match and delta-evidence (a save
   // carrying any of stage 3's giveaway flags IS in stage 3 — leadership, 2026-07-19).
-  const QString rid = evidenceOrExactRestingId(bp, worldAll, map, mapInd());
+  QString rid = evidenceOrExactRestingId(bp, worldAll, map, mapInd());
   if (!rid.isEmpty())
     return rid;
 
@@ -383,7 +393,7 @@ QString MapModel::currentStateId(int mapIndArg) const
 
   // Nothing matched and nothing gave evidence: the best-scoring resting stage, latest
   // winning ties. Never "" (no "custom / not recognized") while a blueprint exists.
-  const QString best = bestRestingId(bp, worldAll, map, mapInd());
+  QString best = bestRestingId(bp, worldAll, map, mapInd());
   if (!best.isEmpty())
     return best;
   return stages.isEmpty() ? QString() : stages.first().id;
@@ -656,4 +666,123 @@ void MapModel::changeMapConstructed(int newMapInd)
   emit castChanged();
   emit warpsChanged();
   emit signsChanged();
+}
+
+// ── The map-change preview ─────────────────────────────────────────────────────
+//
+// ⚠️ notes/plans/map-states.md → "The preview". Picking a map no longer commits — it PREVIEWS.
+// The destination is constructed for real (so what you see is exactly what you'd keep), but the
+// whole 32 KB save is snapshotted first, so the two "no" exits put every byte back. The snapshot
+// rides the app's own flatten/expand path: `flattenData()` writes the live edits into the raw
+// buffer (byte-fidelity — only the strictly-necessary bytes), we copy all of it, and restoring is
+// a memcpy + `expandData()`, which reloads the expanded tree IN PLACE (Area::load refills the same
+// child objects), so every model pointer this class holds stays valid.
+
+namespace {
+
+/// Write the snapshot back over the live save and re-expand it in place. The callers emit the
+/// refresh signals themselves (each exit wants a slightly different set).
+void restoreSnapshotInto(SaveFile* saveFile, const QByteArray& snap)
+{
+  if (saveFile == nullptr || saveFile->data == nullptr || snap.size() != int(SAV_DATA_SIZE))
+    return;
+  std::memcpy(saveFile->data, snap.constData(), SAV_DATA_SIZE);
+  saveFile->expandData();  // reloads every fragment in place — pointers stay valid
+}
+
+}  // namespace
+
+void MapModel::beginMapPreview(int newMapInd)
+{
+  // No snapshot machinery (tests) or nothing to construct from: leave the picker to fall back to a
+  // plain one-byte edit rather than pretend to preview.
+  if (saveFile == nullptr || saveFile->data == nullptr || area == nullptr)
+    return;
+
+  // A fresh preview always snapshots the PRE-preview save: if one is already up, undo it first so
+  // the snapshot below is the map you actually started on, not a half-built other preview.
+  if (previewInd >= 0)
+    cancelMapPreview();
+
+  // Previewing the map you are already on (with nothing else to decide) is a no-op.
+  if (newMapInd == mapInd())
+    return;
+
+  // Snapshot the whole save exactly as it stands. flattenData() folds any live expanded edits into
+  // the raw buffer first, so the copy is complete; restoring it is byte-exact.
+  saveFile->flattenData();
+  previewSnapshot =
+      QByteArray(reinterpret_cast<const char*>(saveFile->data), int(SAV_DATA_SIZE));
+  previewInd = newMapInd;
+
+  // Build the destination for real — the preview shows precisely what committing "Normal" keeps.
+  changeMapConstructed(newMapInd);
+
+  emit mapPreviewChanged();
+}
+
+void MapModel::cancelMapPreview()
+{
+  if (previewInd < 0)
+    return;
+  restoreSnapshotInto(saveFile, previewSnapshot);
+  previewSnapshot.clear();
+  previewInd = -1;
+
+  emit mapPreviewChanged();
+  // The whole expanded tree was just reloaded — refresh the render and every canvas list.
+  emit changed();
+  emit castChanged();
+  emit warpsChanged();
+  emit signsChanged();
+}
+
+void MapModel::confirmMapPreviewNormal()
+{
+  if (previewInd < 0)
+    return;
+  // Keep the construction exactly as previewed. Nothing to write — just release the snapshot and
+  // drop the preview flag; the player (hidden while deciding) comes back on the next `changed()`.
+  previewSnapshot.clear();
+  previewInd = -1;
+
+  emit mapPreviewChanged();
+  emit changed();
+}
+
+void MapModel::confirmMapPreviewManual()
+{
+  if (previewInd < 0)
+    return;
+  const int target = previewInd;
+
+  // Undo the construction, then write ONLY the map id — everything else exactly as it was.
+  restoreSnapshotInto(saveFile, previewSnapshot);
+  previewSnapshot.clear();
+  previewInd = -1;
+
+  emit mapPreviewChanged();
+  setMapInd(target);  // one byte; emits changed()
+  // The snapshot restore reloaded the whole tree, so refresh the object lists too.
+  emit castChanged();
+  emit warpsChanged();
+  emit signsChanged();
+}
+
+bool MapModel::mapPreviewActive() const
+{
+  return previewInd >= 0;
+}
+
+int MapModel::mapPreviewInd() const
+{
+  return previewInd;
+}
+
+QString MapModel::mapPreviewName() const
+{
+  if (previewInd < 0)
+    return QString();
+  auto* entry = MapsDB::inst()->getIndAt(QString::number(previewInd));
+  return entry == nullptr ? QStringLiteral("Map %1").arg(previewInd) : entry->bestName();
 }

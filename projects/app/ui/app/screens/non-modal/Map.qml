@@ -1,5 +1,5 @@
 /*
-  * Copyright 2026 Twilight
+  * Copyright 2026 Fairy Fox
   *
   * Licensed under the Apache License, Version 2.0 (the "License");
   * you may not use this file except in compliance with the License.
@@ -63,7 +63,7 @@ Page {
   /// The map's hard floor. It is the screen; it does not get to vanish so that furniture can fit.
   ///
   /// ⚠️ The docks no longer take any width from it AT ALL -- their panels always float over the
-  /// canvas (Twilight: "map does not need to resize on panel changes"). This is now just the floor
+  /// canvas (project leadership: "map does not need to resize on panel changes"). This is now just the floor
   /// for the WINDOW getting small.
   readonly property int mapMinWidth: 280
 
@@ -84,7 +84,7 @@ Page {
   /// Which tool is in hand, and which panel each dock has open -- all drivable by name.
   ///
   /// ⚠️ `tool` is OWNED HERE now (2026-07-14). It used to live on the top bar, because that is where
-  /// the tools were. They moved to the LEFT RAIL (Twilight), so the top bar no longer owns them and
+  /// the tools were. They moved to the LEFT RAIL (project leadership), so the top bar no longer owns them and
   /// the screen does -- both the rail and the canvas read `mapScreen.tool`.
   property string tool: "select"
   property alias dockPanel: rightDock.open
@@ -95,8 +95,8 @@ Page {
   property alias contrastPickerOpen: identityBar.contrastPickerOpen
   property alias contrastShowGlitch: identityBar.contrastShowGlitch
 
-  /// "Outside is…" — the wLastMap chip. Drivable, so the screenshot review can actually open it.
-  property alias outsideOpen: identityBar.outsideOpen
+  /// The colour chip (output palette) on the right of the bar. Drivable for the screenshot review.
+  property alias colourPickerOpen: identityBar.colourPickerOpen
 
   /// The "Useless edits" toggle (the toolbar "!"), mirrored. `brg.map` is a C++ model, so automation cannot set it
   /// directly — and without this the review could never SEE the four fields that do nothing, which
@@ -141,10 +141,13 @@ Page {
       if (canvas.placing) {
         mapScreen.tool = "select";
         event.accepted = true;
-      } else if (canvas.selectedNpc >= 0 || canvas.selectedWarp >= 0 || canvas.selectedSign >= 0) {
+      } else if (canvas.selectedNpc >= 0 || canvas.selectedWarp >= 0 || canvas.selectedSign >= 0
+                 || canvas.selectedScript >= 0 || canvas.selectedBlockX >= 0) {
         canvas.selectedNpc = -1;
         canvas.selectedWarp = -1;
         canvas.selectedSign = -1;
+        canvas.selectedScript = -1;
+        canvas.selectedBlockX = -1;
         event.accepted = true;
       } else if (rightDock.open !== "" || leftDock.open !== "") {
         rightDock.open = "";
@@ -167,7 +170,7 @@ Page {
     spacing: 0
 
     // The top bar says WHAT IS LOADED -- the map picker, the palette, the music, the animation. The
-    // TOOLS moved to the left rail (Twilight, 2026-07-14: *"move the tools onto the left toolbar at
+    // TOOLS moved to the left rail (project leadership, 2026-07-14: *"move the tools onto the left toolbar at
     // the top above the panels, and the maker buttons below that"*), which is the natural home for
     // "what you DO" -- your off hand lives there, and it leaves this bar to say "what you're looking
     // AT". (It bounced back and forth: a left rail, then up here 2026-07-13, and now a left rail
@@ -186,7 +189,7 @@ Page {
       //
       // ⚠️ The Characters bar was briefly its OWN rail beside this dock. That was a mistake and it
       // broke the rule this whole screen was rebuilt around: **panels do not stack out beside each
-      // other.** It is a panel in this dock like everything else (Twilight, 2026-07-13).
+      // other.** It is a panel in this dock like everything else (project leadership, 2026-07-13).
       //
       // The map's legend, the cast you can place, and the editor for whatever is selected. All on
       // the left, where your other hand is; the panels that configure the MAP ITSELF are on the
@@ -197,7 +200,7 @@ Page {
 
         side: "left"
 
-        // Nothing open (Twilight). You open the Map screen and you see THE MAP.
+        // Nothing open (project leadership). You open the Map screen and you see THE MAP.
         open: ""
 
         // Details FIRST (leadership, 2026-07-18: "Details needs to be moved above layers") — it is
@@ -221,7 +224,7 @@ Page {
 
         // ── The tools + the makers, above the panel icons — each group COLLAPSED to one button ──
         //
-        // Twilight, 2026-07-14: *"collapse the left toolbar button groups into a single button each,
+        // project leadership, 2026-07-14: *"collapse the left toolbar button groups into a single button each,
         // reduce it down to three buttons."* So the rail is three flyout groups now: Tools, Makers,
         // and (below, in the dock) Panels. Each face shows its ACTIVE member and flies the rest out.
         //
@@ -332,7 +335,7 @@ Page {
         onStorageRequested: (section, ind) => {
           // ⭐ ONE gesture, routed by the spot's own declared destination -- so clicking anything on
           // the canvas lands you where that thing actually lives, and the map answers the same way
-          // everywhere. Twilight: *"clicking water doesnt even bring up wild mons it should at least
+          // everywhere. Project leadership: *"clicking water doesnt even bring up wild mons it should at least
           // have that ... have proper standardization"*.
           //
           // The spot says where it belongs; this just obeys. Adding the next storage kind means
@@ -347,6 +350,12 @@ Page {
           }
           if (section === "details") {
             leftDock.open = "details";    // a person, a door, a sign -> its own editor
+            return;
+          }
+          if (section === "script") {
+            // A dashed script trigger -> the Details panel, which reads its full record
+            // (what fires it, what it changes). The canvas already set selectedScript.
+            leftDock.open = "details";
             return;
           }
           rightDock.open = "storage";
@@ -365,6 +374,10 @@ Page {
           leftDock.open = "";
           rightDock.open = "";
         }
+
+        // ⭐ A block was clicked — open the block inspector in Details (its full spot list). The
+        // canvas has already selected the block (canvas.selectedBlockX/Y). Project leadership, 2026-07-19.
+        onBlockInspectRequested: leftDock.open = "details"
 
         // A maker tool put something down. The status bar says what and where -- never a modal, and
         // never nothing at all.
@@ -387,7 +400,7 @@ Page {
         side: "right"
         open: ""
 
-        // "Blocks & Tiles", not "Tiles" (Twilight, 2026-07-13: "Tiles is not very good or accurate --
+        // "Blocks & Tiles", not "Tiles" (project leadership, 2026-07-13: "Tiles is not very good or accurate --
         // it has to do with the block and tile config on the map"). It is exactly that: the BLOCK
         // that fills the edge of the world, and the TILES that mean grass, counter, and boulder.
         panels: [
@@ -397,7 +410,7 @@ Page {
             tip: qsTr("Sprite set — the eleven sprite pictures the game had loaded for this map") },
           // ⇄ The twelve bytes AROUND the doors -- fly, hole, Dig, scripted. They belong to the MAP,
           // which is why they are here with the other things you edit about it, and not in the
-          // Details panel (which is for whatever is SELECTED). Twilight asked for exactly this:
+          // Details panel (which is for whatever is SELECTED). Project leadership asked for exactly this:
           // "I will place them in the right panel as warp state" (2026-07-14).
           { id: "warps", glyph: "⇄", title: qsTr("Warp state"),
             tip: qsTr("Warp state — where FLY goes, where falling drops you, where DIG puts you") },
@@ -409,7 +422,7 @@ Page {
             tip: qsTr("Character state — how the characters on this map behave: facing, scripted control, trainer battle") },
           // ▣ MAP STORAGE — global save bytes that each belong to one map (Vermilion Gym trash-can
           // switches, Cinnabar Gym quiz opponent, Safari Zone run counters). `primary: true` gives its
-          // rail icon the filled, accent-coloured "this holds persistent storage" look Twilight asked
+          // rail icon the filled, accent-coloured "this holds persistent storage" look project leadership asked
           // for (2026-07-15). Briefed + researched this session; reference/gym-safari-state.md.
           // ⭐ "WORLD" is its name (leadership, 2026-07-18: "Map Storage should still be called
           // World") — the world's persistent storage, viewed one map at a time.
@@ -417,7 +430,7 @@ Page {
             tip: qsTr("World — the save's persistent storage, one map at a time: story flags, who's on the map, minigame state") }
         ]
         // ⚠️ MUSIC IS NOT HERE ANY MORE. It is a chip in the toolbar (MusicPicker.qml) -- a whole
-        // dock panel for one combo, two checkboxes and a ▶ was a panel too many (Twilight).
+        // dock panel for one combo, two checkboxes and a ▶ was a panel too many (project leadership).
         sources: ({ "tiles": "TilesetPanel.qml",
                     "sprites": "SpriteSetPanel.qml",
                     "warps": "WarpStatePanel.qml",
@@ -429,7 +442,7 @@ Page {
       }
     }
 
-    // Everything ABOUT what you're looking at lives down here, not in the toolbar (Twilight,
+    // Everything ABOUT what you're looking at lives down here, not in the toolbar (project leadership,
     // 2026-07-13): the cursor's coordinates, the block under it, the map's size, whether this id is
     // an unfinished copy, the animation, the zoom.
     MapStatusBar {
