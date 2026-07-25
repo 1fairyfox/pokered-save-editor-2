@@ -39,6 +39,11 @@ jobs:
           results_file: results.sarif
           results_format: sarif
           publish_results: true
+          # Authenticated read for fuller coverage: a classic PAT (public_repo + read:org)
+          # lets Scorecard read Branch-Protection + webhooks the default GITHUB_TOKEN can't.
+          # Provision it as the SCORECARD_TOKEN repo secret ("fairyfox repo tokens" / ci-secrets
+          # standard). Falls back to the default token until it's set, so this stays green.
+          repo_token: ${{ secrets.SCORECARD_TOKEN || github.token }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

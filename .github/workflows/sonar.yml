@@ -1,0 +1,64 @@
+name: sonar
+
+# SonarCloud (SonarQube Cloud) analysis — fairyfox ci-secrets: SONAR_TOKEN (authenticated
+# quality gate + tech-debt, not a tokenless fallback). C/C++ is analyzed from the compilation
+# database (`build/compile_commands.json`), so we configure + build first so the moc/autogen
+# sources exist, then run the scanner. The scan step is gated on the token so CI stays green
+# until SONAR_TOKEN is provisioned ("fairyfox repo tokens" / ci-secrets standard).
+#
+# Requires a SonarCloud project (org `1fairyfox`, key `1fairyfox_pokered-save-editor-2`) — see
+# sonar-project.properties. Scoped to main + PRs to keep CI minutes sane.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main, dev]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  QT_VERSION: "6.11.0"
+  SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+jobs:
+  sonar:
+    name: sonar
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0   # full history so Sonar can attribute new-code / blame
+
+      - name: Install build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential ninja-build \
+            libgl1-mesa-dev libegl1-mesa-dev libxkbcommon-dev
+
+      - name: Install Qt (Linux gcc_64)
+        uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          host: linux
+          target: desktop
+          arch: linux_gcc_64
+          modules: qtcharts qtmultimedia qtshadertools
+          cache: true
+
+      - name: Configure + build (emit compile_commands.json + generated sources)
+        run: |
+          cmake -S projects -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
+          cmake --build build -j --target tests_all
+          test -f build/compile_commands.json
+
+      - name: SonarCloud scan (authenticated)
+        # Gated on the token so the run stays green until SONAR_TOKEN is provisioned.
+        if: ${{ env.SONAR_TOKEN != '' }}
+        uses: SonarSource/sonarqube-scan-action@2f77a1ec69fb1d595b06f35ab27e97605bdef703 # v5
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: https://sonarcloud.io

@@ -1,0 +1,92 @@
+name: coverage
+
+# Codecov coverage upload (fairyfox ci-secrets: CODECOV_TOKEN — the authenticated upload,
+# not the tokenless public fallback). Mirrors the local `docker/dtest.ps1 coverage` build:
+# a clang source-based-coverage instrumented build (PSE_SHARED_APPCORE=ON), the full ctest
+# suite, then llvm-cov export -> lcov -> Codecov. The upload step is gated on the token so
+# CI stays green until the secret is provisioned ("fairyfox repo tokens" / ci-secrets).
+#
+# Scoped to main + PRs + schedule (not every dev push) to keep CI minutes sane; the local
+# docker coverage build + its floor gate remain the fast dev loop.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main, dev]
+  schedule:
+    - cron: "41 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  QT_VERSION: "6.11.0"
+  CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+jobs:
+  coverage:
+    name: coverage
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Install build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential ninja-build clang llvm \
+            libgl1-mesa-dev libegl1-mesa-dev libxkbcommon-dev
+
+      - name: Install Qt (Linux gcc_64)
+        uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          host: linux
+          target: desktop
+          arch: linux_gcc_64
+          modules: qtcharts qtmultimedia qtshadertools
+          cache: true
+
+      - name: Configure (clang source-based coverage)
+        env:
+          CC: clang
+          CXX: clang++
+        run: >
+          cmake -S projects -B build-cov -G Ninja -DCMAKE_BUILD_TYPE=Debug
+          -DPSE_SHARED_APPCORE=ON
+          -DCMAKE_C_FLAGS="-fprofile-instr-generate -fcoverage-mapping"
+          -DCMAKE_CXX_FLAGS="-fprofile-instr-generate -fcoverage-mapping"
+          -DCMAKE_EXE_LINKER_FLAGS="-fprofile-instr-generate -fcoverage-mapping"
+          -DCMAKE_SHARED_LINKER_FLAGS="-fprofile-instr-generate -fcoverage-mapping"
+
+      - name: Build tests
+        run: cmake --build build-cov -j --target tests_all
+
+      - name: Run ctest (instrumented, offscreen)
+        env:
+          QT_QPA_PLATFORM: offscreen
+          LLVM_PROFILE_FILE: "prof/%m-%p.profraw"
+        run: ctest --test-dir build-cov --output-on-failure || true
+
+      - name: Merge + export lcov
+        run: |
+          set -euo pipefail
+          llvm-profdata merge -sparse build-cov/prof/*.profraw -o build-cov/merged.profdata
+          mapfile -t LIBS < <(find build-cov -name 'lib*.so' | sort -u)
+          OBJ=(); for l in "${LIBS[@]:1}"; do OBJ+=(-object "$l"); done
+          llvm-cov export -format=lcov \
+            -instr-profile=build-cov/merged.profdata "${LIBS[0]}" "${OBJ[@]}" \
+            -ignore-filename-regex='(/tests/|/opt/Qt/|/usr/|moc_|qrc_|\.moc|autogen)' \
+            > coverage.lcov
+          echo "lcov lines: $(wc -l < coverage.lcov)"
+
+      - name: Upload to Codecov (authenticated)
+        # Gated on the token so the run stays green until CODECOV_TOKEN is provisioned.
+        if: ${{ env.CODECOV_TOKEN != '' }}
+        uses: codecov/codecov-action@0fb7174895f61a3b6b78fc075e0cd60383518dac # v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage.lcov
+          fail_ci_if_error: false

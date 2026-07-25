@@ -199,6 +199,45 @@ touched. CI should return to green once that map-states WIP lands. (This also me
 branch-protection required checks, once set, will correctly hold `main` until CI is green — which is
 their purpose.)
 
+## legal-docs + ci-secrets (owner corrected two wrong N-A calls)
+
+The owner overturned two `N-A` calls I'd made — correctly. The docs site is a public front-facing
+surface (and `coins.js`/reader prefs put local-storage state on it), so **legal-docs applies**; and the
+authenticated service integrations should be wired, not skipped in favour of free no-key fallbacks.
+
+- **legal-docs — implemented.** Self-hosted `docs/legal/{privacy,terms,cookies}.html`, rewritten to the
+  actual code: the desktop editor stores nothing on a server and transmits nothing; the docs site
+  discloses the GitHub Pages processor, self-hosted fonts (no third-party IP), and the reader-prefs +
+  Fairy Fox coins **local storage** (device-only, clearable) — coins stated as no monetary value with the
+  shared `/legal/coins/` link. Deployed to `/legal/` by `pages.yml`; linked from the chrome footer "This
+  project" column + a new `Legal` subnav item; `legal@fairyfox.io` contact; a CLAUDE.md maintenance
+  trigger keeps them living.
+- **ci-secrets — wired; token provisioning is the owner's.** All three authenticated integrations are in:
+  Scorecard `repo_token: SCORECARD_TOKEN` (reads Branch-Protection/webhooks beyond the default token;
+  falls back so it stays green), `coverage.yml` → Codecov (`CODECOV_TOKEN`), and `sonar.yml` +
+  `sonar-project.properties` → SonarCloud (`SONAR_TOKEN`, C/C++ via the compilation database). Every
+  token-requiring step is **gated**, so CI stays green until the secrets exist, and none of the three
+  new/updated workflows runs on a plain `dev` push.
+
+### ci-secrets provisioning — the one part that needs you (external accounts I can't create)
+
+I have `gh` access but cannot create a SonarCloud org, a Codecov account, or a GitHub PAT. Create each,
+then set the secret (values never need to touch this transcript):
+
+```powershell
+# SCORECARD_TOKEN — github.com/settings/tokens/new → classic PAT, scopes: public_repo + read:org
+gh secret set SCORECARD_TOKEN --repo 1fairyfox/pokered-save-editor-2
+# CODECOV_TOKEN — app.codecov.io/gh/1fairyfox → this repo → Configuration → Repository Upload Token
+gh secret set CODECOV_TOKEN  --repo 1fairyfox/pokered-save-editor-2
+# SONAR_TOKEN — sonarcloud.io: import the repo (org 1fairyfox), then Account → Security → Generate
+gh secret set SONAR_TOKEN    --repo 1fairyfox/pokered-save-editor-2
+```
+
+(`gh secret set NAME` prompts for the value with input hidden. Or run the hub's
+`repo-tokens.ps1`, which does all three with concealed input.) Once set, the gated steps light up:
+Codecov coverage upload, SonarCloud analysis, and Scorecard's fuller checks — confirm with
+`gh secret list`. Until then, everything else stays green.
+
 ## Environment
 
 - **Node:** `pokered-save-editor-2` — Qt 6.11 C++/QML **desktop** app (llvm-mingw kit), open source,

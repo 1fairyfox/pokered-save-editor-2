@@ -103,7 +103,13 @@ jobs:
           python3 scripts/build_gallery.py tmp/screenshots site/screenshots
           test -f site/screenshots/index.html
           test -n "$(ls site/screenshots/*.png 2>/dev/null)"
-          echo "docs (root): $(find site -maxdepth 1 -type f | wc -l) files; screenshots: $(ls -1 site/screenshots/*.png | wc -l)"
+          # Self-hosted legal pages (fairyfox legal-docs standard) under /legal/. They link
+          # ../main.css + ../fonts/fonts.css (deployed flat at the site root by Doxygen's
+          # HTML_EXTRA_FILES), so they are on-brand and font-consistent with the rest of the site.
+          mkdir -p site/legal
+          cp docs/legal/privacy.html docs/legal/terms.html docs/legal/cookies.html site/legal/
+          test -f site/legal/privacy.html && test -f site/legal/terms.html && test -f site/legal/cookies.html
+          echo "docs (root): $(find site -maxdepth 1 -type f | wc -l) files; screenshots: $(ls -1 site/screenshots/*.png | wc -l); legal: $(ls -1 site/legal/*.html | wc -l)"
 
       - uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
       - uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3
