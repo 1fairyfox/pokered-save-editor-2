@@ -122,6 +122,25 @@ node populates its own contexts (`tests` linux-asan + windows, `lint`, and the `
 gates). (Current state of the platform enforcement is tracked in
 [`adoption-manifest.md`](adoption-manifest.md) → git-workflow / supply-chain rows.)
 
+## Releasing when `main` is branch-protected (PR-based) — CURRENT
+
+As of 2026-07-25, `main` is **branch-protected** (supply-chain-hardening §5, solo config: PR
+required / 0 approvals, strict required checks `linux-asan`+`windows`+`static-analysis`+`CodeQL`,
+`enforce_admins` on, force-push/deletion off, linear-history off). **A direct `git push origin main`
+is now blocked** — the release goes through a PR, and even an admin waits for the required checks:
+
+```sh
+# from green dev (PATCH); a MINOR/MAJOR goes via a release/X.Y.0 branch first, then PRs that branch
+git push origin dev
+gh pr create --base main --head dev --title "release: v<VERSION>" --body "…"
+gh pr checks --watch          # the full required suite must be green
+gh pr merge --merge           # a merge commit (like --no-ff) — this is the release; triggers release.yml
+```
+
+`release.yml` still owns the tag (do **not** `git tag` by hand). The merge commit on `main` is the
+release, exactly as before — only the *mechanism* to create it changed from a local push to a PR merge.
+To adjust or remove the protection: `gh api -X DELETE repos/1fairyfox/pokered-save-editor-2/branches/main/protection`.
+
 ## Hotfixes
 
 A production problem that can't wait for the next `dev` cycle is fixed on a branch cut from

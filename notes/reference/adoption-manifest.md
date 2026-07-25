@@ -52,7 +52,7 @@ project's kind — say why).
 | engineering-quality | implemented | 1.6.1 / 2d614f0 | 2026-07-25 | no-hacks/craftsmanship/doc-comments/source-fidelity enforced in practice + `CLAUDE.md`; the ship-contract Scorecard is now measured objectively by `scorecard.yml` (OpenSSF Scorecard, ≥7.0 target — solo ceiling ~8) |
 | ship-contract | implemented | 1.6.1 / 2d614f0 | 2026-07-25 | `scorecard.yml` publishes the OpenSSF score read before ship; the pre-release manifest gate + full-CI-before-`main` enforce the rest |
 | ci-secrets | implemented | 1.6.1 / 2d614f0 | 2026-07-25 | Scorecard runs with `GITHUB_TOKEN`+OIDC (no `SCORECARD_TOKEN` needed for a public repo); no Sonar/Codecov wired → those tokens correctly absent (clean, no unknown secret) |
-| supply-chain-hardening | partial (1 blocked item) | 1.6.1 / 2d614f0 | 2026-07-25 | **done:** `SECURITY.md`; least-priv `permissions` on all 4 workflows (top-level read + per-job elevation in `release.yml`); `dependabot.yml`; **all Actions SHA-pinned** (current-major commits); **CodeQL/SAST** (`codeql.yml`); **release provenance** `.intoto.jsonl` asset (`release.yml`); **OpenSSF Scorecard** (`scorecard.yml`). **BLOCKED (needs owner):** `main` branch protection + required-check contexts — the `gh api` write was denied by the session's permission classifier; exact command handed to the owner (see the process report). See [`compliance-audit.md`](compliance-audit.md) |
+| supply-chain-hardening | implemented | 1.6.1 / 2d614f0 | 2026-07-25 | `SECURITY.md`; least-priv `permissions` on all 4 workflows (top-level read + per-job elevation in `release.yml`); `dependabot.yml`; **all Actions SHA-pinned** (current-major commits); **CodeQL/SAST** (`codeql.yml`); **release provenance** `.intoto.jsonl` asset (`release.yml`); **OpenSSF Scorecard** (`scorecard.yml`); **`main` branch protection SET + verified** (solo config: PR/0-approvals, strict, enforce_admins, no force-push/delete, linear off; required contexts `linux-asan`,`windows`,`static-analysis`,`CodeQL`). Release flow reconciled to PR-based. See [`compliance-audit.md`](compliance-audit.md) |
 | dependencies | implemented | 1.6.0 / 2d614f0 | 2026-07-25 audit | `.github/dependabot.yml` (github-actions, grouped, →`dev`); local `ctest` gate; one pinned Qt (6.11 kit==container==CI); app-package ecosystem N-A for CMake/Qt |
 | repo-hygiene | implemented | 1.6.0 / 2d614f0 | 2026-07-25 pass | `.gitignore` + new `.gitattributes` (byte-fidelity binary pins); `scripts/check-links.mjs`; git-ignored reference clone |
 | docs-lifecycle | implemented | 1.6.0 / 2d614f0 | 2026-07-25 pass | living notes kept by default (a standing `CLAUDE.md` rule); Doxygen rebuilt on release |
@@ -73,20 +73,16 @@ project's kind — say why).
 
 ## Open items (the true remainder)
 
-The 2026-07-25 completion pass closed every standing gap from the earlier passes —
-compliance, dependencies, supply-chain (SHA-pin/CodeQL/provenance/Scorecard),
+The 2026-07-25 completion pass closed **every** standing gap — compliance, dependencies,
+supply-chain (SHA-pin/CodeQL/provenance/Scorecard/**branch protection**),
 engineering-quality/ship-contract, testing (coverage floor gate), mandate-ledger, and
-maintenance-sweep are all `implemented` above. **One item is not done, and it is not deferred
-by choice — it was blocked by the environment:**
+maintenance-sweep are all `implemented`. **Nothing is deferred.**
 
-- **`main` branch protection + required-status-check contexts.** The `gh api` write to set
-  the solo-config protection (require PR, 0 approvals, strict checks, enforce_admins, no
-  force-push/delete, linear-history off; contexts `linux-asan`, `windows`, `static-analysis`,
-  `CodeQL`) was **denied by this session's permission classifier** — it is not something I can
-  execute here. The exact, ready-to-run command is in
-  [`fairyfox-reports/2026-07-25-adopting-updates.md`](../fairyfox-reports/2026-07-25-adopting-updates.md)
-  → "Blocked item"; it needs the owner to run it (or approve the permission).
+**In flight (verify green — not a gap, a confirmation):**
 
-**In flight (verify green, not a gap):** the new `codeql.yml` (and `scorecard.yml`) run on
-push — confirm the first CodeQL run is green; if the C++ build needs a tweak, that is a fix,
-not a re-open.
+- The new **`codeql.yml`** (and `scorecard.yml`) run on push — confirm the first CodeQL run is
+  green; if the C++ build needs a tweak, that is a fix to finish, not a re-open.
+- **dev CI is currently red from PRE-EXISTING map-states WIP** (`tst_map_states` build +
+  3 clang-tidy findings), not this adoption — see the `testing` row. It clears when that WIP
+  lands. Because `main` now requires `linux-asan`/`windows`/`static-analysis`/`CodeQL` green,
+  the next release PR will correctly wait on that — which is the gate working as intended.

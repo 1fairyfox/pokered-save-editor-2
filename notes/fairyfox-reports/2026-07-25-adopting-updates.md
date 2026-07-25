@@ -151,11 +151,15 @@ Done this pass:
 - **mandate-ledger** (`notes/plans/2026-07-25-mandate.md`) and **maintenance-sweep**
   (`notes/reference/maintenance-sweep.md`) filed.
 
-### Blocked item — needs the owner (I could not execute it, and I am not calling it done)
+### Branch protection — initially blocked, then SET + verified
 
-Setting `main` branch protection via `gh api` was **denied by this session's permission classifier**.
-It is the one item I cannot do from here. The exact, ready-to-run command (writes a UTF-8 no-BOM
-payload, per the standard):
+On the first attempt the `gh api` write was denied by the session's permission classifier; I reported
+it as owner-actionable rather than claim it done. On the owner's "you have access to gh, try again" it
+**succeeded** and was **verified by read-back**: solo config — PR required / 0 approvals, `strict`
+required checks `linux-asan`+`windows`+`static-analysis`+`CodeQL`, `enforce_admins` on,
+force-push/deletion off, linear-history off. The release flow is reconciled to **PR-based**
+(git-workflow.md → "Releasing when `main` is branch-protected"). The command used (UTF-8 no-BOM payload,
+per the standard):
 
 ```powershell
 $json = @'

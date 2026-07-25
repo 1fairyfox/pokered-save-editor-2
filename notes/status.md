@@ -43,10 +43,12 @@ pre-authorized, so they were applied directly (the full safety floor still ran).
   **maintenance-sweep** procedure. Manifest + audit now read every standard `implemented` or reasoned
   `N-A`. Encoded a standing rule — **no self-authorized deferral of mandated work** — in `CLAUDE.md` +
   `context/collaboration.md`.
-- **ONE item blocked, not deferred:** setting `main` **branch protection** via `gh api` was denied by
-  the session's permission classifier. Exact command is in the process report — needs the owner to run
-  it (or approve the permission). **No app code touched;** CodeQL + Scorecard are dispatched — confirm
-  their first runs are green.
+- **`main` branch protection SET + verified** (solo config; required contexts
+  `linux-asan`/`windows`/`static-analysis`/`CodeQL`; release flow reconciled to PR-based in
+  `git-workflow.md`). Initially blocked by the session classifier, then applied on the owner's
+  go-ahead. **Every standard is now `implemented` or a reasoned `N-A`.** **No app code touched;** open
+  confirmations only: CodeQL/Scorecard first runs green, and dev CI is red from **pre-existing
+  map-states WIP** (not this adoption) until that WIP lands.
 
 ### FILTER FLAGS RESEARCHED + EVIDENCE MATCHING + the World panel completed (2026-07-19, `0.43.6-alpha`)
 

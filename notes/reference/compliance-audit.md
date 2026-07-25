@@ -53,14 +53,15 @@ The five `partial`s this audit first recorded were **all closed the same day** �
 [adoption manifest](adoption-manifest.md) for the flipped rows and the process report for the work:
 
 1. **supply-chain-hardening** — SHA-pinned every Action, added CodeQL (`codeql.yml`), release
-   provenance `.intoto.jsonl` asset (`release.yml`), and OpenSSF Scorecard (`scorecard.yml`). **One
-   sub-item is blocked, not deferred:** `main` branch protection via `gh api` was denied by the
-   session's permission classifier — the exact command is handed to the owner (process report).
+   provenance `.intoto.jsonl` asset (`release.yml`), OpenSSF Scorecard (`scorecard.yml`), and
+   **`main` branch protection SET + verified** (solo config; required contexts `linux-asan`,
+   `windows`, `static-analysis`, `CodeQL`). Release flow reconciled to PR-based.
 2. **engineering-quality / ship-contract** — `scorecard.yml` supplies the objective ≥7.0 signal.
 3. **testing** — a hard coverage-floor gate is wired into `docker/run-tests.sh`.
 4. **mandate-ledger** — instantiated at `notes/plans/2026-07-25-mandate.md`.
 5. **maintenance-sweep** — filed at `notes/reference/maintenance-sweep.md`.
 
-**Net state: every standard is `implemented` or a reasoned `N-A`, with the single exception of `main`
-branch protection**, which is environment-blocked and owner-actionable (command provided). CodeQL +
-Scorecard are dispatched and should be confirmed green on their first run.
+**Net state: every standard is `implemented` or a reasoned `N-A`.** `main` branch protection is now set
+and verified. The only open item is a *confirmation*, not a gap: CodeQL + Scorecard are dispatched —
+confirm the first CodeQL run is green (and note dev CI is currently red from pre-existing map-states
+WIP, which clears when that WIP lands).
