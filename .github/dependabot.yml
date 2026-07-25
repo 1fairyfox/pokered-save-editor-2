@@ -1,0 +1,24 @@
+# Dependabot — keep GitHub Actions current. Adopted from the fairyfox hub template.
+# See notes/reference/git-workflow.md and notes/reference/adoption-manifest.md
+# (supply-chain-hardening / dependencies rows).
+#
+# NOTE: this is a C++/CMake/Qt project. There is no Dependabot-supported package
+# ecosystem for the application's own dependencies (Qt is provided by the toolchain,
+# not a lockfile-managed registry), so only the github-actions ecosystem is enabled —
+# which is the part that matters for supply-chain hardening (it keeps CI Actions, and
+# any SHA pins, current). Update PRs target the WORKING branch (dev) to match git-flow.
+
+version: 2
+updates:
+  # GitHub Actions — keeps the workflow `uses:` pins current (Scorecard
+  # Pinned-Dependencies stays green without going stale).
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    target-branch: "dev"
+    open-pull-requests-limit: 10
+    groups:
+      actions-minor-and-patch:
+        update-types: ["minor", "patch"]
+    labels: ["dependencies", "github-actions"]

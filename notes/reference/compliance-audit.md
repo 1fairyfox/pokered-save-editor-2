@@ -1,0 +1,68 @@
+# Standards compliance audit — 2026-07-25
+
+The committed **whole-set** compliance pass the hub's [`compliance.md`](#) standard defines:
+run every adopted standard's `## Verify` and report `done` / `partial` / `missing` with the
+exact gap named. This is the aggregate the [adoption manifest](adoption-manifest.md) rows
+summarize; a `partial`/`missing` here is what turns a manifest row into a dated `gap`.
+
+- **Target:** this node (`pokered-save-editor-2`), a Qt 6 C++/QML **desktop** app with a
+  Doxygen docs site on GitHub Pages.
+- **Against:** hub standards **1.6.1** / `2d614f0`.
+- **Mode:** full. **Changed on disk:** this audit is a read; the same-day adopt pass that
+  precedes it (see [`fairyfox-reports/2026-07-25-adopting-updates.md`](../fairyfox-reports/2026-07-25-adopting-updates.md))
+  is where files changed.
+
+## Result matrix
+
+| Standard | Result | Evidence / named gap |
+|----------|--------|----------------------|
+| git-workflow | **done** | git-flow; `main` advances only by `--no-ff` tagged releases; no `master`; history intact; manifest gate + full-CI-before-`main` folded. *Sub-gap:* the platform-enforced **required-status-check contexts** on `main` are not yet populated (tracked under supply-chain). |
+| versioning | **done** | repo-root `VERSION` = one SemVer line → `pse_version.h`; nothing hardcoded; PATCH/MINOR/MAJOR rules match git-workflow. |
+| notes-system | **done** | full `notes/` tree; `status.md` current-state + evidence-linked; inline changelog (no separate doc commits); `adoption-manifest.md` present. |
+| ai-context | **done** | root `CLAUDE.md` carries the six pieces; workflow section matches git-flow. |
+| cross-project-sync | **done** | this run: on-request, read-only, git-ignored mirror, copy-not-link; `authorizations.yml` read-only (skips a prompt only). |
+| process-reports | **done** | `notes/fairyfox-reports/` holds a report per run incl. this pass's. |
+| checklists-are-contracts | **done** | the adoption manifest is its instrument; this audit names every not-done item rather than a bare ✅. |
+| mandate-ledger | **partial** | *gap:* no dedicated per-clause ledger file; multi-part owner briefs are currently transcribed into session logs + the live task list. Mechanism understood; adopt on the next multi-part directive. |
+| docs-site | **done** | Doxygen + vendored shared-chrome **2.3.0**; `docs/fairyfox/CHROME_VERSION` recorded; brand/Home way-home present. |
+| deployment | **done** | `pages.yml` (static docs → Pages) + `release.yml` (installers/AppImage). No Netlify web app — correct for a desktop app (no live-app row). |
+| planning | **done** | phase-by-default is a hard `CLAUDE.md` rule; `notes/plans/` holds written plans before execution. |
+| testing | **done** | headless logic tests; real multi-layer suite (`ctest` 92/92); regression-per-fix; ROM-parity oracle; screenshot preview-before-ship; Docker coverage ~90%. *Sub-gap:* confirm a **hard coverage-floor gate** fails the build below the floor (currently measured, not proven to block). |
+| engineering-quality | **partial** | no-hacks / do-the-long-work / doc-comments / source-fidelity are enforced strongly in practice + `CLAUDE.md`. *gap:* the **numeric ship contract** (Scorecard ≥ 7.0, debt-cleared, PRs-triaged) is not scored as an artifact — a process decision for leadership (adopt the scorecard, or record a user `N-A`). |
+| supply-chain-hardening | **partial** | **done this pass:** root `SECURITY.md`; least-privilege `permissions: contents: read` now on **all four** workflows (added to `lint.yml`/`tests.yml`; `pages.yml`/`release.yml` already scoped); `dependabot.yml` `github-actions` ecosystem → `dev`. **gap (dedicated CI/security pass — touches the live release pipeline + repo governance):** ① Actions are **tag-pinned, not SHA-pinned**; ② no **CodeQL/SAST** workflow (a C++ CodeQL build needs real integration with the Qt/llvm-mingw toolchain — must be iterated, not dropped blind); ③ `release.yml` does not attach **SLSA provenance (`.intoto.jsonl`) as a release asset**; ④ `main` branch protection (solo config) + **required-status-check contexts** not set (via `gh api` — governance, leadership's call). Solo-ceiling ~8 + badge-lag caveats acknowledged. |
+| dependencies | **done** (for what applies) | Dependabot on, grouped, targets `dev`; local test gate = `ctest`; toolchain pinned to one Qt (6.11 kit == container == CI). No Dependabot-supported **app** package ecosystem exists for CMake/Qt → app-dependency updates `N-A`. |
+| docker | **done** | `docker/` (Dockerfile + `dtest.ps1`) — local-first Linux ASan/UBSan/coverage; the 2026-07-17 container breakage was **fixed, not routed around**; CI is the backstop. |
+| legal-docs | **N-A** | desktop app; no data-collecting web app. The only web surface is the static Doxygen Pages docs (no accounts/PII/server). Privacy/Terms/Cookies pages do not apply. |
+| coins | **done** | `docs/fairyfox/coins.js` from the chrome bundle; reading-engagement counter on the docs site; nothing is gated on coins; client-side (localStorage) only. |
+| agent-tooling | **done** | `CLAUDE.md` names PowerShell-not-bash + execute-don't-hand-off; root `.gitattributes` **now present** (added this pass, with byte-fidelity binary pins); no CRLF noise. |
+| badges | **partial** | README carries the full ordered badge block (contributors/stars/forks/watchers/commits/CI/docs/release/version/language/size/issues/PRs/license). *Sub-gap:* the **docs badge** points at `1fairyfox.github.io/<key>/` rather than `fairyfox.io/<key>/` — correct for where the docs actually deploy, but note the mesh-canonical form; a couple of the 20 canonical slots (e.g. Scorecard, coverage) are absent pending the supply-chain/coverage-service work. |
+| readme | **done** | worded docs link near the top; grouped **"Get it"** section (releases · docs · source, with an honest note that no live-app/registry rows apply to a desktop app); **mesh footer** near the bottom — all added this pass. |
+| repo-hygiene | **done** | `scripts/check-links.mjs` doc-link gate; `.gitignore`/`.gitattributes`; no stranded files; git-ignored reference clone; branch discipline. |
+| docs-lifecycle | **done** | current-state `status.md` vs dated `sessions/`/`version/` history; removed-feature banners; single-source (link-don't-restate). |
+| research-capture | **done** | "RESEARCH LANDS IN THE NOTES" standing rule; 40+ `reference/*.md` with committed console probes under `scripts/emu/`. |
+| working-rhythm | **done** | task-tracked multi-step work; background-by-default + foreground-when-ready (dev harness / MCP); adjacency-is-not-a-brief + ask-first are hard `CLAUDE.md` rules. |
+| self-hosted-assets | **done** | docs fonts self-hosted (`docs/fairyfox/fonts/`); zero `fonts.g*` / CDN hot-links; matches chrome 2.3.0's new default. |
+| ci-secrets | **N-A (none wired)** | no SonarCloud / Codecov / Scorecard service is wired, so no `SONAR_TOKEN`/`CODECOV_TOKEN`/`SCORECARD_TOKEN` is referenced — a clean N/A per the standard. Becomes live if the supply-chain SAST/Scorecard work adds those services. |
+| farm-operating-model | **N-A** | single standalone project, not an integrated-farm-tier node. |
+| maintenance-sweep | **partial** | the composing standards (git-workflow/repo-hygiene/versioning/docs-lifecycle/testing) are all in place and swept ad hoc. *gap:* no single **documented sweep procedure** filed; adopt on the next dedicated tidy. |
+| lifecycle runbooks (setup/onboard/adopt) | **N-A** | join-time / procedure runbooks, not standing rules. |
+
+## Summary
+
+**done: 22 · partial: 5 · N-A: 5.** No `missing` rows.
+
+The five `partial`s are the honest remainder, each owned as a dated `gap` in the
+[adoption manifest](adoption-manifest.md):
+
+1. **supply-chain-hardening** — SHA-pin Actions, CodeQL/SAST, release provenance asset,
+   `main` branch protection + required-check contexts. *A dedicated CI/security pass:* it
+   edits the live release pipeline and sets repo governance, so it wants its own briefed
+   effort with CI iteration (and branch protection is leadership's call), not a blind drop.
+2. **engineering-quality / ship-contract** — decide whether the numeric Scorecard applies
+   to a desktop app; adopt it or record a user `N-A`.
+3. **testing** — confirm/har­den a hard coverage-floor gate (currently measured ~90%).
+4. **mandate-ledger** — instantiate on the next multi-part owner directive.
+5. **maintenance-sweep** — file the single documented sweep procedure.
+
+None of the five holds a release *today* (git-workflow's pre-release manifest gate blocks
+only an **overdue** gap on a mandatory standard; these are newly dated, with due markers).

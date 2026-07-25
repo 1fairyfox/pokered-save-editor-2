@@ -32,6 +32,10 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Least-privilege (fairyfox supply-chain-hardening §1): read-only build/test CI.
+permissions:
+  contents: read
+
 jobs:
   linux-asan:
     runs-on: ubuntu-latest

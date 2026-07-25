@@ -42,18 +42,19 @@ project's kind — say why).
 | ai-context | implemented | 1.6.0 / 2d614f0 | 2026-07-25 pass | root `CLAUDE.md` (the AI-context file) |
 | cross-project-sync | implemented | 1.6.0 / 2d614f0 | 2026-07-25 pass | [`cross-project-sync.md`](cross-project-sync.md); this check-for-updates run |
 | process-reports | implemented | 1.6.0 / 2d614f0 | 2026-07-25 pass | [`notes/fairyfox-reports/`](../fairyfox-reports/) (this run's report) |
-| compliance | gap(next adopt pass) | 1.6.0 / 2d614f0 | — | no committed `compliance.md` audit file yet; adopted standards carry their own `## Verify`, but the aggregate audit is not filed |
+| compliance | implemented | 1.6.0 / 2d614f0 | 2026-07-25 full pass | [`compliance-audit.md`](compliance-audit.md) — whole-set audit filed (22 done · 5 partial · 5 N-A · 0 missing) |
 | checklists-are-contracts | implemented | 1.6.0 / 2d614f0 | 2026-07-25 pass | this manifest (its enforcement artifact) + the not-done disclosure in this run's report |
 | mandate-ledger | gap(next multi-part directive) | 1.6.0 / 2d614f0 | — | multi-part owner briefs are currently transcribed into session logs + the task list; a dedicated `notes/plans/*-mandate.md` ledger is not yet used |
 | planning | implemented | 1.6.0 / 2d614f0 | 2026-07-25 pass | phase-by-default is a hard `CLAUDE.md` rule; [`notes/plans/`](../plans/next-steps.md) |
 | docs-site | implemented | 1.6.0 / 2d614f0 | 2026-07-25 pass | Doxygen + vendored shared-chrome bundle **2.3.0**; [`documentation.md`](documentation.md), [`deployment.md`](deployment.md) |
 | deployment | implemented | 1.6.0 / 2d614f0 | 2026-07-25 pass | `.github/workflows/release.yml` + `pages.yml`; [`deployment.md`](deployment.md) |
 | testing | implemented | 1.6.0 / 2d614f0 | 2026-07-25 pass | full `ctest` (92/92); Docker ASan/UBSan/coverage (~90% line); [`plans/testing.md`](../plans/testing.md) |
-| engineering-quality | gap(next adopt pass) | 1.6.0 / 2d614f0 | — | ship-contract scorecard (≥7.0 floor) + PR-triage not yet formally tracked; quality bar is enforced in prose (`CLAUDE.md` principles) but not scored |
-| ship-contract | gap(next adopt pass) | 1.6.0 / 2d614f0 | — | see engineering-quality; a numeric scorecard artifact is not filed |
-| supply-chain-hardening | gap(next adopt pass) | 1.6.0 / 2d614f0 | — | CI runs, but provenance-as-release-asset + SAST-outlives-toolchain-bump not verified this pass |
-| dependencies | gap(next adopt pass) | 1.6.0 / 2d614f0 | — | dependabot.yml presence + toolchain↔SAST pin not audited this pass |
-| repo-hygiene | implemented | 1.6.0 / 2d614f0 | 2026-07-25 pass | `.gitignore`/`.gitattributes`; `scripts/check-links.mjs`; git-ignored reference clone |
+| engineering-quality | partial | 1.6.0 / 2d614f0 | 2026-07-25 audit | no-hacks/craftsmanship/doc-comments/source-fidelity enforced in practice + `CLAUDE.md`. **gap:** the numeric ship-contract Scorecard (≥7.0) is not scored — a leadership decision (adopt or `N-A`) |
+| ship-contract | partial | 1.6.0 / 2d614f0 | 2026-07-25 audit | see engineering-quality; numeric scorecard artifact not filed |
+| ci-secrets | N-A(none wired) | 1.6.0 / 2d614f0 | 2026-07-25 audit | no Sonar/Codecov/Scorecard service wired → no token referenced; clean N/A. Becomes live if the supply-chain SAST/Scorecard work adds those services |
+| supply-chain-hardening | partial | 1.6.0 / 2d614f0 | 2026-07-25 audit | **done:** `SECURITY.md`, least-priv `permissions` on all 4 workflows, `dependabot.yml` (github-actions). **gap(dedicated CI/security pass):** SHA-pin Actions · CodeQL/SAST · release provenance asset · `main` branch protection + required-check contexts. See [`compliance-audit.md`](compliance-audit.md) |
+| dependencies | implemented | 1.6.0 / 2d614f0 | 2026-07-25 audit | `.github/dependabot.yml` (github-actions, grouped, →`dev`); local `ctest` gate; one pinned Qt (6.11 kit==container==CI); app-package ecosystem N-A for CMake/Qt |
+| repo-hygiene | implemented | 1.6.0 / 2d614f0 | 2026-07-25 pass | `.gitignore` + new `.gitattributes` (byte-fidelity binary pins); `scripts/check-links.mjs`; git-ignored reference clone |
 | docs-lifecycle | implemented | 1.6.0 / 2d614f0 | 2026-07-25 pass | living notes kept by default (a standing `CLAUDE.md` rule); Doxygen rebuilt on release |
 | research-capture | implemented | 1.6.0 / 2d614f0 | 2026-07-25 pass | "RESEARCH LANDS IN THE NOTES" standing rule; 40+ `reference/*.md` with console probes |
 | working-rhythm | implemented | 1.6.0 / 2d614f0 | 2026-07-25 pass | the by-default build/test/commit loop in `CLAUDE.md` Default Workflow |
@@ -61,7 +62,7 @@ project's kind — say why).
 | legal-docs | N-A(no data-collecting web app) | 1.6.0 / 2d614f0 | — | desktop app; the only web surface is the Doxygen Pages docs (no accounts, no PII, no server). Privacy/Terms/Cookies pages do not apply |
 | coins | implemented | 1.6.0 / 2d614f0 | 2026-07-25 pass | `docs/fairyfox/coins.js` shipped via the chrome bundle; reading-engagement counter on the docs site |
 | badges | implemented | 1.6.0 / 2d614f0 | 2026-07-25 pass | `README.md` full badge block (22 badges incl. contributors/stars/CI/docs/release/version/issues/PRs/license) |
-| agent-tooling | implemented | 1.6.0 / 2d614f0 | 2026-07-25 pass | PowerShell-on-Windows workflow; the `pokered-dev` MCP server; `CLAUDE.md` Build System |
+| agent-tooling | implemented | 1.6.0 / 2d614f0 | 2026-07-25 pass | PowerShell-on-Windows workflow; the `pokered-dev` MCP server; `CLAUDE.md` Build System; root `.gitattributes` now present (CRLF hygiene) |
 | maintenance-sweep | gap(next adopt pass) | 1.6.0 / 2d614f0 | — | no periodic sweep procedure filed; done ad hoc |
 | readme | implemented | 1.6.0 / 2d614f0 | 2026-07-25 pass | worded docs link + "Get it" section + mesh footer added this pass; [`readme` standard `## Verify`](#) |
 | docker | implemented | 1.6.0 / 2d614f0 | 2026-07-25 pass | `docker/` (Dockerfile + `dtest.ps1`) local-first Linux ASan/UBSan/coverage; already-practiced, now filed. `CLAUDE.md` Build System |
@@ -72,14 +73,23 @@ project's kind — say why).
 
 ## Open gaps (the remainder, owned and dated)
 
-Due **next dedicated adopt/compliance pass** (not this run — each needs real audit work, not
-a prose claim):
+Two gaps from the first pass are now **closed**: **compliance** (the whole-set
+[`compliance-audit.md`](compliance-audit.md) is filed) and **dependencies** (dependabot +
+one pinned Qt; app-package ecosystem N-A). The remainder, each owned and dated:
 
-- **compliance** — file a committed `compliance.md` aggregate audit (run every adopted
-  standard's `## Verify`, report done/partial/missing).
+- **supply-chain-hardening** (partial → due **a dedicated CI/security pass**): the safe,
+  self-contained measures are done this pass (`SECURITY.md`, least-privilege workflow
+  permissions, `dependabot.yml`). The rest edits the **live release pipeline** and sets
+  **repo governance**, so it wants its own briefed effort with CI iteration: SHA-pin the
+  Actions (dependabot will then maintain them), add a **CodeQL/SAST** workflow (a C++
+  CodeQL build is non-trivial against the Qt/llvm-mingw toolchain — iterate, don't drop),
+  attach **SLSA provenance (`.intoto.jsonl`) as a release asset** in `release.yml`, and set
+  `main` **branch protection** (solo config) + **required-status-check contexts** via
+  `gh api` (governance — leadership's call).
 - **engineering-quality / ship-contract** — decide whether the numeric Scorecard (≥ 7.0
-  floor) applies to this project and, if so, file it; otherwise record a user `N-A`.
-- **supply-chain-hardening / dependencies** — audit provenance-as-release-asset, the
-  SAST-outlives-toolchain-bump rule, dependabot config, and the toolchain↔SAST pin.
-- **mandate-ledger** — adopt the per-clause ledger for the next multi-part owner directive.
-- **maintenance-sweep** — file the periodic sweep procedure.
+  floor) applies to a desktop app; adopt it or record a user `N-A`.
+- **testing** — confirm/harden a **hard coverage-floor gate** (coverage is measured ~90%;
+  prove the build blocks below the floor).
+- **mandate-ledger** — instantiate the per-clause ledger on the next multi-part owner
+  directive.
+- **maintenance-sweep** — file the single documented sweep procedure.

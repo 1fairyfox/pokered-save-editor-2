@@ -9,6 +9,10 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Least-privilege (fairyfox supply-chain-hardening §1): read-only static-analysis CI.
+permissions:
+  contents: read
+
 jobs:
   static-analysis:
     runs-on: ubuntu-latest

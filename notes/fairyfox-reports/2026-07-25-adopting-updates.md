@@ -101,6 +101,33 @@ app code touched. Committed to `dev`. Owed items recorded as dated `gap` rows, n
 - **Manifest template:** consider shipping a tiny `N-A` legend for common node *kinds* (desktop app,
   library, static site) so each node doesn't re-derive which web-mesh standards don't apply.
 
+## Follow-up (same day) — compliance audit + safe supply-chain measures
+
+On the owner's "finish it in full" follow-up, ran a second pass to work the manifest `gap` rows down
+rather than leave them purely dated:
+
+- **Filed `notes/reference/compliance-audit.md`** — the whole-set audit (every standard's `## Verify`
+  for this node): **22 done · 5 partial · 5 N-A · 0 missing**, each gap named. The `compliance` and
+  `dependencies` manifest rows flip to `implemented`.
+- **Adopted the self-contained supply-chain measures** (no release-pipeline blast radius): root
+  `SECURITY.md`; least-privilege `permissions: contents: read` on `lint.yml` + `tests.yml` (the two
+  that lacked it); `.github/dependabot.yml` (github-actions ecosystem → `dev`; the app-package
+  ecosystems don't apply to CMake/Qt). Added root `.gitattributes` with **explicit `binary` pins for
+  the 226 `.blk` / 14 `.sav` / 4 `.bin` fixtures** — a byte-fidelity safeguard this project's values
+  demand and the bare hub template didn't cover.
+- **Deliberately deferred** the measures that touch the **live release pipeline** or **repo
+  governance** — SHA-pinning Actions (needs verified SHAs; dependabot will then maintain), a CodeQL/SAST
+  workflow (a C++ CodeQL build against Qt/llvm-mingw is real integration work, not a blind drop),
+  release provenance-as-asset in `release.yml` (untestable from here; only runs on `main`), and `main`
+  branch protection + required-status-check contexts (`gh api`; governance is the owner's call). These
+  are `partial`/`gap` rows with recipes, for a dedicated CI/security pass.
+
+**Judgment call, stated:** "adopt in full" for a node this size is genuinely two kinds of work — the
+safe repo-config/doc adoptions (done) and a briefed CI/security effort (deferred). Marking the latter
+`implemented` in a docs pass would be exactly the drift `checklists-are-contracts` exists to stop, so
+they stay honest `partial` rows. This pass touched **no app code** — only docs/notes and safe
+repo-config; the two workflow `permissions` blocks are validated by the next `dev` CI run.
+
 ## Environment
 
 - **Node:** `pokered-save-editor-2` — Qt 6.11 C++/QML **desktop** app (llvm-mingw kit), open source,

@@ -28,9 +28,20 @@ pre-authorized, so they were applied directly (the full safety floor still ran).
   (platform-enforced)** sections. **notes-system**: evidence-linked status (this entry) + the manifest.
 - **Chrome bundle 2.2.1 → 2.3.0** (self-hosted fonts) — the node already self-hosts, so its old
   "deviation" is now the mesh default; `docs/fairyfox/CHROME_VERSION` pinned.
-- **Owed (dated `gap` rows in the manifest, next dedicated pass):** a committed `compliance.md` audit,
-  the ship-contract scorecard decision, supply-chain provenance/SAST + dependencies audit,
-  mandate-ledger, maintenance-sweep. Docs/notes-only change — **no app code touched; suite unaffected**.
+- **Second pass same day — the gaps worked down.** Filed the whole-set
+  [`reference/compliance-audit.md`](reference/compliance-audit.md) (**22 done · 5 partial · 5 N-A · 0
+  missing**), and adopted the **safe supply-chain measures**: root `SECURITY.md`, least-privilege
+  `permissions: contents: read` on all four workflows, and `.github/dependabot.yml` (github-actions
+  ecosystem). Added a root **`.gitattributes`** with **explicit `binary` pins for the 226 `.blk`,
+  14 `.sav`, 4 `.bin`** fixtures (byte fidelity is sacred — no EOL handling may ever touch them).
+  `dependencies` + `compliance` manifest rows flipped to `implemented`.
+- **Still owed (dated `gap`/`partial` rows in the manifest) — a dedicated CI/security pass:**
+  SHA-pin Actions · CodeQL/SAST · release provenance asset · `main` branch protection +
+  required-check contexts (these edit the live release pipeline + set governance → their own briefed
+  effort). Plus the ship-contract scorecard decision, a hard coverage-floor gate, mandate-ledger, and
+  the maintenance-sweep procedure. **No app code touched** (only docs/notes + safe repo-config);
+  the test suite is unaffected — the two new workflow `permissions` blocks are validated by the next
+  `dev` CI run.
 
 ### FILTER FLAGS RESEARCHED + EVIDENCE MATCHING + the World panel completed (2026-07-19, `0.43.6-alpha`)
 

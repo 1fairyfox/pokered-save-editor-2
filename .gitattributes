@@ -1,0 +1,58 @@
+# Line-ending normalization — adopted from the fairyfox hub template
+# (hub/standards/agent-tooling.md + docker.md). Git stores LF; the working tree
+# checks out LF on every platform regardless of core.autocrlf, so LF-expecting
+# tooling stops flagging phantom "modified" files, and files copied into a Linux
+# Docker image never carry CRLF.
+#
+# ⚠️ BYTE-FIDELITY IS SACRED HERE. This project ships binary save fixtures, map
+# blocks, and ROM-adjacent data whose every byte must survive untouched. The
+# project-specific "binary assets" block below marks each of those formats
+# `binary` (= -text -diff) so NO end-of-line handling can ever rewrite one byte.
+# git's text=auto also content-detects NUL-containing files as binary, but these
+# are pinned explicitly as belt-and-suspenders.
+
+# Default: auto-detect text vs binary; force LF in the working tree everywhere.
+* text=auto eol=lf
+
+# Windows scripts must stay CRLF or they break.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# SVG is text (diff/merge it), but keep it explicit.
+*.svg text
+
+# ── Binary assets — never touch EOLs ─────────────────────────────────────────
+# Generic media/fonts/archives (from the hub template).
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.webp binary
+*.ico  binary
+*.icns binary
+*.woff  binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+*.eot binary
+*.pdf binary
+*.zip binary
+*.gz  binary
+*.mp4  binary
+*.webm binary
+*.mov  binary
+*.mp3  binary
+*.wav  binary
+
+# ── Project-specific byte-exact formats (pokered-save-editor-2) ──────────────
+# Save files, raw map blocks, unused-byte dumps, ROM-adjacent + Game Boy data,
+# and compiled Qt translations. These carry save/ROM fidelity — pin them binary.
+*.sav binary
+*.bin binary
+*.blk binary
+*.gb  binary
+*.gbc binary
+*.sgb binary
+*.rom binary
+*.qm  binary
