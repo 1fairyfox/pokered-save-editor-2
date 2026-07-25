@@ -211,6 +211,11 @@ if(TARGET appcore)
     target_compile_definitions(tst_player PRIVATE PSE_ASSETS_DIR="${PSE_ASSETS_DIR}")
     add_test(NAME tst_player COMMAND tst_player)
     set_tests_properties(tst_player PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+    # This custom block must append ITSELF to the aggregate (the helper does it for
+    # pse_add_test targets). It was previously only in tests_all by accident — the
+    # tst_map_states block below appended "tst_player" by copy-paste — so fixing that
+    # would have orphaned this one. Both now append their own name.
+    set_property(GLOBAL APPEND PROPERTY PSE_TEST_TARGETS tst_player)
 
     # The map-state progression blueprints (MapStatesDB + MapModel's states surface): the DB
     # loads all 98 with every reference in range, applying a stage moves ONLY state-region
@@ -224,7 +229,10 @@ if(TARGET appcore)
     target_compile_definitions(tst_map_states PRIVATE PSE_ASSETS_DIR="${PSE_ASSETS_DIR}")
     add_test(NAME tst_map_states COMMAND tst_map_states)
     set_tests_properties(tst_map_states PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
-    set_property(GLOBAL APPEND PROPERTY PSE_TEST_TARGETS tst_player)
+    # NOTE: must name THIS target — a copy-paste of `tst_player` here left tst_map_states
+    # out of the `tests_all` aggregate, so CI (which builds only tests_all) never built it
+    # and ctest reported it "Not Run". Keep this in sync with the executable name above.
+    set_property(GLOBAL APPEND PROPERTY PSE_TEST_TARGETS tst_map_states)
 
     # THE AREA STATE -- v1's "Map" page fields (Phase 8). Keystone `setAreaField_writesExactlyItsBytes`
     # byte-diffs the whole save across every setter (one byte/bit each); plus the derived view-box sync
