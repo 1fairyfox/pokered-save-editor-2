@@ -211,6 +211,7 @@ check-for-updates). The hub reads these on request to improve the shared standar
 \subpage md_notes_2reference_2cross-project-sync <br>
 \subpage md_notes_2reference_2adoption-manifest <br>
 \subpage md_notes_2reference_2compliance-audit <br>
+\subpage md_notes_2reference_2maintenance-sweep <br>
 \subpage md_notes_2reference_2versioning <br>
 \subpage md_notes_2reference_2deployment
 */
@@ -228,6 +229,7 @@ check-for-updates). The hub reads these on request to improve the shared standar
 \brief What comes next — ordered tasks, the testing picture, and longer-term ambitions.
 
 \subpage md_notes_2plans_2next-steps <br>
+\subpage md_notes_2plans_22026-07-25-mandate <br>
 \subpage md_notes_2plans_2map-screen <br>
 \subpage md_notes_2plans_2map-states <br>
 \subpage md_notes_2plans_2event-flags <br>

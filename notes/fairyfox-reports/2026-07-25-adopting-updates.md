@@ -128,6 +128,55 @@ safe repo-config/doc adoptions (done) and a briefed CI/security effort (deferred
 they stay honest `partial` rows. This pass touched **no app code** — only docs/notes and safe
 repo-config; the two workflow `permissions` blocks are validated by the next `dev` CI run.
 
+## Completion pass — the deferred supply-chain work, done (and one item blocked)
+
+The owner corrected a real error: on the follow-up I had **deferred** the harder supply-chain items on
+my own judgment ("a dedicated CI/security pass") *after* completion in full was mandated. That deferral
+was never mine to make. This pass does them, and encodes a standing rule against ever doing it again
+(`CLAUDE.md` + `collaboration.md` → "No self-authorized deferral"; AI memory).
+
+Done this pass:
+
+- **SHA-pinned every Action** across `lint`/`tests`/`pages`/`release` to its **current-major** commit
+  (checkout, install-qt-action, configure-pages, upload/download-artifact, upload-pages-artifact,
+  deploy-pages, gh-release) — with version comments. (Caught myself first resolving the latest *major*
+  releases, which would have been breaking bumps; re-resolved to the commit each in-use major points at.)
+- **CodeQL/SAST** — new `codeql.yml`, C++ manual build mirroring the Linux app build; SHA-pinned,
+  least-privilege. Dispatched on push and running (parsed clean); confirm its first run is green.
+- **Release provenance** — `release.yml` now attests SLSA build provenance and attaches the
+  `.intoto.jsonl` **as a release asset** (Scorecard reads assets, not the attestation API), with
+  least-privilege **per-job** permissions (top-level dropped to `contents: read`).
+- **OpenSSF Scorecard** — `scorecard.yml`, the objective ship-contract (≥7.0) signal.
+- **Coverage floor gate** — wired into `docker/run-tests.sh` (`COVERAGE_FLOOR`, fails below the floor).
+- **mandate-ledger** (`notes/plans/2026-07-25-mandate.md`) and **maintenance-sweep**
+  (`notes/reference/maintenance-sweep.md`) filed.
+
+### Blocked item — needs the owner (I could not execute it, and I am not calling it done)
+
+Setting `main` branch protection via `gh api` was **denied by this session's permission classifier**.
+It is the one item I cannot do from here. The exact, ready-to-run command (writes a UTF-8 no-BOM
+payload, per the standard):
+
+```powershell
+$json = @'
+{
+  "required_status_checks": { "strict": true, "contexts": ["linux-asan","windows","static-analysis","CodeQL"] },
+  "enforce_admins": true,
+  "required_pull_request_reviews": { "required_approving_review_count": 0 },
+  "restrictions": null,
+  "required_linear_history": false,
+  "allow_force_pushes": false,
+  "allow_deletions": false
+}
+'@
+$p = "$env:TEMP\pse_main_protection.json"
+[IO.File]::WriteAllText($p, $json, (New-Object System.Text.UTF8Encoding($false)))
+gh api -X PUT "repos/1fairyfox/pokered-save-editor-2/branches/main/protection" --input $p
+```
+
+(The four contexts are the exact check-run names verified live: `linux-asan`, `windows`,
+`static-analysis`, `CodeQL`. Reversible via `gh api -X DELETE …/branches/main/protection`.)
+
 ## Environment
 
 - **Node:** `pokered-save-editor-2` — Qt 6.11 C++/QML **desktop** app (llvm-mingw kit), open source,

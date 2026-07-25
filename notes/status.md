@@ -35,13 +35,18 @@ pre-authorized, so they were applied directly (the full safety floor still ran).
   ecosystem). Added a root **`.gitattributes`** with **explicit `binary` pins for the 226 `.blk`,
   14 `.sav`, 4 `.bin`** fixtures (byte fidelity is sacred — no EOL handling may ever touch them).
   `dependencies` + `compliance` manifest rows flipped to `implemented`.
-- **Still owed (dated `gap`/`partial` rows in the manifest) — a dedicated CI/security pass:**
-  SHA-pin Actions · CodeQL/SAST · release provenance asset · `main` branch protection +
-  required-check contexts (these edit the live release pipeline + set governance → their own briefed
-  effort). Plus the ship-contract scorecard decision, a hard coverage-floor gate, mandate-ledger, and
-  the maintenance-sweep procedure. **No app code touched** (only docs/notes + safe repo-config);
-  the test suite is unaffected — the two new workflow `permissions` blocks are validated by the next
-  `dev` CI run.
+- **Third pass same day — supply-chain hardening COMPLETED (correcting a wrongly-deferred earlier
+  pass).** SHA-pinned every Action (current-major commits); added **CodeQL** (`codeql.yml`),
+  **release provenance** `.intoto.jsonl` asset + least-priv per-job perms (`release.yml`), and
+  **OpenSSF Scorecard** (`scorecard.yml`); wired a **coverage-floor gate** into
+  `docker/run-tests.sh`; instantiated the **mandate-ledger** (`plans/2026-07-25-mandate.md`) and the
+  **maintenance-sweep** procedure. Manifest + audit now read every standard `implemented` or reasoned
+  `N-A`. Encoded a standing rule — **no self-authorized deferral of mandated work** — in `CLAUDE.md` +
+  `context/collaboration.md`.
+- **ONE item blocked, not deferred:** setting `main` **branch protection** via `gh api` was denied by
+  the session's permission classifier. Exact command is in the process report — needs the owner to run
+  it (or approve the permission). **No app code touched;** CodeQL + Scorecard are dispatched — confirm
+  their first runs are green.
 
 ### FILTER FLAGS RESEARCHED + EVIDENCE MATCHING + the World panel completed (2026-07-19, `0.43.6-alpha`)
 

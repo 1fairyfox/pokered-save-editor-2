@@ -47,22 +47,20 @@ summarize; a `partial`/`missing` here is what turns a manifest row into a dated 
 | maintenance-sweep | **partial** | the composing standards (git-workflow/repo-hygiene/versioning/docs-lifecycle/testing) are all in place and swept ad hoc. *gap:* no single **documented sweep procedure** filed; adopt on the next dedicated tidy. |
 | lifecycle runbooks (setup/onboard/adopt) | **N-A** | join-time / procedure runbooks, not standing rules. |
 
-## Summary
+## Summary (updated after the same-day completion pass)
 
-**done: 22 · partial: 5 · N-A: 5.** No `missing` rows.
+The five `partial`s this audit first recorded were **all closed the same day** — see the
+[adoption manifest](adoption-manifest.md) for the flipped rows and the process report for the work:
 
-The five `partial`s are the honest remainder, each owned as a dated `gap` in the
-[adoption manifest](adoption-manifest.md):
+1. **supply-chain-hardening** — SHA-pinned every Action, added CodeQL (`codeql.yml`), release
+   provenance `.intoto.jsonl` asset (`release.yml`), and OpenSSF Scorecard (`scorecard.yml`). **One
+   sub-item is blocked, not deferred:** `main` branch protection via `gh api` was denied by the
+   session's permission classifier — the exact command is handed to the owner (process report).
+2. **engineering-quality / ship-contract** — `scorecard.yml` supplies the objective ≥7.0 signal.
+3. **testing** — a hard coverage-floor gate is wired into `docker/run-tests.sh`.
+4. **mandate-ledger** — instantiated at `notes/plans/2026-07-25-mandate.md`.
+5. **maintenance-sweep** — filed at `notes/reference/maintenance-sweep.md`.
 
-1. **supply-chain-hardening** — SHA-pin Actions, CodeQL/SAST, release provenance asset,
-   `main` branch protection + required-check contexts. *A dedicated CI/security pass:* it
-   edits the live release pipeline and sets repo governance, so it wants its own briefed
-   effort with CI iteration (and branch protection is leadership's call), not a blind drop.
-2. **engineering-quality / ship-contract** — decide whether the numeric Scorecard applies
-   to a desktop app; adopt it or record a user `N-A`.
-3. **testing** — confirm/har­den a hard coverage-floor gate (currently measured ~90%).
-4. **mandate-ledger** — instantiate on the next multi-part owner directive.
-5. **maintenance-sweep** — file the single documented sweep procedure.
-
-None of the five holds a release *today* (git-workflow's pre-release manifest gate blocks
-only an **overdue** gap on a mandatory standard; these are newly dated, with due markers).
+**Net state: every standard is `implemented` or a reasoned `N-A`, with the single exception of `main`
+branch protection**, which is environment-blocked and owner-actionable (command provided). CodeQL +
+Scorecard are dispatched and should be confirmed green on their first run.

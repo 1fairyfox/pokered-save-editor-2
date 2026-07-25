@@ -131,6 +131,22 @@ run_coverage() {
         -instr-profile="$B/merged.profdata" "$FIRST" "${OBJ[@]}" \
         -ignore-filename-regex="$IGNORE" || true
     echo "    (extract with: docker run --rm -v pse-build:/build -v \${PWD}:/out alpine cp -r /build/out/coverage/html /out)"
+    # --- coverage floor gate (fairyfox testing standard: a coverage gate with a floor,
+    # wired into the build). Parse the total line % from llvm-cov's JSON export and FAIL
+    # the run if it drops below COVERAGE_FLOOR. Default 85 passes today (~89-90%); it is a
+    # regression ratchet, and the standard's target is 90 — raise the floor as coverage
+    # climbs rather than let a regression slip through green.
+    echo "==> coverage floor gate"
+    local FLOOR="${COVERAGE_FLOOR:-85}"
+    local PCT
+    PCT=$(llvm-cov export -summary-only -instr-profile="$B/merged.profdata" "$FIRST" "${OBJ[@]}" \
+            -ignore-filename-regex="$IGNORE" \
+          | python3 -c 'import json,sys; print(json.load(sys.stdin)["data"][0]["totals"]["lines"]["percent"])' 2>/dev/null)
+    if [ -z "$PCT" ]; then
+        echo "!! coverage floor gate could not read a percentage (llvm-cov export / python3 failed)"; return 1
+    fi
+    printf "    line coverage: %.2f%%   (floor: %s%%)\n" "$PCT" "$FLOOR"
+    awk -v p="$PCT" -v f="$FLOOR" 'BEGIN{ if (p+0 < f+0){ printf("!! FAIL: coverage %.2f%% is below the %s%% floor\n", p, f); exit 1 } else { printf("   PASS: coverage floor met\n") } }'
 }
 
 case "$VARIANT" in

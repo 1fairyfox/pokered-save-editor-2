@@ -1,0 +1,53 @@
+name: scorecard
+
+# OpenSSF Scorecard — the objective supply-chain/quality score behind the fairyfox
+# engineering-quality "ship contract" (Scorecard >= 7.0 floor before a release) and
+# supply-chain-hardening. Runs on `main` pushes + weekly; publishes the result to the
+# OpenSSF API (badge) and the repo Security tab. Read the score before shipping — a drop
+# below 7.0 holds a release the same way a mandatory manifest gap does.
+#
+# Solo-repo ceiling is ~8/10 (Code-Review needs an approving review GitHub forbids
+# self-granting) — harden to the ceiling, don't chase 10. See supply-chain-hardening.md.
+
+on:
+  branch_protection_rule:
+  schedule:
+    - cron: "18 4 * * 1"   # weekly
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions: read-all
+
+jobs:
+  analysis:
+    name: Scorecard analysis
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write   # upload the SARIF result to the Security tab
+      id-token: write          # publish to the OpenSSF Scorecard API (badge)
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Run analysis
+        uses: ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc # v2.4.4
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          publish_results: true
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: SARIF file
+          path: results.sarif
+          retention-days: 5
+
+      - name: Upload to code-scanning
+        uses: github/codeql-action/upload-sarif@4187e74d05793876e9989daffde9c3e66b4acd07 # v3
+        with:
+          sarif_file: results.sarif
