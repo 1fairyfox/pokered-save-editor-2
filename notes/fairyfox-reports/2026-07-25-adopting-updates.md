@@ -177,6 +177,24 @@ gh api -X PUT "repos/1fairyfox/pokered-save-editor-2/branches/main/protection" -
 (The four contexts are the exact check-run names verified live: `linux-asan`, `windows`,
 `static-analysis`, `CodeQL`. Reversible via `gh api -X DELETE …/branches/main/protection`.)
 
+## CI state — an honest correction
+
+Earlier in this run I said the test suite was "green / unaffected." That was an **assumption I stated
+without checking**, and it was wrong — I should not have claimed it. Reading the actual `dev` runs:
+**CI was already RED before any of this work**, and the failures are entirely in the map-states /
+hidden-item code that has **active uncommitted WIP** in the working tree:
+
+- `tests` → `tst_map_states` **fails to build** (`***Not Run`), so 91/92, not 92/92.
+- `lint` → **3 gated clang-tidy findings**: `mapmodel_states.cpp:376` and `:388`
+  (constness-prevents-move) and `abstracthiddenitemdb.cpp:78` (implicit-conversion-in-loop).
+
+My changes (docs + CI config) are orthogonal and did not cause any of it. Two of the three files
+(`mapmodel_states.cpp`, `tst_map_states.cpp`) are in the owner's uncommitted WIP, so I did **not** edit
+them — a lint/build fix there would clobber work in progress. This is flagged for the owner rather than
+touched. CI should return to green once that map-states WIP lands. (This also means the new
+branch-protection required checks, once set, will correctly hold `main` until CI is green — which is
+their purpose.)
+
 ## Environment
 
 - **Node:** `pokered-save-editor-2` — Qt 6.11 C++/QML **desktop** app (llvm-mingw kit), open source,
