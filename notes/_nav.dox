@@ -62,6 +62,7 @@ check-for-updates). The hub reads these on request to improve the shared standar
 `notes/reference/cross-project-sync.md` → "Process reports".
 
 \subpage pse_fairyfox_reports_about <br>
+\subpage md_notes_2fairyfox-reports_22026-07-25-adopting-updates <br>
 \subpage md_notes_2fairyfox-reports_22026-07-19-adopting-updates <br>
 \subpage md_notes_2fairyfox-reports_22026-07-06-adopting-updates <br>
 \subpage md_notes_2fairyfox-reports_22026-07-02-check-for-updates <br>
@@ -208,6 +209,7 @@ check-for-updates). The hub reads these on request to improve the shared standar
 \subpage md_notes_2reference_2documentation <br>
 \subpage md_notes_2reference_2git-workflow <br>
 \subpage md_notes_2reference_2cross-project-sync <br>
+\subpage md_notes_2reference_2adoption-manifest <br>
 \subpage md_notes_2reference_2versioning <br>
 \subpage md_notes_2reference_2deployment
 */

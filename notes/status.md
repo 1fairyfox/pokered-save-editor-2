@@ -11,6 +11,27 @@ release: `0.16.6-alpha`, shipped 2026-07-11.) Single source of truth: repo-root 
 `tst_db_integrity` now 15 (two new pins: `everyFlyDestinationSitsAtItsMapId`,
 `everyTradeResolvesAndSitsAtItsBit`).
 
+### FAIRYFOX STANDARDS ADOPTED — 1.6.0 + chrome 2.3.0, adoption manifest created (2026-07-25)
+
+Ran the fairyfox check-for-updates + adopt flow (hub `697bc5c → 2d614f0`, standards **1.6.0**). Under
+the standing `adopt-standards-by-default` authorization the standard/template changes are
+pre-authorized, so they were applied directly (the full safety floor still ran). Evidence:
+[`reference/adoption-manifest.md`](reference/adoption-manifest.md) (per-standard state, this pass's
+`## Verify` results) and the process report
+[`fairyfox-reports/2026-07-25-adopting-updates.md`](fairyfox-reports/2026-07-25-adopting-updates.md).
+
+- **New keystone artifact:** `reference/adoption-manifest.md` — one row per hub standard
+  (`implemented`/`gap`/`N-A`), honest for a desktop-app node (web-mesh-only standards recorded `N-A`).
+- **New standards folded:** `readme` (worded docs link + "Get it" section + mesh footer added to
+  `README.md`), `docker` (already-practiced — `docker/` local-first Linux — now filed).
+- **git-workflow** gained the **pre-release manifest gate** + **full-CI-before-`main`
+  (platform-enforced)** sections. **notes-system**: evidence-linked status (this entry) + the manifest.
+- **Chrome bundle 2.2.1 → 2.3.0** (self-hosted fonts) — the node already self-hosts, so its old
+  "deviation" is now the mesh default; `docs/fairyfox/CHROME_VERSION` pinned.
+- **Owed (dated `gap` rows in the manifest, next dedicated pass):** a committed `compliance.md` audit,
+  the ship-contract scorecard decision, supply-chain provenance/SAST + dependencies audit,
+  mandate-ledger, maintenance-sweep. Docs/notes-only change — **no app code touched; suite unaffected**.
+
 ### FILTER FLAGS RESEARCHED + EVIDENCE MATCHING + the World panel completed (2026-07-19, `0.43.6-alpha`)
 
 The third brief of the day, delivered in full. Story:

@@ -101,6 +101,27 @@ fires on every push to `main` and publishes a GitHub Release when `VERSION` was 
   git push origin dev
   ```
 
+## The pre-release manifest gate (adopted from the hub, 1.6.0)
+
+Before cutting any release, **read [`adoption-manifest.md`](adoption-manifest.md).** An overdue
+`gap` row on a **mandatory** standard (supply-chain-hardening, git-workflow, testing, ship-contract)
+**holds the release the same way a red build does** — do not ship past a known, dated compliance gap
+on a load-bearing standard. This is the release half of the enforcement pulse: adopt/onboard runs
+*record* Verify results in the manifest, and the release *reads* them, so "whole standards silently
+unadopted while releases keep shipping" can't recur. A green build is **necessary but not
+sufficient**; the manifest is the other half of "ready to ship".
+
+## Full CI before `main` — platform-enforced, every job (hub 1.6.0)
+
+A green *local* build is necessary but not sufficient: no merge to `main` until **every** CI job on
+the release PR/`dev` HEAD is green — build, SAST (CodeQL), and every integration/smoke job the
+project has. Make it **platform-enforced**, not just documented: `main` branch protection's
+**required status checks should list the full suite by job name**, so GitHub itself blocks a merge
+past a pending or failing job. The rule is *"require the full suite, whatever its jobs are"* — this
+node populates its own contexts (`tests` linux-asan + windows, `lint`, and the `release`/`pages`
+gates). (Current state of the platform enforcement is tracked in
+[`adoption-manifest.md`](adoption-manifest.md) → git-workflow / supply-chain rows.)
+
 ## Hotfixes
 
 A production problem that can't wait for the next `dev` cycle is fixed on a branch cut from

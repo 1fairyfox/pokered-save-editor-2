@@ -24,6 +24,23 @@
 
 <div class="ff-shot"><img src="https://1fairyfox.github.io/pokered-save-editor-2/screenshots/home.png" alt="UI/UX progress"/></div>
 
+📖 **Documentation** — <https://1fairyfox.github.io/pokered-save-editor-2/> (the full Doxygen docs
+site: architecture, the living notes library, and the screenshot gallery).
+
+### Get it
+
+Where this project lives, downloaded, and read — one labelled row each:
+
+- **Download / releases** — [GitHub Releases](https://github.com/1fairyfox/pokered-save-editor-2/releases):
+  Windows portable + installer, Linux AppImage + tar.gz (built per tagged release). ⚠️ Early alpha —
+  see the Status note below before relying on it.
+- **Documentation** — <https://1fairyfox.github.io/pokered-save-editor-2/> (docs, notes, screenshots).
+- **Source** — [the repository](https://github.com/1fairyfox/pokered-save-editor-2) and its living
+  [`notes/`](notes/README.md).
+
+_(No web/live-app or store/registry rows: this is a native desktop application, not published to any
+package registry or app store. Those rows go in the moment such a destination exists.)_
+
 ## ⚠️ Status — early alpha, work in progress
 
 This is an **active WIP and not finished** — expect rough edges and bugs. It carries a large
@@ -42,6 +59,7 @@ Current version lives in [`VERSION`](VERSION) (presently in the `0.x-alpha` rang
 
 ## Table of contents
 
+- <a href="#get-it">Get it</a>
 - <a href="#what-it-is">What it is</a>
 - <a href="#features">Features</a>
 - <a href="#building-from-source">Building from source</a>
@@ -212,6 +230,15 @@ Full details: [`notes/reference/git-workflow.md`](notes/reference/git-workflow.m
 [`notes/plans/testing.md`](notes/plans/testing.md).
 
 ![Bag screen](https://1fairyfox.github.io/pokered-save-editor-2/screenshots/bag.png)
+
+---
+
+## Part of the Fairy Fox project mesh
+
+Pokered Save Editor 2 is one node in the **[Fairy Fox](https://fairyfox.io) project mesh** — a set of
+projects that share common standards, tooling, and a docs library. Home: **<https://fairyfox.io>**
+(the hub and the wider project index). This project's own docs live at
+<https://1fairyfox.github.io/pokered-save-editor-2/>.
 
 ## Why the reboot
 
