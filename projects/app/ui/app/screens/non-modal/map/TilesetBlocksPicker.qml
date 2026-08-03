@@ -191,10 +191,15 @@ Item {
           Layout.fillWidth: true
           text: {
             switch (brg.map.tileAnim) {
-              case 0: return qsTr("Nothing animates — no water, no flowers. (Surf needs the water tile, "
-                                  + "so this breaks it on a water map.)");
-              case 1: return qsTr("The water animates. The flowers don't.");
-              case 2: return qsTr("The water and the flowers both animate.");
+              case 0: return qsTr("Nothing animates — no water, no flowers. ⚠️ Surf needs the animated "
+                                  + "water tile, so Indoor breaks Surf on a water map.");
+              case 1: return qsTr("Water animates, flowers don't — Surf-friendly. It doesn't play "
+                                  + "frames: it rotates the pixels of whatever tile sits in the water "
+                                  + "slot, so a non-water map set to Cave still warps that tile.");
+              case 2: return qsTr("Water and flowers animate — Surf-friendly. ⚠️ It doesn't play "
+                                  + "frames: it rotates the pixels of whatever tile sits in the water "
+                                  + "slot, so a map that isn't really a water map still gets that tile "
+                                  + "distorted the same way.");
             }
             // Every value the save can hold, including the ones no real game ships: the console tests
             // bit 0 and nothing else.
@@ -239,19 +244,54 @@ Item {
           onActivated: brg.map.blocksetInd = currentValue
         }
 
-        // A fact about an unusual save, in the same muted voice as everything else here. It is not an
-        // error -- a console draws it perfectly happily -- so it does not shout.
-        Text {
+        // Blocks and graphics are two pointers; normally they name the same tileset. When they don't,
+        // say so in the muted voice — and OFFER to bring them back in sync (project leadership, 2026-08-03:
+        // *"for tileset, blockset make sure you offer to switch the other in sync when changing"*).
+        // Not automatic — a console draws a disagreeing save perfectly happily, so the offer is a
+        // button, never a silent rewrite. This is the same muted-notice-with-a-button idiom the
+        // stored-size Fix uses. The offer appears the instant a change makes the two diverge.
+        ColumnLayout {
           Layout.fillWidth: true
           visible: !brg.map.blocksetIsTileset
-          text: brg.map.blocksetInd < 0
-                ? qsTr("The blocks pointer is not any tileset's. The game would read whatever sits at "
-                       + "that address.")
-                : qsTr("The blocks come from %1 and the tiles from %2.")
-                  .arg(brg.map.blocksetName).arg(brg.map.tilesetName)
-          font.pixelSize: 10
-          color: brg.settings.textColorMid
-          wrapMode: Text.WordWrap
+          spacing: 6
+
+          Text {
+            Layout.fillWidth: true
+            text: brg.map.blocksetInd < 0
+                  ? qsTr("The blocks pointer is not any tileset's. The game would read whatever sits "
+                         + "at that address.")
+                  : qsTr("The blocks come from %1 and the tiles from %2.")
+                    .arg(brg.map.blocksetName).arg(brg.map.tilesetName)
+            font.pixelSize: 10
+            color: brg.settings.textColorMid
+            wrapMode: Text.WordWrap
+          }
+
+          RowLayout {
+            Layout.fillWidth: true
+            spacing: 6
+
+            // Bring the blocks to the graphics' tileset (the common "I just changed the tileset, match
+            // the blocks too" case).
+            Button {
+              flat: true
+              font.pixelSize: 10
+              text: qsTr("Match blocks → %1").arg(brg.map.tilesetName)
+              onClicked: brg.map.blocksetInd = brg.map.tilesetInd
+            }
+
+            // Or the other way: bring the graphics to the blocks' tileset. Only when the blocks name a
+            // real tileset (a raw, nobody's-tileset pointer has no name to match to).
+            Button {
+              flat: true
+              font.pixelSize: 10
+              visible: brg.map.blocksetInd >= 0
+              text: qsTr("Match tiles → %1").arg(brg.map.blocksetName)
+              onClicked: brg.map.tilesetInd = brg.map.blocksetInd
+            }
+
+            Item { Layout.fillWidth: true }
+          }
         }
       }
     }

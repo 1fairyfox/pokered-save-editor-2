@@ -111,11 +111,20 @@ Item {
           anchors.centerIn: parent
           spacing: 3
 
-          Text {
+          // ▶ / ⏸ as pre-coloured SVGs, NOT font glyphs — Windows renders ⏸ (U+23F8) as a colour
+          // EMOJI otherwise, breaking the one-consistent-icon-set rule (project leadership, 2026-08-03:
+          // *"these common buttons like play pause skip all use different font/emoji icons … can we
+          // have consistency"*). A plain Image renders on every backend (the footprints precedent):
+          // play is the dark one (the button is white at rest); pause the white one (the button is
+          // orange while playing).
+          Image {
             anchors.verticalCenter: parent.verticalCenter
-            text: sim.playing ? "⏸" : "▶"
-            font.pixelSize: 10
-            color: frame.ink
+            width: 11; height: 11
+            source: sim.playing ? "qrc:/assets/icons/pause-light.svg"
+                                 : "qrc:/assets/icons/play.svg"
+            sourceSize: Qt.size(22, 22)
+            fillMode: Image.PreserveAspectFit
+            smooth: true
           }
 
           Text {

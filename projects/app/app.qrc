@@ -645,6 +645,10 @@
         <file>ui/app/screens/non-modal/map/MapSimButton.qml</file>
         <file>assets/icons/footprints.svg</file>
         <file>assets/icons/footprints-light.svg</file>
+        <file>assets/icons/play.svg</file>
+        <file>assets/icons/pause-light.svg</file>
+        <file>assets/icons/flower.svg</file>
+        <file>assets/icons/flower-light.svg</file>
         <file>ui/app/screens/non-modal/map/MapWarp.qml</file>
         <file>ui/app/screens/non-modal/map/MapConnection.qml</file>
         <file>ui/app/screens/non-modal/map/ConnectionArrow.qml</file>

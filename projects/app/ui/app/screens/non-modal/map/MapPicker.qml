@@ -206,7 +206,12 @@ Item {
         onPicked: (v) => brg.map.lastBlackoutMap = v
       }
 
-      Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: brg.settings.dividerColor }
+      // Only shown when there is something to say about the size — a stale header + its Fix. When the
+      // size is fine the panel is just the designated maps and ends there (no trailing divider).
+      Rectangle {
+        Layout.fillWidth: true; implicitHeight: 1; color: brg.settings.dividerColor
+        visible: !brg.map.headerMatches
+      }
 
       // The size the save stores is a DIFFERENT set of bytes from the map id. If some earlier edit
       // left them stale, the doctrine says SHOW it and offer the fix -- never rewrite it quietly.
@@ -233,18 +238,6 @@ Item {
           text: qsTr("Fix")
           onClicked: brg.map.fixMapHeader()
         }
-      }
-
-      // When the size is fine and nothing needs fixing, say the panel is complete rather than ending
-      // on a bare divider.
-      Text {
-        Layout.fillWidth: true
-        visible: brg.map.headerMatches
-        text: qsTr("The stored map size matches this map.")
-        font.pixelSize: 10
-        color: brg.settings.textColorMid
-        opacity: 0.7
-        wrapMode: Text.WordWrap
       }
     }
   }

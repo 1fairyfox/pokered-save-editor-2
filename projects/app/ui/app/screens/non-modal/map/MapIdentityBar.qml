@@ -145,24 +145,24 @@ Rectangle {
       // Music — ▶/⏸ ♪ ▾ (the ▾ drops the track / volume / flags).
       MusicPicker { id: musicPicker }
 
-      // ── Tile animation — ▶/⏸ ✦ ▾ — the SAFE, default one ────────────────────────────────────
+      // ── Tile animation — ▶/⏸ + a flower — the SAFE, default one, PLAY-ONLY ──────────────────
       //
-      // The play zone toggles the map clock directly (leadership: "a play button … that defaults to
-      // tile animation"); the ▾ drops the speed / step / description. ✦ reads as "the map shimmering"
-      // and is free of the panel glyphs (✿ is Wild Pokémon, ▦ is the Blocks & Tiles dock).
+      // The play zone toggles the map clock directly. No menu (leadership 2026-08-03: "remove the
+      // tile animation dropdown, we don't need speed control"); what animates + the Surf/distortion
+      // caveats live on the tileset button's Indoor/Cave/Outdoor description. The flower says "the
+      // map's water and plants, alive".
       Item {
         id: animWrap
-        objectName: "animGroup"   // the screenshot review drives the panel through this
+        objectName: "animGroup"
         implicitWidth: animBtn.implicitWidth
         implicitHeight: 26
-
-        property bool menuOpen: false
 
         MapSimButton {
           id: animBtn
           objectName: "animChip"
 
-          glyph: "✦"
+          iconSource: "qrc:/assets/icons/flower.svg"
+          iconSourcePlaying: "qrc:/assets/icons/flower-light.svg"
 
           playing: brg.mapClock.playing
           playEnabled: brg.mapClock.animates
@@ -171,105 +171,10 @@ Rectangle {
                      : brg.mapClock.playing ? qsTr("Stop") : qsTr("Play the tile animation")
           onToggled: brg.mapClock.playing = !brg.mapClock.playing
 
-          hasMenu: true
-          menuOpen: animWrap.menuOpen
-          menuTip: qsTr("Tile animation — the water and the flowers")
-          onMenuToggled: animWrap.menuOpen = !animWrap.menuOpen
-        }
-
-        // ── The tile-animation panel: speed, step, a word on what animates ─────────────────────
-        Popup {
-          visible: animWrap.menuOpen
-          onClosed: animWrap.menuOpen = false
-
-          y: animWrap.height + 5
-          x: -40
-          width: 230
-          padding: 12
-          margins: 8   // keep it inside the window at the semi-fluid minimum (never clip the bottom)
-
-          background: Rectangle {
-            color: "#ffffff"; radius: 8
-            border.width: 1; border.color: brg.settings.dividerColor
-          }
-
-          ColumnLayout {
-            width: parent.width
-            spacing: 8
-
-            Label {
-              text: qsTr("Tile animation")
-              font.pixelSize: 12; font.bold: true
-              color: brg.settings.textColorMid
-            }
-
-            Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: brg.settings.dividerColor }
-
-            Label {
-              Layout.fillWidth: true
-              wrapMode: Text.Wrap
-              text: brg.mapClock.animates
-                      ? qsTr("The water and the flowers, moving at the console's own pace.")
-                      : qsTr("This map has nothing that animates.")
-              font.pixelSize: 10
-              opacity: 0.6
-            }
-
-            RowLayout {
-              Layout.fillWidth: true
-              visible: brg.mapClock.animates
-              spacing: 4
-
-              Label { text: qsTr("Speed"); font.pixelSize: 11; color: brg.settings.textColorMid }
-
-              Repeater {
-                model: [ { s: 0.5, label: "½×" }, { s: 1.0, label: "1×" }, { s: 2.0, label: "2×" } ]
-
-                delegate: Rectangle {
-                  required property var modelData
-                  Layout.fillWidth: true
-                  implicitHeight: 24
-                  radius: 5
-
-                  readonly property bool on: Math.abs(brg.mapClock.speed - modelData.s) < 0.01
-
-                  color: on ? brg.settings.accentColor
-                       : spdHover.hovered ? "#f0f0f0" : "#ffffff"
-                  border.width: 1; border.color: brg.settings.dividerColor
-
-                  Label {
-                    anchors.centerIn: parent
-                    text: modelData.label
-                    font.pixelSize: 11; font.bold: parent.on
-                    color: parent.on ? brg.settings.textColorLight : brg.settings.textColorDark
-                  }
-
-                  HoverHandler { id: spdHover; cursorShape: Qt.PointingHandCursor }
-                  TapHandler { onTapped: brg.mapClock.speed = modelData.s }
-                }
-              }
-
-              Rectangle {
-                implicitWidth: stepRow.implicitWidth + 10
-                implicitHeight: 24
-                radius: 5
-                color: stepHover.hovered ? "#f0f0f0" : "#ffffff"
-                border.width: 1; border.color: brg.settings.dividerColor
-
-                RowLayout {
-                  id: stepRow
-                  anchors.centerIn: parent
-                  spacing: 2
-                  Label { text: "⏭"; font.pixelSize: 11 }
-                }
-
-                HoverHandler { id: stepHover; cursorShape: Qt.PointingHandCursor }
-                TapHandler { onTapped: brg.mapClock.step() }
-
-                MapToolTip { shown: stepHover.hovered; text: qsTr("Step one frame") }
-              }
-            }
-          }
+          // No menu — leadership 2026-08-03: "remove the tile animation dropdown, we don't need
+          // speed control." What animates (and the Surf/distortion caveats) is said on the tileset
+          // button's Indoor/Cave/Outdoor description instead.
+          hasMenu: false
         }
       }
 
