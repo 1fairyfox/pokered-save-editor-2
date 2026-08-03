@@ -219,6 +219,15 @@ authenticated service integrations should be wired, not skipped in favour of fre
   token-requiring step is **gated**, so CI stays green until the secrets exist, and none of the three
   new/updated workflows runs on a plain `dev` push.
 
+> **Update 2026-08-03 — done.** The owner ran `scripts/repo-tokens.ps1` and set all three:
+> `gh secret list` shows `SONAR_TOKEN`, `CODECOV_TOKEN`, `SCORECARD_TOKEN`. ci-secrets Verify now
+> passes (every referenced secret set; canonical names; nothing referenced-but-unset). The three
+> workflows first *execute* on the next `main` push/PR (GitHub runs a workflow only once it's on the
+> default branch), so their authenticated runs go green at the next release — a confirmation, not a gap.
+> One tool bug surfaced + fixed on the way: `repo-tokens.ps1` used `gh secret set --body-file -`, which
+> the current `gh` doesn't have (it reads the value from stdin when `--body` is omitted) — fixed in the
+> vendored copy and **flagged back to the hub** (its `tools/repo-tokens.ps1` carries the same stale flag).
+
 ### ci-secrets provisioning — the one part that needs you (external accounts I can't create)
 
 I have `gh` access but cannot create a SonarCloud org, a Codecov account, or a GitHub PAT. Create each,

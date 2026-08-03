@@ -46,6 +46,12 @@ pre-authorized, so they were applied directly (the full safety floor still ran).
 - **`main` branch protection SET + verified** (solo config; required contexts
   `linux-asan`/`windows`/`static-analysis`/`CodeQL`; release flow reconciled to PR-based in
   `git-workflow.md`). **Every standard is now `implemented` or a reasoned `N-A`.**
+- **ci-secrets COMPLETE (2026-08-03):** all 3 service tokens set (`SONAR_TOKEN`/`CODECOV_TOKEN`/`SCORECARD_TOKEN`,
+  via `scripts/repo-tokens.ps1`) — ci-secrets Verify passes. **legal-docs** shipped (self-hosted
+  Privacy/Terms/Cookies on the docs site). **Every fairyfox standard is now `implemented` or a reasoned
+  `N-A`** (`reference/compliance-audit.md`). The `coverage`/`sonar`/`scorecard` + `pages` legal deploy
+  first *run* on the next `main` push (GitHub default-branch rule) — confirmations, not gaps; none are
+  `main`-required contexts.
 - **dev CI is GREEN** (`6ac96ec`: tests + lint + CodeQL all success). Landed the map-screen WIP and
   fixed the failures CI surfaced: a pre-existing `tests_all` registration bug (`tst_map_states` and
   `tst_player` used custom blocks that mis-appended to `PSE_TEST_TARGETS`, so CI — which builds only

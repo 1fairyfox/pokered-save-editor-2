@@ -42,9 +42,9 @@ summarize; a `partial`/`missing` here is what turns a manifest row into a dated 
 | research-capture | **done** | "RESEARCH LANDS IN THE NOTES" standing rule; 40+ `reference/*.md` with committed console probes under `scripts/emu/`. |
 | working-rhythm | **done** | task-tracked multi-step work; background-by-default + foreground-when-ready (dev harness / MCP); adjacency-is-not-a-brief + ask-first are hard `CLAUDE.md` rules. |
 | self-hosted-assets | **done** | docs fonts self-hosted (`docs/fairyfox/fonts/`); zero `fonts.g*` / CDN hot-links; matches chrome 2.3.0's new default. |
-| ci-secrets | **partial** | All 3 authenticated integrations now **wired**: Scorecard `repo_token: SCORECARD_TOKEN` (with default-token fallback), `coverage.yml` → Codecov (`CODECOV_TOKEN`), `sonar.yml` + `sonar-project.properties` → SonarCloud (`SONAR_TOKEN`); token-requiring steps gated so CI stays green. **Remaining = the owner sets the 3 secret values** (external SonarCloud/Codecov accounts + a GitHub PAT — I can't create these); provisioning steps in the process report. |
+| ci-secrets | **done** | All 3 secrets **set** (`gh secret list`: `SONAR_TOKEN`, `CODECOV_TOKEN`, `SCORECARD_TOKEN`, provisioned 2026-08-03 via `scripts/repo-tokens.ps1`) and each **referenced** by a workflow (`sonar.yml`/`coverage.yml`/`scorecard.yml`); canonical names; nothing referenced-but-unset — the standard's Verify passes. (The workflows first *run* on the next `main` push/PR — a GitHub default-branch constraint, not a gap.) |
 | farm-operating-model | **N-A** | single standalone project, not an integrated-farm-tier node. |
-| maintenance-sweep | **partial** | the composing standards (git-workflow/repo-hygiene/versioning/docs-lifecycle/testing) are all in place and swept ad hoc. *gap:* no single **documented sweep procedure** filed; adopt on the next dedicated tidy. |
+| maintenance-sweep | **done** | documented sweep procedure filed at [`maintenance-sweep.md`](maintenance-sweep.md) (audit-first, composing git-workflow/repo-hygiene/versioning/docs-lifecycle/testing; surfaces, doesn't auto-act). |
 | lifecycle runbooks (setup/onboard/adopt) | **N-A** | join-time / procedure runbooks, not standing rules. |
 
 ## Summary (updated after the same-day completion pass)
@@ -61,7 +61,13 @@ The five `partial`s this audit first recorded were **all closed the same day** �
 4. **mandate-ledger** — instantiated at `notes/plans/2026-07-25-mandate.md`.
 5. **maintenance-sweep** — filed at `notes/reference/maintenance-sweep.md`.
 
-**Net state: every standard is `implemented` or a reasoned `N-A`.** `main` branch protection is now set
-and verified. The only open item is a *confirmation*, not a gap: CodeQL + Scorecard are dispatched —
-confirm the first CodeQL run is green (and note dev CI is currently red from pre-existing map-states
-WIP, which clears when that WIP lands).
+Since that pass, the last two holdouts were also closed: **legal-docs** (self-hosted Privacy/Terms/Cookies
+on the docs site) and **ci-secrets** (all 3 tokens provisioned 2026-08-03; each referenced; Verify passes).
+
+**Net state: every standard is `implemented` or a reasoned `N-A` — 0 `partial`, 0 `missing`.** `main`
+branch protection is set + verified; **dev CI is green** (`6ac96ec`/`750dee7`: tests + lint + CodeQL).
+The only open items are *confirmations that run at the next `main` push*, not gaps: the
+`pages.yml` legal-page deploy and the `coverage.yml`/`sonar.yml`/`scorecard.yml` authenticated runs
+(GitHub only runs a workflow once it's on the default branch). None are `main`-required contexts, so
+none can block a release. **Reasoned `N-A`:** legal-docs' desktop-only clauses where inapplicable,
+farm-operating-model, and the lifecycle runbooks.
