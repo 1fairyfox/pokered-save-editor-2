@@ -139,7 +139,10 @@ foreach ($s in $rows) {
     $bstr  = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
     try {
         $plain = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr)
-        $plain | gh secret set $s.Name --repo $Repo --body-file - | Out-Null
+        # gh reads the value from stdin when --body is omitted (it trims the trailing
+        # newline). NOTE: not `--body-file -` (unsupported on current gh) and not
+        # `--body <value>` (that would expose the plaintext on the command line).
+        $plain | gh secret set $s.Name --repo $Repo | Out-Null
         if ($LASTEXITCODE -ne 0) { throw "gh secret set $($s.Name) failed (exit $LASTEXITCODE)." }
         Write-Host "   -> set on $Repo" -ForegroundColor Green
         $set += $s.Name
