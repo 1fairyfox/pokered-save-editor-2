@@ -1347,7 +1347,7 @@ QImage mirroredH(const QImage& img)
 }
 } // namespace
 
-QImage MapEngine::playerSprite(int facing, int contrast)
+QImage MapEngine::playerSprite(int facing, int contrast, const QRgb* outputPalette)
 {
   // gfx/sprites/red.png: six 16x16 frames -- stand down, stand up, stand LEFT, then the
   // three walking ones. There is NO "right" frame: the game draws facing-right as
@@ -1394,8 +1394,13 @@ QImage MapEngine::playerSprite(int facing, int contrast)
       }
 
       const int shade = (obp0 >= 0) ? ((obp0 >> (2 * index)) & 3) : index;
-      const int grey = shadeGrey[shade];
-      row[x] = qRgba(grey, grey, grey, 255);
+      // Through the OUTPUT palette when one is supplied, so the player honours the Game Boy / SGB /
+      // custom colour filter exactly as the map background does (project leadership, 2026-08-03: "sprites
+      // need to honor it"). No palette → grey, as before. In Grey mode the output palette IS the four
+      // greys, so this is byte-identical to the old path.
+      const QRgb c = outputPalette ? outputPalette[shade]
+                                   : qRgb(shadeGrey[shade], shadeGrey[shade], shadeGrey[shade]);
+      row[x] = qRgba(qRed(c), qGreen(c), qBlue(c), 255);
     }
   }
 
@@ -1458,7 +1463,8 @@ QVector<QPoint> MapEngine::tilesInLayer(const Buffer& buffer, int tilesetInd, La
   return out;
 }
 
-QImage MapEngine::npcSprite(int pictureID, int facing, int contrast, int animFrame)
+QImage MapEngine::npcSprite(int pictureID, int facing, int contrast, int animFrame,
+                            const QRgb* outputPalette)
 {
   // Picture id 0 means "this slot is unused" (ram/wram.asm). Draw nothing -- do not guess.
   if (pictureID < 1 || pictureID > spriteArtCount)
@@ -1568,8 +1574,11 @@ QImage MapEngine::npcSprite(int pictureID, int facing, int contrast, int animFra
       }
 
       const int shade = (obp0 >= 0) ? ((obp0 >> (2 * index)) & 3) : index;
-      const int grey = shadeGrey[shade];
-      row[x] = qRgba(grey, grey, grey, 255);
+      // Through the OUTPUT palette when supplied — the NPCs honour the colour filter alongside the
+      // player and the map (project leadership, 2026-08-03). No palette → grey (identical to Grey mode).
+      const QRgb c = outputPalette ? outputPalette[shade]
+                                   : qRgb(shadeGrey[shade], shadeGrey[shade], shadeGrey[shade]);
+      row[x] = qRgba(qRed(c), qGreen(c), qBlue(c), 255);
     }
   }
 

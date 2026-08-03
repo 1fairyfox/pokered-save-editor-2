@@ -178,43 +178,9 @@ Rectangle {
         }
       }
 
-      // ── People walking — ▶/⏸ 👣 — its OWN button, marked DESTRUCTIVE ─────────────────────────
-      //
-      // The footprints read as "people walking"; the amber dot is the app's "attention" idiom, here
-      // because this simulation MOVES the real sprite data. First press asks once (SimWarningDialog);
-      // after that ▶ runs it. No menu — it is a play button, and the caution lives on its face + tip.
-      MapSimButton {
-        id: walkBtn
-        objectName: "walkChip"
-
-        iconSource: "qrc:/assets/icons/footprints.svg"
-        iconSourcePlaying: "qrc:/assets/icons/footprints-light.svg"
-        marked: true
-
-        playing: brg.mapSim.playing
-        playEnabled: brg.mapSim.canSimulate
-        playTip: !brg.mapSim.canSimulate
-                   ? qsTr("Nobody on this map can walk — they are all set to Stay")
-                   : brg.mapSim.playing ? qsTr("Stop the walk")
-                   : qsTr("Let the people walk — ⚠️ this MOVES the real sprite data")
-        onToggled: {
-          if (brg.mapSim.playing) {
-            brg.mapSim.playing = false;
-            return;
-          }
-          if (brg.settings.mapSimWarned)
-            brg.mapSim.playing = true;
-          else
-            simWarning.open();
-        }
-
-        hasMenu: false
-      }
-    }
-
-    SimWarningDialog {
-      id: simWarning
-      onAccepted: brg.mapSim.playing = true
+      // (People-walking simulation removed for now — leadership 2026-08-03: *"sprite walking, remove
+      // that feature for now, I think it's not as useful now."* The MapSim backend (brg.mapSim) stays,
+      // dormant and unwired, so bringing the button back later is a one-block change.)
     }
 
     Item { Layout.fillWidth: true }

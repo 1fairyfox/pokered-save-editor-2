@@ -415,7 +415,7 @@ public:
 
   /// The player's 16x16 sprite, facing @p facing, through the sprite palette for @p contrast.
   /// Colour 0 comes back **transparent**, as it is on the hardware.
-  static QImage playerSprite(int facing, int contrast = 0);
+  static QImage playerSprite(int facing, int contrast = 0, const QRgb* outputPalette = nullptr);
 
   /// Where a sprite goes, in buffer pixels -- the 4-pixel lift included. (The player is
   /// slot 0 and uses the same geometry as everyone else.)
@@ -447,7 +447,8 @@ public:
    *
    * @see notes/reference/sprites.md
    */
-  static QImage npcSprite(int pictureID, int facing, int contrast = 0, int animFrame = 0);
+  static QImage npcSprite(int pictureID, int facing, int contrast = 0, int animFrame = 0,
+                          const QRgb* outputPalette = nullptr);
 
   /**
    * @brief The 6x5-block scratch area as TILE ids -- the game's `wSurroundingTiles`.

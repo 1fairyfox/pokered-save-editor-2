@@ -51,6 +51,26 @@ QPixmap PlayerProvider::requestPixmap(const QString& id, QSize* size, const QSiz
     parts.remove(0, 2);
   }
 
+  // ── The output-palette tail: `.../pal/<mapInd>/<tilesetInd>/<generation>` ─────────────────────
+  //
+  // Sprites honour the Game Boy / SGB / custom colour filter, so the URL carries the map + tileset
+  // to resolve the map's output palette (SGB colours each map differently), plus a generation
+  // counter that cache-busts when the filter changes (project leadership, 2026-08-03: "sprites need to
+  // honor it"). It rides as a KEYWORD segment — like `sil`/`npc` — so it never collides with the
+  // optional npc `frame` field. Absent → grey, exactly as before.
+  QRgb outPal[4];
+  bool havePal = false;
+  {
+    const int k = parts.indexOf(QStringLiteral("pal"));
+    if (k >= 0 && k + 2 < parts.size()) {
+      MapEngine::outputPaletteFor(parts.at(k + 1).toInt(), parts.at(k + 2).toInt(), outPal);
+      havePal = true;
+    }
+    if (k >= 0)
+      while (parts.size() > k)   // drop pal/... so the positional parsing below is unaffected
+        parts.removeLast();
+  }
+
   // Two forms, told apart by the first word:
   //   <facing>/<contrast>                            -- the player (slot 0)
   //   npc/<pictureID>/<facing>/<contrast>[/<frame>]  -- anybody else (one loose PNG per sprite)
@@ -64,13 +84,13 @@ QPixmap PlayerProvider::requestPixmap(const QString& id, QSize* size, const QSiz
     const int contrast = (parts.size() > 3) ? parts.at(3).toInt() : 0;
     const int frame    = (parts.size() > 4) ? parts.at(4).toInt() : 0;
 
-    sprite = MapEngine::npcSprite(picture, facing, contrast, frame);
+    sprite = MapEngine::npcSprite(picture, facing, contrast, frame, havePal ? outPal : nullptr);
   }
   else {
     const int facing   = (parts.size() > 0) ? parts.at(0).toInt() : MapEngine::FacingDown;
     const int contrast = (parts.size() > 1) ? parts.at(1).toInt() : 0;
 
-    sprite = MapEngine::playerSprite(facing, contrast);
+    sprite = MapEngine::playerSprite(facing, contrast, havePal ? outPal : nullptr);
   }
 
   if (sprite.isNull()) {

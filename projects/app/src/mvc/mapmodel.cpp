@@ -559,7 +559,9 @@ QVariantList MapModel::neighbourSprites(int dir) const
     m["x"] = sp->getX();
     m["y"] = sp->getY();
     // Facing Down (0) — a static context sprite; through the OBJECT palette, like every other sprite.
-    m["source"] = QStringLiteral("image://player/npc/%1/0/%2").arg(pic).arg(contrast());
+    m["source"] = QStringLiteral("image://player/npc/%1/0/%2").arg(pic).arg(contrast())
+                + QStringLiteral("/pal/%1/%2/%3").arg(mapInd()).arg(tilesetInd())
+                    .arg(MapEngine::paletteGeneration());   // honour the colour filter — @see PlayerProvider
     out.append(m);
   }
   return out;
@@ -1504,7 +1506,12 @@ QString MapModel::playerSource() const
   // The contrast rides along because the player is drawn through the OBJECT palette -- and
   // that is the one the "harmless" glitch palettes actually damage.
   return "image://player/" + QString::number(playerFacing())
-       + "/" + QString::number(contrast());
+       + "/" + QString::number(contrast())
+       // Carry the map + tileset + palette generation so the sprite honours the colour filter (SGB
+       // colours each map differently) and refreshes when it changes. @see PlayerProvider, its `pal`
+       // keyword segment. (project leadership, 2026-08-03: "sprites need to honor it".)
+       + QStringLiteral("/pal/%1/%2/%3").arg(mapInd()).arg(tilesetInd())
+           .arg(MapEngine::paletteGeneration());
 }
 
 int MapModel::playerRectX() const { return MapEngine::playerRect(playerX(), playerY()).x(); }
@@ -1584,7 +1591,9 @@ QVariantList MapModel::npcList() const
     m["source"]  = "image://player/npc/" + QString::number(s->pictureID)
                  + "/" + QString::number(s->faceDir)
                  + "/" + QString::number(contrast())
-                 + "/" + QString::number(s->animFrameCounter & 3);
+                 + "/" + QString::number(s->animFrameCounter & 3)
+                 + QStringLiteral("/pal/%1/%2/%3").arg(mapInd()).arg(tilesetInd())
+                     .arg(MapEngine::paletteGeneration());   // honour the colour filter — @see PlayerProvider
 
     // The two things about a sprite that a person cannot see by looking at it.
     m["inSpriteSet"] = (s->pictureID == SpritePlayerPicture) || loaded.contains(s->pictureID);
@@ -1740,7 +1749,9 @@ QVariantList MapModel::spriteCatalog() const
       // Facing down -- that is what a character looks like when you are choosing one.
       m["source"] = "image://player/npc/" + QString::number(e->ind)
                   + "/" + QString::number(MapEngine::FacingDown)
-                  + "/" + QString::number(contrast());
+                  + "/" + QString::number(contrast())
+                  + QStringLiteral("/pal/%1/%2/%3").arg(mapInd()).arg(tilesetInd())
+                      .arg(MapEngine::paletteGeneration());   // honour the colour filter — @see PlayerProvider
 
       // ⚠️ "Would the CONSOLE draw this, if I dropped it here?" -- asked of the machine, not of the
       // save's cached sprite set (which the game overwrites before it ever reads it).

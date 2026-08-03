@@ -191,15 +191,11 @@ Item {
           Layout.fillWidth: true
           text: {
             switch (brg.map.tileAnim) {
-              case 0: return qsTr("Nothing animates — no water, no flowers. ⚠️ Surf needs the animated "
-                                  + "water tile, so Indoor breaks Surf on a water map.");
-              case 1: return qsTr("Water animates, flowers don't — Surf-friendly. It doesn't play "
-                                  + "frames: it rotates the pixels of whatever tile sits in the water "
-                                  + "slot, so a non-water map set to Cave still warps that tile.");
-              case 2: return qsTr("Water and flowers animate — Surf-friendly. ⚠️ It doesn't play "
-                                  + "frames: it rotates the pixels of whatever tile sits in the water "
-                                  + "slot, so a map that isn't really a water map still gets that tile "
-                                  + "distorted the same way.");
+              case 0: return qsTr("Nothing animates. ⚠️ Surf needs the water tile, so Indoor breaks Surf.");
+              case 1: return qsTr("Water animates, flowers don't — Surf-friendly. Tile $14 goes through a "
+                                  + "water distortion, typically only used for real water tiles.");
+              case 2: return qsTr("Water and flowers animate — Surf-friendly. Tile $14 goes through a "
+                                  + "water distortion, typically only used for real water tiles.");
             }
             // Every value the save can hold, including the ones no real game ships: the console tests
             // bit 0 and nothing else.
