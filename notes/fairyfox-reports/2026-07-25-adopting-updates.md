@@ -233,8 +233,15 @@ gh secret set CODECOV_TOKEN  --repo 1fairyfox/pokered-save-editor-2
 gh secret set SONAR_TOKEN    --repo 1fairyfox/pokered-save-editor-2
 ```
 
-(`gh secret set NAME` prompts for the value with input hidden. Or run the hub's
-`repo-tokens.ps1`, which does all three with concealed input.) Once set, the gated steps light up:
+**Or just run the vendored tool** (recommended) — `scripts/repo-tokens.ps1`: it prints each token's
+get-it link + how-to, prompts with **hidden input**, streams each value to `gh secret set` over stdin,
+and zeroes the plaintext (never disk/history/transcript). Blank + Enter skips one.
+
+```powershell
+pwsh -File scripts/repo-tokens.ps1        # walks all three; auto-detects the repo
+```
+
+(Or `gh secret set NAME` per secret, which also prompts hidden.) Once set, the gated steps light up:
 Codecov coverage upload, SonarCloud analysis, and Scorecard's fuller checks — confirm with
 `gh secret list`. Until then, everything else stays green.
 
