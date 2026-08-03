@@ -1446,6 +1446,11 @@ void MapModel::setColourMode(int mode)
   MapEngine::setColourMode(mode);
   emit colourModeChanged();
   emit sourceChanged();   // the palette generation is in the URL; a new one re-renders the map
+  // ⚠️ The SPRITE URLs carry the palette generation too (so the player + NPCs recolour with the map),
+  // and the canvas's NPC list is a bound C++ METHOD that only re-asks on castChanged() — so without
+  // this the background recoloured but the NPCs kept their stale, grey-generation URLs. (project
+  // leadership, 2026-08-03: "npcs didn't change color still same".) @see MapCanvas.revision
+  emit castChanged();
 }
 
 QVariantList MapModel::colourPresets() const { return MapEngine::colourPresets(); }
@@ -1469,6 +1474,7 @@ void MapModel::setCustomColour(int shade, const QColor& colour)
 
   emit colourModeChanged();
   emit sourceChanged();
+  emit castChanged();   // re-ask the cast so the NPCs pick up the new palette — @see setColourMode
 }
 
 QVariantMap MapModel::viewBoxesAt(int x, int y) const
