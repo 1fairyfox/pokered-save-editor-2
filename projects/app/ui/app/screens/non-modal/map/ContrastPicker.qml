@@ -123,6 +123,7 @@ Item {
     modal: false
     focus: true
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
+    onClosed: root.openState = false   // sync the button highlight on click-off/Escape close @see MapPicker
 
     background: Rectangle {
       color: "#ffffff"

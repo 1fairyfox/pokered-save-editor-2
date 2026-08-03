@@ -17,16 +17,16 @@
 /*
   MapIdentityBar.qml -- the top bar: WHAT IS LOADED, then the things you PLAY, then THE PALETTE.
 
-    [ Pallet Town ⌄ ] [ ⊞ ] [ ▩ ] │ [ ◧ ] ‖ [ ▶♪⌄ ] [ ▶✦⌄ ] [ ▶👣• ] … [ ◧ colour ] │ [ ! ]
-      map picker      opts  tiles   contrast   music   anim   walk         palette        scratch
+    [ Pallet Town ⌄ ] [ ⊞ ] │ [ ◧ ] ‖ [ ▶♪⌄ ] [ ▶✿ ] … [ ◧ colour ] │ [ ! ]
+      map picker      opts    contrast   music   anim       palette      scratch
 
-  * The MAP SELECTOR is the title (MapNamePicker). ⊞ (MapPicker) holds the designated maps + the
-    stored-size fix; ▩ (TilesetBlocksPicker) holds the tileset & blocks the map draws from — its own
-    button since 2026-08-03 (leadership: "break tileset and blocks out into its own button").
+  * The MAP SELECTOR is the title (MapNamePicker). ⊞ (MapPicker) holds the map's config in one
+    dropdown to the right of the name: designated maps, the stored-size fix, and the tileset & blocks
+    the map draws from (folded back in here 2026-08-03, from a brief standalone ▩ button).
   * The PALETTE (ContrastPicker) reads as a percentage and drops a segmented slider.
-  * THE THINGS YOU PLAY sit together past a divider: music (♪), tile animation (✦) and people
-    walking (👣). Each is a MapSimButton — a ▶/⏸ play zone + a subject icon + an optional ▾. The
-    walk carries a small amber dot because its simulation is DESTRUCTIVE (it moves real sprite data).
+  * THE THINGS YOU PLAY sit together past a divider: music (♪) and tile animation (a flower). Each is
+    a MapSimButton — a ▶/⏸ play zone + a subject icon + an optional ▾. (The people-walk button was
+    removed 2026-08-03; the MapSim backend stays dormant.)
 
   Nothing here is a menu bar and nothing here is a toolbar with separators. It is chips.
 */
@@ -42,7 +42,6 @@ Rectangle {
 
   /// The drop-downs, drivable by name for the DEBUG harness / the screenshot review.
   property alias mapPickerOpen: mapPicker.openState
-  property alias tilesetPickerOpen: tilesetBlocksPicker.openState
   property alias contrastPickerOpen: contrastPicker.openState
   property alias contrastShowGlitch: contrastPicker.showGlitch
   property alias colourPickerOpen: colourPicker.openState
@@ -93,21 +92,18 @@ Rectangle {
       Layout.rightMargin: 2
     }
 
-    // ── The CONFIG buttons: Map options · Tileset & blocks · Contrast ─────────────────────────
+    // ── The CONFIG buttons: Map options · Contrast ───────────────────────────────────────────
     //
     // Compact icon tool-buttons, each with a ▾ that says "I drop a menu" (project leadership). Where a
-    // reactive icon is natural it is one: Contrast IS its live four-shade swatch, ⊞ carries an amber
-    // dot when the map's stored size is stale, ▩ carries one when its blocks and graphics disagree.
-    // They share MapBarButton, so they read as a family.
+    // reactive icon is natural it is one: Contrast IS its live four-shade swatch; ⊞ carries an amber
+    // dot when the map's stored size is stale OR its blocks and graphics disagree. They share
+    // MapBarButton, so they read as a family.
 
-    // ── Map options (⊞): designated maps (Outside is / Wake up at) + the stored-size fix ────────
-    MapPicker { id: mapPicker; objectName: "mapPickerControl" }
-
-    // ── Tileset & blocks (▩): the graphics the map draws from, and the blocks it is built out of ─
+    // ── Map options (⊞): designated maps, tileset & blocks, and the stored-size fix ─────────────
     //
-    // Its own button next to ⊞ (project leadership, 2026-08-03: *"break tileset and blocks out into its own
-    // button next to designated maps"*) — it used to be an "Override…" disclosure inside ⊞'s panel.
-    TilesetBlocksPicker { id: tilesetBlocksPicker; objectName: "tilesetBlocksControl" }
+    // Tileset & blocks fold back in here (project leadership, 2026-08-03: *"move tileset and blockset to
+    // the map-select dropdown panel"*) — they were briefly a standalone ▩ button.
+    MapPicker { id: mapPicker; objectName: "mapPickerControl" }
 
     // ── Contrast ─────────────────────────────────────────────────────────────────────────────
     //

@@ -15,19 +15,19 @@
 */
 
 /*
-  MapPicker.qml -- the top bar's MAP OPTIONS button (⊞): the DESIGNATED MAPS, and the map-size fix.
-
-  The map SELECTOR is the title now (MapNamePicker.qml). This ⊞ button holds the extras:
+  MapPicker.qml -- the top bar's MAP OPTIONS button (⊞): everything ABOUT the loaded map that isn't
+  picking WHICH map (that is the title, MapNamePicker). One dropdown to the right of the name:
 
     * "Outside is…"  (`wLastMap`)          -- where every "back outside" ($FF) door lands
     * "Wake up at…"  (`wLastBlackoutMap`)  -- where blacking out, DIG and an ESCAPE ROPE drop you
     * a Fix for a stored map SIZE that came from another map
+    * the TILESET (`gfxPtr`, + Indoor/Cave/Outdoor) and the BLOCKSET (`blockPtr`) the map draws from
 
-  ⚠️ TILESET & BLOCKS ARE NOT HERE ANY MORE (project leadership, 2026-08-03): they broke out into their
-  own top-bar button (TilesetBlocksPicker.qml, the ▩ next to this one). The graphics/blocks a map
-  draws from is a thing people come here to change, not a power-user footnote buried in a disclosure.
-  So this button's amber dot now marks only a stored-size mismatch; the blockset≠tileset disagreement
-  marks the ▩ button instead.
+  ⚠️ Tileset & blocks live HERE again (project leadership, 2026-08-03: *"move tileset and blockset to
+  the map-select dropdown panel"*). They were briefly their own ▩ button; leadership folded them back
+  into this one dropdown so the map name stays a clean direct selector and all the map's config sits in
+  a single panel beside it. This button's amber dot marks EITHER a stale stored size OR a blockset that
+  disagrees with the tileset.
 */
 import QtQuick
 import QtQuick.Controls
@@ -47,9 +47,8 @@ Item {
 
   // ── A "Designated Maps" row: a label, a grouped map combo, and a one-line blurb ────────────────
   //
-  // Reused for "Outside is…" (wLastMap) and "Wake up at…" (wLastBlackoutMap) — both moved off the
-  // toolbar into this panel (project leadership, 2026-07-19). The combo is the SAME grouped map list the title
-  // picker uses; 248 names flat is a wall, so it groups by the map's own tileset.
+  // Reused for "Outside is…" (wLastMap) and "Wake up at…" (wLastBlackoutMap). The combo is the SAME
+  // grouped map list the title picker uses; 248 names flat is a wall, so it groups by tileset.
   component DesignatedMapRow: ColumnLayout {
     id: dmr
     property string label: ""
@@ -123,8 +122,7 @@ Item {
     }
   }
 
-  // The ⊞ button opens the map's EXTRAS: the designated maps and the size fix. Its glyph is a
-  // grid-in-a-frame — a map is a grid of blocks.
+  // The ⊞ button opens the map's config: designated maps, the size fix, and the tileset/blocks.
   MapBarButton {
     id: trigger
     anchors.fill: parent
@@ -133,14 +131,13 @@ Item {
     open: root.openState
     onToggle: root.openState = !root.openState
 
-    tip: qsTr("Map options — designated maps, and the stored size")
+    tip: qsTr("Map options — designated maps, tileset & blocks, the stored size")
 
-    // Reactive state: the map's stored size no longer matches the map. A little amber dot, so the
-    // icon SAYS something is off without a wall of text on the bar. (Tileset/blocks disagreement is
-    // the ▩ button's dot now.)
+    // Reactive state: a stale stored size, OR a blockset that disagrees with the tileset. Either is a
+    // rare-but-legal thing worth flagging — a little amber dot, so the icon SAYS something is off.
     Rectangle {
       parent: trigger
-      visible: !brg.map.headerMatches
+      visible: !brg.map.headerMatches || !brg.map.blocksetIsTileset
       width: 7; height: 7; radius: 3.5
       color: "#e69f00"
       border.width: 1
@@ -158,14 +155,23 @@ Item {
     width: 300
     padding: 10
 
-    // ⚠️ Keep the panel inside the window (project leadership, 2026-08-03): `margins` lets Qt shift a
-    // drop-down UP when it would otherwise clip past the window bottom at the semi-fluid minimum
-    // size, so a menu can never fall off the edge.
+    // ⚠️ Keep the panel inside the window at the 750×480 semi-fluid minimum: `margins` lets Qt shift
+    // it up rather than clip past the bottom, and the height cap + ScrollView below let a tall panel
+    // (this one now carries designated maps AND tileset/blocks) scroll rather than overflow.
     margins: 8
 
     modal: false
     focus: true
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
+
+    // ⚠️ Sync the button's open flag when the popup closes by ANY route (click-off, Escape). Without
+    // this, click-off closed the popup but left openState=true — so the ⊞ button stayed highlighted
+    // and the next click "closed" the already-closed popup instead of reopening it. (project leadership,
+    // 2026-08-03: "panel highlighting and opening is weird if you close the panel by clicking off".)
+    onClosed: root.openState = false
+
+    readonly property real maxH: (root.Window.height > 0 ? root.Window.height : 480) - 70
+    height: Math.min(implicitHeight, maxH)
 
     background: Rectangle {
       color: "#ffffff"
@@ -174,69 +180,241 @@ Item {
       border.color: brg.settings.dividerColor
     }
 
-    ColumnLayout {
-      anchors.fill: parent
-      spacing: 8
+    contentItem: ScrollView {
+      clip: true
+      ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
 
-      // ── Designated Maps — the "where the world puts you" bytes ────────────────────────────────
-      //
-      // Both live in WorldGeneral and both re-home the player: Outside is (wLastMap) is where every
-      // "back outside" ($FF) door lands — change it and every such door on the canvas re-labels at
-      // once; Wake up at (wLastBlackoutMap) is where blacking out, DIG and an ESCAPE ROPE drop you.
-      Text {
-        text: qsTr("Designated Maps")
-        font.pixelSize: 11
-        font.bold: true
-        color: brg.settings.textColorMid
-      }
+      ColumnLayout {
+        width: pop.availableWidth
+        spacing: 8
 
-      DesignatedMapRow {
-        Layout.fillWidth: true
-        label: qsTr("Outside is…")
-        blurb: qsTr("Designated map when a warp goes back outside.")
-        value: brg.map.lastMap
-        onPicked: (v) => brg.map.lastMap = v
-      }
+        // ── Designated Maps — the "where the world puts you" bytes ──────────────────────────────
+        //
+        // Both live in WorldGeneral and both re-home the player: Outside is (wLastMap) is where every
+        // "back outside" ($FF) door lands — change it and every such door on the canvas re-labels at
+        // once; Wake up at (wLastBlackoutMap) is where blacking out, DIG and an ESCAPE ROPE drop you.
+        Text {
+          text: qsTr("Designated Maps")
+          font.pixelSize: 11
+          font.bold: true
+          color: brg.settings.textColorMid
+        }
 
-      DesignatedMapRow {
-        Layout.fillWidth: true
-        label: qsTr("Wake up at…")
-        blurb: qsTr("Designated black out, DIG, and ESCAPE ROPE map.")
-        value: brg.map.lastBlackoutMap
-        onPicked: (v) => brg.map.lastBlackoutMap = v
-      }
+        DesignatedMapRow {
+          Layout.fillWidth: true
+          label: qsTr("Outside is…")
+          blurb: qsTr("Designated map when a warp goes back outside.")
+          value: brg.map.lastMap
+          onPicked: (v) => brg.map.lastMap = v
+        }
 
-      // Only shown when there is something to say about the size — a stale header + its Fix. When the
-      // size is fine the panel is just the designated maps and ends there (no trailing divider).
-      Rectangle {
-        Layout.fillWidth: true; implicitHeight: 1; color: brg.settings.dividerColor
-        visible: !brg.map.headerMatches
-      }
+        DesignatedMapRow {
+          Layout.fillWidth: true
+          label: qsTr("Wake up at…")
+          blurb: qsTr("Designated black out, DIG, and ESCAPE ROPE map.")
+          value: brg.map.lastBlackoutMap
+          onPicked: (v) => brg.map.lastBlackoutMap = v
+        }
 
-      // The size the save stores is a DIFFERENT set of bytes from the map id. If some earlier edit
-      // left them stale, the doctrine says SHOW it and offer the fix -- never rewrite it quietly.
-      //
-      // But it is not an ERROR, so it is not red (project leadership, 2026-07-13: "you have red text everywhere,
-      // even to indicate information, which is bad"). Red means *something is broken*. This is a
-      // notice, so it reads as a notice: a muted amber line with a button that does the thing.
-      RowLayout {
-        Layout.fillWidth: true
-        visible: !brg.map.headerMatches
-        spacing: 6
+        // A stale stored size — shown only when it disagrees, with its Fix.
+        Rectangle {
+          Layout.fillWidth: true; implicitHeight: 1; color: brg.settings.dividerColor
+          visible: !brg.map.headerMatches
+        }
 
+        RowLayout {
+          Layout.fillWidth: true
+          visible: !brg.map.headerMatches
+          spacing: 6
+
+          Text {
+            Layout.fillWidth: true
+            text: qsTr("The stored map size is from another map.")
+            font.pixelSize: 10
+            color: "#8a6d00"
+            wrapMode: Text.WordWrap
+          }
+
+          Button {
+            flat: true
+            font.pixelSize: 10
+            text: qsTr("Fix")
+            onClicked: brg.map.fixMapHeader()
+          }
+        }
+
+        Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: brg.settings.dividerColor }
+
+        // ── Tileset (the graphics) + what animates ──────────────────────────────────────────────
+        Text {
+          text: qsTr("Tileset — the graphics")
+          font.pixelSize: 11
+          font.bold: true
+          color: brg.settings.textColorMid
+        }
+
+        ComboBox {
+          Layout.fillWidth: true
+          Layout.preferredHeight: 32
+          font.pixelSize: 12
+
+          model: brg.map.tilesetList()
+          textRole: "name"
+          valueRole: "ind"
+
+          currentIndex: {
+            const list = model;
+            for (let i = 0; i < list.length; i++)
+              if (list[i].ind === brg.map.tilesetInd)
+                return i;
+            return -1;
+          }
+
+          onActivated: brg.map.tilesetInd = currentValue
+        }
+
+        // Indoor / Cave / Outdoor. NOT a place -- it is which tiles MOVE, and it lives with the
+        // tileset because it IS the tileset's byte (0x3522). Cave is not Indoor: cave water animates.
+        RowLayout {
+          Layout.fillWidth: true
+          spacing: 0
+
+          Repeater {
+            model: [
+              { v: 0, name: qsTr("Indoor")  },
+              { v: 1, name: qsTr("Cave")    },
+              { v: 2, name: qsTr("Outdoor") }
+            ]
+
+            Rectangle {
+              required property var modelData
+              required property int index
+
+              Layout.fillWidth: true
+              implicitHeight: 26
+
+              readonly property bool active: brg.map.tileAnim === modelData.v
+
+              color: active ? brg.settings.accentColor
+                   : segHover.hovered ? "#f0f0f0" : "transparent"
+
+              border.width: 1
+              border.color: brg.settings.dividerColor
+
+              topLeftRadius: index === 0 ? 4 : 0
+              bottomLeftRadius: index === 0 ? 4 : 0
+              topRightRadius: index === 2 ? 4 : 0
+              bottomRightRadius: index === 2 ? 4 : 0
+
+              HoverHandler { id: segHover; cursorShape: Qt.PointingHandCursor }
+              TapHandler { onTapped: brg.map.tileAnim = modelData.v }
+
+              Text {
+                anchors.centerIn: parent
+                text: modelData.name
+                font.pixelSize: 11
+                font.bold: parent.active
+                color: parent.active ? brg.settings.textColorLight : brg.settings.textColorDark
+              }
+            }
+          }
+        }
+
+        // What the chosen one DOES, said underneath and changing as you pick. "Indoor" is not a place,
+        // it is *nothing animates*.
         Text {
           Layout.fillWidth: true
-          text: qsTr("The stored map size is from another map.")
+          text: {
+            switch (brg.map.tileAnim) {
+              case 0: return qsTr("Nothing animates. ⚠️ Surf needs the water tile, so Indoor breaks Surf.");
+              case 1: return qsTr("Water animates, flowers don't — Surf-friendly. Tile $14 goes through a "
+                                  + "water distortion, typically only used for real water tiles.");
+              case 2: return qsTr("Water and flowers animate — Surf-friendly. Tile $14 goes through a "
+                                  + "water distortion, typically only used for real water tiles.");
+            }
+            return (brg.map.tileAnim % 2 === 1)
+                   ? qsTr("%1 — the console reads bit 0, so this behaves as water only.")
+                       .arg(brg.map.tileAnim)
+                   : qsTr("%1 — the console reads bit 0, so this behaves as water and flowers.")
+                       .arg(brg.map.tileAnim);
+          }
           font.pixelSize: 10
-          color: "#8a6d00"
+          color: brg.settings.textColorMid
           wrapMode: Text.WordWrap
         }
 
-        Button {
-          flat: true
-          font.pixelSize: 10
-          text: qsTr("Fix")
-          onClicked: brg.map.fixMapHeader()
+        Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: brg.settings.dividerColor }
+
+        // ── Blockset (the blocks) ───────────────────────────────────────────────────────────────
+        Text {
+          text: qsTr("Blockset — what the map is built from")
+          font.pixelSize: 11
+          font.bold: true
+          color: brg.settings.textColorMid
+        }
+
+        ComboBox {
+          Layout.fillWidth: true
+          Layout.preferredHeight: 32
+          font.pixelSize: 12
+
+          model: brg.map.tilesetList()
+          textRole: "name"
+          valueRole: "ind"
+
+          currentIndex: {
+            const list = model;
+            for (let i = 0; i < list.length; i++)
+              if (list[i].ind === brg.map.blocksetInd)
+                return i;
+            return -1;   // a blockPtr that is nobody's blockset. Shown, not "corrected".
+          }
+
+          onActivated: brg.map.blocksetInd = currentValue
+        }
+
+        // Blocks and graphics are two pointers; normally they name the same tileset. When they don't,
+        // say so in the muted voice — and OFFER to bring them back in sync (a button, never a silent
+        // rewrite; the same muted-notice idiom the stored-size Fix uses). Appears the instant a change
+        // makes the two diverge.
+        ColumnLayout {
+          Layout.fillWidth: true
+          visible: !brg.map.blocksetIsTileset
+          spacing: 6
+
+          Text {
+            Layout.fillWidth: true
+            text: brg.map.blocksetInd < 0
+                  ? qsTr("The blocks pointer is not any tileset's. The game would read whatever sits "
+                         + "at that address.")
+                  : qsTr("The blocks come from %1 and the tiles from %2.")
+                    .arg(brg.map.blocksetName).arg(brg.map.tilesetName)
+            font.pixelSize: 10
+            color: brg.settings.textColorMid
+            wrapMode: Text.WordWrap
+          }
+
+          RowLayout {
+            Layout.fillWidth: true
+            spacing: 6
+
+            Button {
+              flat: true
+              font.pixelSize: 10
+              text: qsTr("Match blocks → %1").arg(brg.map.tilesetName)
+              onClicked: brg.map.blocksetInd = brg.map.tilesetInd
+            }
+
+            Button {
+              flat: true
+              font.pixelSize: 10
+              visible: brg.map.blocksetInd >= 0
+              text: qsTr("Match tiles → %1").arg(brg.map.blocksetName)
+              onClicked: brg.map.tilesetInd = brg.map.blocksetInd
+            }
+
+            Item { Layout.fillWidth: true }
+          }
         }
       }
     }
