@@ -56,7 +56,7 @@ $Secrets = @(
         Label = 'SonarCloud — quality gate & tech-debt analysis (sonar.yml)'
         Url   = 'https://sonarcloud.io/account/security'
         How   = @(
-            'Sign in to SonarCloud with GitHub, import this repo (org 1fairyfox),'
+            'Sign in to SonarCloud with GitHub, import this repo (org junebug12851),'
             'then Account > Security. Enter a name, click Generate, and copy the token.'
             'Project-scoped alternative: the project > Administration >'
             'Analysis Method > GitHub Actions also hands you an analysis token.'
