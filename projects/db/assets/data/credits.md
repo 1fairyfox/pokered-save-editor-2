@@ -38,10 +38,16 @@ Everyone and everything that helped build Pokered Save Editor 2 -- contributors,
 - **[linuxdeploy](https://github.com/linuxdeploy/linuxdeploy)** -- Bundles the Linux AppImage (with its Qt plugin) in the release pipeline
 - **[MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk)** -- Powers the pokered-dev MCP server (scripts/mcp) -- the standardized way an AI session drives the whole dev loop: builds, tests, app driving, screenshots and the emulator. A developer tool only: it lives in a git-ignored venv, runs as its own process, and is never linked into or shipped with the editor _(License: MIT -- a dev tool, NOT distributed with this app)_
 - **[psutil](https://github.com/giampaolo/psutil)** -- Process inspection for the dev MCP server's leaked-process sweeper -- the guard against the runaway-emulator pile-ups of 2026-07-15 _(License: BSD-3-Clause -- a dev tool, NOT distributed with this app)_
+- **[CodeQL (GitHub)](https://codeql.github.com)** -- The static-analysis (SAST) engine that scans the C++ codebase for security and correctness issues on every build -- a developer/CI tool, not shipped with the app
+- **[Dependabot (GitHub)](https://github.com/dependabot)** -- Keeps the CI GitHub Actions pinned-dependencies current so the SHA pins never go stale
 
 ## Services Used
 
 - **[Github](https://github.com)** -- Gracously host so many projects free including this one.
+- **[GitHub Actions](https://github.com/features/actions)** -- Runs every automated check and the release pipeline -- builds, the full test suite, static analysis, SAST, docs, and the packaged downloads
+- **[Codecov](https://codecov.io)** -- Tracks test coverage from CI and reports it on pull requests
+- **[SonarQube Cloud (SonarCloud)](https://sonarcloud.io)** -- Code-quality and technical-debt analysis of the C++ codebase
+- **[OpenSSF Scorecard](https://securityscorecards.dev)** -- Scores the repository's supply-chain security posture and surfaces hardening gaps
 
 ## Icons
 

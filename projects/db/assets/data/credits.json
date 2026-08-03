@@ -129,6 +129,16 @@
           "url": "github.com/giampaolo/psutil",
           "license": "BSD-3-Clause (dev tool, not distributed with this app)",
           "note": "Process inspection for the dev MCP server's leaked-process sweeper -- the guard against the runaway-emulator pile-ups of 2026-07-15"
+        },
+        {
+          "name": "CodeQL (GitHub)",
+          "url": "codeql.github.com",
+          "note": "The static-analysis (SAST) engine that scans the C++ codebase for security and correctness issues on every build -- a developer/CI tool, not shipped with the app"
+        },
+        {
+          "name": "Dependabot (GitHub)",
+          "url": "github.com/dependabot",
+          "note": "Keeps the CI GitHub Actions pinned-dependencies current so the SHA pins never go stale"
         }
       ]
     },
@@ -139,6 +149,26 @@
           "name": "Github",
           "url": "github.com",
           "note": "Gracously host so many projects free including this one."
+        },
+        {
+          "name": "GitHub Actions",
+          "url": "github.com/features/actions",
+          "note": "Runs every automated check and the release pipeline -- builds, the full test suite, static analysis, SAST, docs, and the packaged downloads"
+        },
+        {
+          "name": "Codecov",
+          "url": "codecov.io",
+          "note": "Tracks test coverage from CI and reports it on pull requests"
+        },
+        {
+          "name": "SonarQube Cloud (SonarCloud)",
+          "url": "sonarcloud.io",
+          "note": "Code-quality and technical-debt analysis of the C++ codebase"
+        },
+        {
+          "name": "OpenSSF Scorecard",
+          "url": "securityscorecards.dev",
+          "note": "Scores the repository's supply-chain security posture and surfaces hardening gaps"
         }
       ]
     },
