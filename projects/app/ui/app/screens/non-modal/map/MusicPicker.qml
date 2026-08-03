@@ -100,6 +100,7 @@ Item {
 
     width: 250
     padding: 8
+    margins: 8   // keep inside the window at the semi-fluid minimum (never clip the bottom)
 
     background: Rectangle {
       color: "#ffffff"

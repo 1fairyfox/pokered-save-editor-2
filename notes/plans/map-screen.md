@@ -321,6 +321,32 @@ puts on the screen, and a map editor that shows dead water is showing you someth
 anyone. This is a first-class part of the overhaul, not a garnish — and, like everything else here, it is
 an **emulation, not an impression**.
 
+### Update 2026-08-03 — the play buttons, un-merged; tileset & blocks, split out
+
+Project leadership revised the top-bar layout (superseding the 2026-07-14 merge that folded tile
+animation and the walk into one "Simulate" button):
+
+- **Three separate play buttons**, sitting together past the config divider, each a `MapSimButton`
+  (`▶/⏸` + a subject icon + an optional `▾`): **music** (`♪`), **tile animation** (`✦`), **people
+  walking** (footprints). *"Have a play button next to the feet icon that defaults to tile animation …
+  break people simulation out to its own button to the right."* Tile animation's `▾` drops speed / step
+  / description; the walk has no menu — it is just a play button.
+- **The walk is marked as DESTRUCTIVE, subtly.** It moves the real sprite data, so its button wears a
+  small **amber caution dot** — the app's existing "attention" idiom (`MapPicker`'s `⊞` dot, the `!`
+  scratch mark), *not* red (red is reserved for real errors). First press still asks once
+  (`SimWarningDialog`); the tooltip carries the ⚠ note. Icon mapping: **feet → the people-sim** (feet
+  read as walking), `✦` → tile animation (free of the panel glyphs — `✿` is Wild Pokémon, `▦` the
+  Blocks & Tiles dock).
+- **Tileset & blocks broke out into their own top-bar button** (`▩`, `TilesetBlocksPicker.qml`), next to
+  Map options (`⊞`, `MapPicker.qml`). *"Break tileset and blocks out into its own button next to
+  designated maps."* It used to be an "Override…" disclosure buried inside `⊞`'s panel. `⊞` now holds
+  only the designated maps + the stored-size fix (its amber dot = size mismatch); `▩`'s amber dot =
+  blockset≠tileset disagreement.
+- **Semi-fluid menu safety.** Top-bar drop-downs get `margins: 8` so Qt keeps them inside the window
+  (shifting up rather than clipping past the bottom at the 750×480 minimum); the tallest also caps its
+  height and scrolls. Splitting the old all-in-one `⊞` panel into two shorter popups removed the actual
+  clipping culprit. *"It shouldn't be possible [to clip] — at least scroll — the UI/UX is semi-fluid."*
+
 Full domain write-up (read it before building this):
 [`../reference/map-animation.md`](../reference/map-animation.md) — verified against the disassembly.
 

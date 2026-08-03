@@ -15,22 +15,18 @@
 */
 
 /*
-  MapIdentityBar.qml -- the top bar: THE TOOLS, then WHAT IS LOADED, then THE PALETTE.
+  MapIdentityBar.qml -- the top bar: WHAT IS LOADED, then the things you PLAY, then THE PALETTE.
 
-  Project leadership's call (2026-07-13): the tools moved up here from a left-hand rail, and the whole left
-  edge went back to the map. What used to be three read-only chips (map name, tileset, size) is now
-  ONE control you can actually drive:
+    [ Pallet Town ⌄ ] [ ⊞ ] [ ▩ ] │ [ ◧ ] ‖ [ ▶♪⌄ ] [ ▶✦⌄ ] [ ▶👣• ] … [ ◧ colour ] │ [ ! ]
+      map picker      opts  tiles   contrast   music   anim   walk         palette        scratch
 
-    [ ↖ ✥ ⌕ ] │ [ Pallet Town · Overworld ⌄ ] [ 100% ⌄ ] [ 10x9 ] [ ⚠ unfinished copy ]
-      tools        the map picker              the palette   size    what's wrong, if anything
-
-  * The MAP PICKER (MapPicker.qml) drops the three things the save keeps separately -- the map id,
-    the tileset the graphics come from (with Indoor/Cave/Outdoor, which is not a place but which
-    tiles MOVE), and the blockset the map is BUILT from. Two pointers, two controls, because the
-    save has two pointers and a console obeys both.
-  * The PALETTE (ContrastPicker.qml) reads as a percentage and drops a segmented slider. The six
-    glitch values are behind a switch -- shown as their own, differently coloured segments, because
-    they are not levels; they are a read that lands between two.
+  * The MAP SELECTOR is the title (MapNamePicker). ⊞ (MapPicker) holds the designated maps + the
+    stored-size fix; ▩ (TilesetBlocksPicker) holds the tileset & blocks the map draws from — its own
+    button since 2026-08-03 (leadership: "break tileset and blocks out into its own button").
+  * The PALETTE (ContrastPicker) reads as a percentage and drops a segmented slider.
+  * THE THINGS YOU PLAY sit together past a divider: music (♪), tile animation (✦) and people
+    walking (👣). Each is a MapSimButton — a ▶/⏸ play zone + a subject icon + an optional ▾. The
+    walk carries a small amber dot because its simulation is DESTRUCTIVE (it moves real sprite data).
 
   Nothing here is a menu bar and nothing here is a toolbar with separators. It is chips.
 */
@@ -41,15 +37,12 @@ import QtQuick.Layouts
 Rectangle {
   id: bar
 
-  // ⚠️ THE TOOLS AND THE MAKERS ARE NOT HERE ANY MORE (2026-07-14).
-  //
-  // They moved to the LEFT RAIL (project leadership: *"move the tools onto the left toolbar above the panels,
-  // and the maker buttons below that"*). This bar is back to what it should always have been: a
-  // statement of WHAT IS LOADED. `tool` is owned by the screen now (`mapScreen.tool`), the rail sets
-  // it, and the canvas reads it. See Map.qml → the left dock's `railHeader`.
+  // ⚠️ THE TOOLS AND THE MAKERS ARE NOT HERE (they live on the LEFT RAIL — see Map.qml). This bar is
+  // a statement of WHAT IS LOADED, plus the things you PLAY. `tool` is owned by the screen.
 
   /// The drop-downs, drivable by name for the DEBUG harness / the screenshot review.
   property alias mapPickerOpen: mapPicker.openState
+  property alias tilesetPickerOpen: tilesetBlocksPicker.openState
   property alias contrastPickerOpen: contrastPicker.openState
   property alias contrastShowGlitch: contrastPicker.showGlitch
   property alias colourPickerOpen: colourPicker.openState
@@ -73,9 +66,8 @@ Rectangle {
     // ── The map's NAME — and it IS the map selector ───────────────────────────────────────────
     //
     // project leadership, 2026-07-19: *"make the map title a button with a down arrow … clicking the map name
-    // directly lets you select a different map, no panel opening needed."* So the bold title is a
-    // flat dropdown (MapNamePicker) that opens the map PREVIEW on pick. The tileset/blocks override
-    // and the designated maps live in the ⊞ panel beside it.
+    // directly lets you select a different map."* The tileset/blocks override and the designated maps
+    // live in the ⊞ / ▩ buttons beside it.
     RowLayout {
       spacing: 6
 
@@ -101,34 +93,40 @@ Rectangle {
       Layout.rightMargin: 2
     }
 
-    // ── The CONFIG buttons: Map · Warp · Contrast ────────────────────────────────────────────
+    // ── The CONFIG buttons: Map options · Tileset & blocks · Contrast ─────────────────────────
     //
-    // Compact icon tool-buttons, each with a ▾ that says "I drop a menu" (project leadership). Where a reactive
-    // icon is natural it is one: Contrast IS its live four-shade swatch, the Map icon carries an amber
-    // dot when the map's blocks/size don't match. They share MapBarButton, so they read as a family.
-    // (Music used to be here too; it moved to the SIMULATION group below, with the other things you
-    // play.)
+    // Compact icon tool-buttons, each with a ▾ that says "I drop a menu" (project leadership). Where a
+    // reactive icon is natural it is one: Contrast IS its live four-shade swatch, ⊞ carries an amber
+    // dot when the map's stored size is stale, ▩ carries one when its blocks and graphics disagree.
+    // They share MapBarButton, so they read as a family.
 
-    // ── Map options (⊞): designated maps (Outside is / Wake up at), tileset & blocks override ───
-    //
-    // The map SELECTOR is the title (MapNamePicker); this panel holds the extras. "Outside is…" moved
-    // in here from its own toolbar chip (project leadership, 2026-07-19) — it re-labels every "back outside"
-    // ($FF) door on the canvas at once, live, when changed.
+    // ── Map options (⊞): designated maps (Outside is / Wake up at) + the stored-size fix ────────
     MapPicker { id: mapPicker; objectName: "mapPickerControl" }
+
+    // ── Tileset & blocks (▩): the graphics the map draws from, and the blocks it is built out of ─
+    //
+    // Its own button next to ⊞ (project leadership, 2026-08-03: *"break tileset and blocks out into its own
+    // button next to designated maps"*) — it used to be an "Override…" disclosure inside ⊞'s panel.
+    TilesetBlocksPicker { id: tilesetBlocksPicker; objectName: "tilesetBlocksControl" }
 
     // ── Contrast ─────────────────────────────────────────────────────────────────────────────
     //
-    // Just contrast now — the COLOUR palette moved to its own chip on the right of the bar
-    // (ColourPicker, project leadership, 2026-07-19). Contrast is a save byte; colour is a view setting.
+    // Just contrast — the COLOUR palette is its own chip on the right of the bar. Contrast is a save
+    // byte; colour is a view setting.
     ContrastPicker { id: contrastPicker }
 
-    // ══ THE SIMULATION GROUP — the three things you PLAY ══════════════════════════════════════
+    // ══ THE THINGS YOU PLAY — music · tile animation · people walking ═════════════════════════
     //
     // project leadership, 2026-07-14: *"the music button, the tile-animation button and the walk button need to
     // all be icon buttons with an optional dropdown — a play/pause button next to a symbol, with a
-    // little dropdown arrow. Those three are all SIMULATION and go in the group to the RIGHT of the
-    // config buttons."* So they sit together, past a divider, each a MapSimButton (▶/⏸ + a symbol +
-    // an optional ▾).
+    // little dropdown arrow."* They briefly MERGED into one "Simulate" button; leadership un-merged
+    // them again 2026-08-03: *"have a play button next to the feet icon that defaults to tile
+    // animation … break people simulation out to its own button to the right … it offers destructive
+    // simulation."* So there are three, past a divider:
+    //
+    //   ▶♪⌄  music         — MapSimButton (MusicPicker)
+    //   ▶✦⌄  tile animation — the SAFE default; ▶ plays the water/flowers, ▾ drops speed/step
+    //   ▶👣• people walking — its OWN button; the amber dot marks it DESTRUCTIVE (moves sprite data)
     Rectangle {
       implicitWidth: 1
       implicitHeight: 18
@@ -137,271 +135,177 @@ Rectangle {
       Layout.rightMargin: 4
     }
 
-    // ⚠️ The three sim buttons sit in their OWN tight RowLayout, so they read as a GROUP -- close
-    // together, and clearly apart from the config buttons across the divider (project leadership, 2026-07-14:
-    // *"make the simulation buttons look like a proper grouping with proper spacing"*). With the ▾
-    // now INSIDE each button, they are compact enough to cluster.
+    // ⚠️ The play buttons sit in their OWN tight RowLayout so they read as a GROUP -- close together,
+    // and clearly apart from the config buttons across the divider (project leadership, 2026-07-14: *"make
+    // the simulation buttons look like a proper grouping with proper spacing"*).
     RowLayout {
+      id: playGroup
       spacing: 3
 
-    // Music — ▶/⏸ ♪ ▾ (the ▾ drops the track / volume / flags).
-    MusicPicker { id: musicPicker }
+      // Music — ▶/⏸ ♪ ▾ (the ▾ drops the track / volume / flags).
+      MusicPicker { id: musicPicker }
 
-    // ── SIMULATION — one icon-text button, one panel ────────────────────────────────────────
-    //
-    // project leadership, 2026-07-14: *"move the walking button into the animation button, use the walking
-    // symbol not the flower, make it an icon-text button, name the panel Simulation and put the tile
-    // animation and the walking options together nicely in one panel."*
-    //
-    // So the two separate play buttons (tile animation ✿, walk 👣) become ONE `[👣 Simulate ⌄]`
-    // button, filled orange while EITHER is running. Everything — play/pause, speed, step, the walk —
-    // lives in the "Simulation" panel it drops.
-    Item {
-      id: simWrap
-      objectName: "simGroup"   // the screenshot review drives the panel through this
-      implicitWidth: simBtn.implicitWidth
-      implicitHeight: 26
+      // ── Tile animation — ▶/⏸ ✦ ▾ — the SAFE, default one ────────────────────────────────────
+      //
+      // The play zone toggles the map clock directly (leadership: "a play button … that defaults to
+      // tile animation"); the ▾ drops the speed / step / description. ✦ reads as "the map shimmering"
+      // and is free of the panel glyphs (✿ is Wild Pokémon, ▦ is the Blocks & Tiles dock).
+      Item {
+        id: animWrap
+        objectName: "animGroup"   // the screenshot review drives the panel through this
+        implicitWidth: animBtn.implicitWidth
+        implicitHeight: 26
 
-      property bool menuOpen: false
-      readonly property bool anyPlaying: brg.mapClock.playing || brg.mapSim.playing
+        property bool menuOpen: false
 
-      // A little play/pause toggle, reused for both the tile animation and the walk, inside the panel.
-      component PlayToggle: Rectangle {
-        id: tog
-        property bool on: false
-        property bool en: true
-        signal toggled()
+        MapSimButton {
+          id: animBtn
+          objectName: "animChip"
 
-        implicitWidth: 32
-        implicitHeight: 24
-        radius: 5
+          glyph: "✦"
 
-        color: !tog.en ? "transparent"
-             : tog.on ? "#d55e00"
-             : togHover.hovered ? "#f0f0f0" : "#ffffff"
-        border.width: 1
-        border.color: tog.on ? "#d55e00" : brg.settings.dividerColor
-        opacity: tog.en ? 1.0 : 0.4
+          playing: brg.mapClock.playing
+          playEnabled: brg.mapClock.animates
+          playTip: !brg.mapClock.animates
+                     ? qsTr("This map has nothing that animates")
+                     : brg.mapClock.playing ? qsTr("Stop") : qsTr("Play the tile animation")
+          onToggled: brg.mapClock.playing = !brg.mapClock.playing
 
-        Behavior on color { ColorAnimation { duration: 90 } }
-
-        Text {
-          anchors.centerIn: parent
-          text: tog.on ? "⏸" : "▶"
-          font.pixelSize: 11
-          color: tog.on ? "#ffffff" : brg.settings.textColorDark
+          hasMenu: true
+          menuOpen: animWrap.menuOpen
+          menuTip: qsTr("Tile animation — the water and the flowers")
+          onMenuToggled: animWrap.menuOpen = !animWrap.menuOpen
         }
 
-        HoverHandler { id: togHover; enabled: tog.en; cursorShape: Qt.PointingHandCursor }
-        TapHandler { enabled: tog.en; onTapped: tog.toggled() }
-      }
+        // ── The tile-animation panel: speed, step, a word on what animates ─────────────────────
+        Popup {
+          visible: animWrap.menuOpen
+          onClosed: animWrap.menuOpen = false
 
-      // The button: footprints + "Simulate" + ⌄. Orange while anything is running.
-      Rectangle {
-        id: simBtn
-        anchors.fill: parent
-        radius: 6
-        implicitWidth: sbRow.implicitWidth + 16
+          y: animWrap.height + 5
+          x: -40
+          width: 230
+          padding: 12
+          margins: 8   // keep it inside the window at the semi-fluid minimum (never clip the bottom)
 
-        color: simWrap.anyPlaying ? "#d55e00"
-             : (sbHover.hovered || simWrap.menuOpen) ? "#f0f0f0"
-             : "#ffffff"
-        border.width: 1
-        border.color: simWrap.anyPlaying ? "#d55e00" : brg.settings.dividerColor
-
-        Behavior on color { ColorAnimation { duration: 90 } }
-
-        readonly property color ink: simWrap.anyPlaying ? "#ffffff" : brg.settings.textColorDark
-
-        Row {
-          id: sbRow
-          anchors.centerIn: parent
-          spacing: 5
-
-          Image {
-            anchors.verticalCenter: parent.verticalCenter
-            width: 15; height: 15
-            source: simWrap.anyPlaying ? "qrc:/assets/icons/footprints-light.svg"
-                                       : "qrc:/assets/icons/footprints.svg"
-            sourceSize: Qt.size(30, 30)
-            fillMode: Image.PreserveAspectFit
-            smooth: true
+          background: Rectangle {
+            color: "#ffffff"; radius: 8
+            border.width: 1; border.color: brg.settings.dividerColor
           }
 
-          // Icon only — no text (project leadership). Just the ▾ to say it drops a menu.
-          Text {
-            anchors.verticalCenter: parent.verticalCenter
-            text: "⌄"
-            font.pixelSize: 10
-            color: simBtn.ink
-            opacity: 0.8
-          }
-        }
-
-        HoverHandler { id: sbHover; cursorShape: Qt.PointingHandCursor }
-        TapHandler { onTapped: simWrap.menuOpen = !simWrap.menuOpen }
-
-        MapToolTip {
-          shown: sbHover.hovered && !simWrap.menuOpen
-          text: qsTr("Simulation — animate the map and let the people walk")
-        }
-      }
-
-      // ── The Simulation panel ─────────────────────────────────────────────────────────────
-      Popup {
-        visible: simWrap.menuOpen
-        onClosed: simWrap.menuOpen = false
-
-        y: simWrap.height + 5
-        x: -40
-        width: 230
-        padding: 12
-
-        background: Rectangle {
-          color: "#ffffff"; radius: 8
-          border.width: 1; border.color: brg.settings.dividerColor
-        }
-
-        ColumnLayout {
-          width: parent.width
-          spacing: 8
-
-          Label {
-            text: qsTr("Simulation")
-            font.pixelSize: 12; font.bold: true
-            color: brg.settings.textColorMid
-          }
-
-          Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: brg.settings.dividerColor }
-
-          // ── Tile animation ──────────────────────────────────────────────────────────────
-          RowLayout {
-            Layout.fillWidth: true
-            spacing: 6
+          ColumnLayout {
+            width: parent.width
+            spacing: 8
 
             Label {
-              Layout.fillWidth: true
               text: qsTr("Tile animation")
               font.pixelSize: 12; font.bold: true
-              color: brg.settings.textColorDark
+              color: brg.settings.textColorMid
             }
 
-            PlayToggle {
-              on: brg.mapClock.playing
-              en: brg.mapClock.animates
-              onToggled: brg.mapClock.playing = !brg.mapClock.playing
-            }
-          }
-
-          Label {
-            Layout.fillWidth: true
-            wrapMode: Text.Wrap
-            text: brg.mapClock.animates
-                    ? qsTr("The water and the flowers, moving at the console's own pace.")
-                    : qsTr("This map has nothing that animates.")
-            font.pixelSize: 10
-            opacity: 0.6
-          }
-
-          RowLayout {
-            Layout.fillWidth: true
-            visible: brg.mapClock.animates
-            spacing: 4
-
-            Label { text: qsTr("Speed"); font.pixelSize: 11; color: brg.settings.textColorMid }
-
-            Repeater {
-              model: [ { s: 0.5, label: "½×" }, { s: 1.0, label: "1×" }, { s: 2.0, label: "2×" } ]
-
-              delegate: Rectangle {
-                required property var modelData
-                Layout.fillWidth: true
-                implicitHeight: 24
-                radius: 5
-
-                readonly property bool on: Math.abs(brg.mapClock.speed - modelData.s) < 0.01
-
-                color: on ? brg.settings.accentColor
-                     : spdHover.hovered ? "#f0f0f0" : "#ffffff"
-                border.width: 1; border.color: brg.settings.dividerColor
-
-                Label {
-                  anchors.centerIn: parent
-                  text: modelData.label
-                  font.pixelSize: 11; font.bold: parent.on
-                  color: parent.on ? brg.settings.textColorLight : brg.settings.textColorDark
-                }
-
-                HoverHandler { id: spdHover; cursorShape: Qt.PointingHandCursor }
-                TapHandler { onTapped: brg.mapClock.speed = modelData.s }
-              }
-            }
-
-            Rectangle {
-              implicitWidth: stepRow.implicitWidth + 10
-              implicitHeight: 24
-              radius: 5
-              color: stepHover.hovered ? "#f0f0f0" : "#ffffff"
-              border.width: 1; border.color: brg.settings.dividerColor
-
-              RowLayout {
-                id: stepRow
-                anchors.centerIn: parent
-                spacing: 2
-                Label { text: "⏭"; font.pixelSize: 11 }
-              }
-
-              HoverHandler { id: stepHover; cursorShape: Qt.PointingHandCursor }
-              TapHandler { onTapped: brg.mapClock.step() }
-
-              MapToolTip { shown: stepHover.hovered; text: qsTr("Step one frame") }
-            }
-          }
-
-          Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: brg.settings.dividerColor }
-
-          // ── People walking ──────────────────────────────────────────────────────────────
-          RowLayout {
-            Layout.fillWidth: true
-            spacing: 6
+            Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: brg.settings.dividerColor }
 
             Label {
               Layout.fillWidth: true
-              text: qsTr("People walking")
-              font.pixelSize: 12; font.bold: true
-              color: brg.settings.textColorDark
+              wrapMode: Text.Wrap
+              text: brg.mapClock.animates
+                      ? qsTr("The water and the flowers, moving at the console's own pace.")
+                      : qsTr("This map has nothing that animates.")
+              font.pixelSize: 10
+              opacity: 0.6
             }
 
-            PlayToggle {
-              on: brg.mapSim.playing
-              en: brg.mapSim.canSimulate
-              onToggled: {
-                if (brg.mapSim.playing) {
-                  brg.mapSim.playing = false;
-                  return;
+            RowLayout {
+              Layout.fillWidth: true
+              visible: brg.mapClock.animates
+              spacing: 4
+
+              Label { text: qsTr("Speed"); font.pixelSize: 11; color: brg.settings.textColorMid }
+
+              Repeater {
+                model: [ { s: 0.5, label: "½×" }, { s: 1.0, label: "1×" }, { s: 2.0, label: "2×" } ]
+
+                delegate: Rectangle {
+                  required property var modelData
+                  Layout.fillWidth: true
+                  implicitHeight: 24
+                  radius: 5
+
+                  readonly property bool on: Math.abs(brg.mapClock.speed - modelData.s) < 0.01
+
+                  color: on ? brg.settings.accentColor
+                       : spdHover.hovered ? "#f0f0f0" : "#ffffff"
+                  border.width: 1; border.color: brg.settings.dividerColor
+
+                  Label {
+                    anchors.centerIn: parent
+                    text: modelData.label
+                    font.pixelSize: 11; font.bold: parent.on
+                    color: parent.on ? brg.settings.textColorLight : brg.settings.textColorDark
+                  }
+
+                  HoverHandler { id: spdHover; cursorShape: Qt.PointingHandCursor }
+                  TapHandler { onTapped: brg.mapClock.speed = modelData.s }
                 }
-                if (brg.settings.mapSimWarned)
-                  brg.mapSim.playing = true;
-                else
-                  simWarning.open();
+              }
+
+              Rectangle {
+                implicitWidth: stepRow.implicitWidth + 10
+                implicitHeight: 24
+                radius: 5
+                color: stepHover.hovered ? "#f0f0f0" : "#ffffff"
+                border.width: 1; border.color: brg.settings.dividerColor
+
+                RowLayout {
+                  id: stepRow
+                  anchors.centerIn: parent
+                  spacing: 2
+                  Label { text: "⏭"; font.pixelSize: 11 }
+                }
+
+                HoverHandler { id: stepHover; cursorShape: Qt.PointingHandCursor }
+                TapHandler { onTapped: brg.mapClock.step() }
+
+                MapToolTip { shown: stepHover.hovered; text: qsTr("Step one frame") }
               }
             }
           }
-
-          Label {
-            Layout.fillWidth: true
-            wrapMode: Text.Wrap
-            text: !brg.mapSim.canSimulate
-                    ? qsTr("Nobody on this map can walk — they are all set to Stay.")
-                    : qsTr("Lets the people wander. ⚠️ This MOVES the real sprite data.")
-            font.pixelSize: 10
-            opacity: 0.6
-          }
         }
       }
-    }
 
-    }   // end of the simulation group's RowLayout
+      // ── People walking — ▶/⏸ 👣 — its OWN button, marked DESTRUCTIVE ─────────────────────────
+      //
+      // The footprints read as "people walking"; the amber dot is the app's "attention" idiom, here
+      // because this simulation MOVES the real sprite data. First press asks once (SimWarningDialog);
+      // after that ▶ runs it. No menu — it is a play button, and the caution lives on its face + tip.
+      MapSimButton {
+        id: walkBtn
+        objectName: "walkChip"
+
+        iconSource: "qrc:/assets/icons/footprints.svg"
+        iconSourcePlaying: "qrc:/assets/icons/footprints-light.svg"
+        marked: true
+
+        playing: brg.mapSim.playing
+        playEnabled: brg.mapSim.canSimulate
+        playTip: !brg.mapSim.canSimulate
+                   ? qsTr("Nobody on this map can walk — they are all set to Stay")
+                   : brg.mapSim.playing ? qsTr("Stop the walk")
+                   : qsTr("Let the people walk — ⚠️ this MOVES the real sprite data")
+        onToggled: {
+          if (brg.mapSim.playing) {
+            brg.mapSim.playing = false;
+            return;
+          }
+          if (brg.settings.mapSimWarned)
+            brg.mapSim.playing = true;
+          else
+            simWarning.open();
+        }
+
+        hasMenu: false
+      }
+    }
 
     SimWarningDialog {
       id: simWarning
@@ -431,18 +335,11 @@ Rectangle {
     // default, give it a good label. When it's off, the fields that relate to things there's no
     // point in changing will not be present and add clutter."*
     //
-    // Roughly a THIRD of a sprite's bytes are scratch the console works out again the moment it
-    // loads the save -- the walk state, the on-screen pixels, the VRAM slot. They are real, they are
-    // hers, and she can edit every one of them. But they are not what anybody came for, and having
-    // them stacked under the fields that DO matter is the difference between a panel and a hex dump.
-    //
     // Off: they simply are not there. On: they are, each wearing its yellow "!".
     //
-    // ⚠️ AN ICON, NOT A LABELLED SWITCH. It was "Reloaded values" + a Switch, and project leadership:
-    // *"it's way too long -- don't put a long label to the left of it, do something else, maybe an
-    // icon of sorts."* She is right: a sentence of chrome sitting permanently in the toolbar to
-    // describe a thing you touch once. It is a chip with a mark on it now, and the words are in its
-    // tooltip -- which is the whole bargain this toolbar makes everywhere else.
+    // ⚠️ AN ICON, NOT A LABELLED SWITCH (project leadership: *"it's way too long — don't put a long label
+    // to the left of it … maybe an icon of sorts."*). It is a chip with a mark on it now, and the
+    // words are in its tooltip — the bargain this toolbar makes everywhere else.
     Rectangle {
       objectName: "showScratchToggle"   // the DEBUG harness drives the panel through this
 

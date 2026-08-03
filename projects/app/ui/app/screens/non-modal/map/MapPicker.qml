@@ -15,27 +15,19 @@
 */
 
 /*
-  MapPicker.qml -- ONE control in the top bar that answers "which map, drawn out of what".
+  MapPicker.qml -- the top bar's MAP OPTIONS button (⊞): the DESIGNATED MAPS, and the map-size fix.
 
-  Clicking it drops a small panel with the three choices the save actually keeps, and they are three
-  because the SAVE keeps them as three:
+  The map SELECTOR is the title now (MapNamePicker.qml). This ⊞ button holds the extras:
 
-    * the MAP        (`wCurMap`)         -- which map's block data is loaded
-    * the TILESET    (`gfxPtr`)          -- where the tiles are drawn FROM, and Indoor/Cave/Outdoor
-                                            (which is not a place -- it is which tiles MOVE)
-    * the BLOCKSET   (`blockPtr`)        -- which tileset's BLOCKS the map is built out of
+    * "Outside is…"  (`wLastMap`)          -- where every "back outside" ($FF) door lands
+    * "Wake up at…"  (`wLastBlackoutMap`)  -- where blacking out, DIG and an ESCAPE ROPE drop you
+    * a Fix for a stored map SIZE that came from another map
 
-  Normally the last two name the same tileset. They are two separate pointers in the save, though,
-  and a console draws exactly what they say -- so they get two separate controls, and a save that
-  disagrees with itself is SHOWN doing so, never quietly tidied up.
-
-  ⚠️ Picking a map no longer COMMITS anything (leadership, 2026-07-19). It starts a PREVIEW: the
-  destination is constructed for real so you see exactly what you would get, but the save is
-  snapshotted first and nothing is written until you decide. The Preview box (top-right of the
-  canvas) carries the decision -- ✗ drops it, ✓ asks "Normal or Manual": Normal keeps the whole
-  construction (sprites, signs, warps, connections, the map's own progression), Manual restores the
-  snapshot and writes ONLY the map id. So the old "Construct on change" switch is gone -- there is
-  no mode to set up front; you look, then choose. @see MapModel::beginMapPreview, MapCanvas' box.
+  ⚠️ TILESET & BLOCKS ARE NOT HERE ANY MORE (project leadership, 2026-08-03): they broke out into their
+  own top-bar button (TilesetBlocksPicker.qml, the ▩ next to this one). The graphics/blocks a map
+  draws from is a thing people come here to change, not a power-user footnote buried in a disclosure.
+  So this button's amber dot now marks only a stored-size mismatch; the blockset≠tileset disagreement
+  marks the ▩ button instead.
 */
 import QtQuick
 import QtQuick.Controls
@@ -52,10 +44,6 @@ Item {
   /// (reference/dev-harness.md)
   property bool openState: false
   onOpenStateChanged: openState ? pop.open() : pop.close()
-
-  /// Tileset + blockset are advanced overrides behind a disclosure link (project leadership, 2026-07-19) —
-  /// the map is the thing you pick; these two are the power path, collapsed until asked for.
-  property bool advancedOpen: false
 
   // ── A "Designated Maps" row: a label, a grouped map combo, and a one-line blurb ────────────────
   //
@@ -135,8 +123,7 @@ Item {
     }
   }
 
-  // The map SELECTOR is the title now (MapNamePicker.qml). This ⊞ button opens the map's EXTRAS: the
-  // designated maps (Outside is / Wake up at) and the tileset/blocks override. Its glyph is a
+  // The ⊞ button opens the map's EXTRAS: the designated maps and the size fix. Its glyph is a
   // grid-in-a-frame — a map is a grid of blocks.
   MapBarButton {
     id: trigger
@@ -146,14 +133,14 @@ Item {
     open: root.openState
     onToggle: root.openState = !root.openState
 
-    tip: qsTr("Map options — designated maps, tileset & blocks")
+    tip: qsTr("Map options — designated maps, and the stored size")
 
-    // Reactive state: the map's blocks come from a different tileset than its graphics (rare, legal,
-    // and worth flagging), or its stored size no longer matches the map. A little amber dot, so the
-    // icon SAYS something is off without a wall of text on the bar.
+    // Reactive state: the map's stored size no longer matches the map. A little amber dot, so the
+    // icon SAYS something is off without a wall of text on the bar. (Tileset/blocks disagreement is
+    // the ▩ button's dot now.)
     Rectangle {
       parent: trigger
-      visible: !brg.map.blocksetIsTileset || !brg.map.headerMatches
+      visible: !brg.map.headerMatches
       width: 7; height: 7; radius: 3.5
       color: "#e69f00"
       border.width: 1
@@ -171,6 +158,11 @@ Item {
     width: 300
     padding: 10
 
+    // ⚠️ Keep the panel inside the window (project leadership, 2026-08-03): `margins` lets Qt shift a
+    // drop-down UP when it would otherwise clip past the window bottom at the semi-fluid minimum
+    // size, so a menu can never fall off the edge.
+    margins: 8
+
     modal: false
     focus: true
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
@@ -187,9 +179,6 @@ Item {
       spacing: 8
 
       // ── Designated Maps — the "where the world puts you" bytes ────────────────────────────────
-      //
-      // (The map SELECTOR moved to the title — MapNamePicker.qml — so this panel is the extras: the
-      // designated maps, and the tileset/blocks override below. Project leadership, 2026-07-19.)
       //
       // Both live in WorldGeneral and both re-home the player: Outside is (wLastMap) is where every
       // "back outside" ($FF) door lands — change it and every such door on the canvas re-labels at
@@ -246,192 +235,16 @@ Item {
         }
       }
 
-      Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: brg.settings.dividerColor }
-
-      // ── Tileset & blocks — the power path, behind a link ─────────────────────────────────────
-      //
-      // The map is what you pick; the tileset (graphics) and blockset (blocks) are advanced
-      // overrides most people never touch, so they collapse behind a disclosure link — the same
-      // "Something else…" idiom the Details panel uses (project leadership, 2026-07-19). A quiet amber dot on
-      // the link surfaces when a save's graphics and blocks disagree, so the fact is never buried.
-      RowLayout {
-        Layout.fillWidth: true
-        spacing: 6
-
-        // "Override…" (not just "Tileset & blocks") so the link reads as MANUAL control — you are
-        // overriding what the map would otherwise use — rather than "more useful options hidden in a
-        // menu" (project leadership, 2026-07-19).
-        Text {
-          text: root.advancedOpen ? qsTr("Override tileset & blocks ▾")
-                                   : qsTr("Override tileset & blocks ▸")
-          font.pixelSize: 11
-          color: brg.settings.accentColor
-          MouseArea {
-            anchors.fill: parent
-            cursorShape: Qt.PointingHandCursor
-            onClicked: root.advancedOpen = !root.advancedOpen
-          }
-        }
-
-        Rectangle {
-          visible: !brg.map.blocksetIsTileset
-          width: 6; height: 6; radius: 3
-          color: "#e69f00"
-        }
-
-        Item { Layout.fillWidth: true }
-      }
-
-      ColumnLayout {
-        Layout.fillWidth: true
-        Layout.topMargin: 2
-        spacing: 8
-        visible: root.advancedOpen
-
-        // ── Tileset (the graphics) + what animates ────────────────────────────────────────────
-        Text {
-          text: qsTr("Tileset — the graphics")
-          font.pixelSize: 11
-          font.bold: true
-          color: brg.settings.textColorMid
-        }
-
-      ComboBox {
-        Layout.fillWidth: true
-        Layout.preferredHeight: 32
-        font.pixelSize: 12
-
-        model: brg.map.tilesetList()
-        textRole: "name"
-        valueRole: "ind"
-
-        currentIndex: {
-          const list = model;
-          for (let i = 0; i < list.length; i++)
-            if (list[i].ind === brg.map.tilesetInd)
-              return i;
-          return -1;
-        }
-
-        onActivated: brg.map.tilesetInd = currentValue
-      }
-
-      // Indoor / Cave / Outdoor. NOT a place -- it is which tiles MOVE, and it lives with the
-      // tileset because it IS the tileset's byte (0x3522). Cave is not Indoor: cave water animates.
-      RowLayout {
-        Layout.fillWidth: true
-        spacing: 0
-
-        Repeater {
-          model: [
-            { v: 0, name: qsTr("Indoor"),  does: qsTr("Nothing animates.") },
-            { v: 1, name: qsTr("Cave"),    does: qsTr("Water animates. Flowers don't.") },
-            { v: 2, name: qsTr("Outdoor"), does: qsTr("Water and flowers animate.") }
-          ]
-
-          Rectangle {
-            required property var modelData
-            required property int index
-
-            Layout.fillWidth: true
-            implicitHeight: 26
-
-            readonly property bool active: brg.map.tileAnim === modelData.v
-
-            color: active ? brg.settings.accentColor
-                 : segHover.hovered ? "#f0f0f0" : "transparent"
-
-            border.width: 1
-            border.color: brg.settings.dividerColor
-
-            topLeftRadius: index === 0 ? 4 : 0
-            bottomLeftRadius: index === 0 ? 4 : 0
-            topRightRadius: index === 2 ? 4 : 0
-            bottomRightRadius: index === 2 ? 4 : 0
-
-            HoverHandler { id: segHover; cursorShape: Qt.PointingHandCursor }
-            TapHandler { onTapped: brg.map.tileAnim = modelData.v }
-
-            Text {
-              anchors.centerIn: parent
-              text: modelData.name
-              font.pixelSize: 11
-              font.bold: parent.active
-              color: parent.active ? brg.settings.textColorLight : brg.settings.textColorDark
-            }
-          }
-        }
-      }
-
-      // What the chosen one DOES, said underneath and changing as you pick (project leadership, 2026-07-13) --
-      // rather than hidden in a tooltip you have to go hunting for. This is the whole reason the
-      // control exists: "Indoor" is not a place, it is *nothing animates*.
+      // When the size is fine and nothing needs fixing, say the panel is complete rather than ending
+      // on a bare divider.
       Text {
         Layout.fillWidth: true
-        text: {
-          switch (brg.map.tileAnim) {
-            case 0: return qsTr("Nothing animates — no water, no flowers. (Surf needs the water tile, "
-                                + "so this breaks it on a water map.)");
-            case 1: return qsTr("The water animates. The flowers don't.");
-            case 2: return qsTr("The water and the flowers both animate.");
-          }
-          // Every value the save can hold, including the ones no real game ships: the console tests
-          // bit 0 and nothing else.
-          return (brg.map.tileAnim % 2 === 1)
-                 ? qsTr("%1 — the console reads bit 0, so this behaves as water only.")
-                     .arg(brg.map.tileAnim)
-                 : qsTr("%1 — the console reads bit 0, so this behaves as water and flowers.")
-                     .arg(brg.map.tileAnim);
-        }
+        visible: brg.map.headerMatches
+        text: qsTr("The stored map size matches this map.")
         font.pixelSize: 10
         color: brg.settings.textColorMid
+        opacity: 0.7
         wrapMode: Text.WordWrap
-      }
-
-      Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: brg.settings.dividerColor }
-
-      // ── Blockset (the blocks) ───────────────────────────────────────────────────────────────
-      Text {
-        text: qsTr("Blockset — what the map is built from")
-        font.pixelSize: 11
-        font.bold: true
-        color: brg.settings.textColorMid
-      }
-
-      ComboBox {
-        Layout.fillWidth: true
-        Layout.preferredHeight: 32
-        font.pixelSize: 12
-
-        model: brg.map.tilesetList()
-        textRole: "name"
-        valueRole: "ind"
-
-        currentIndex: {
-          const list = model;
-          for (let i = 0; i < list.length; i++)
-            if (list[i].ind === brg.map.blocksetInd)
-              return i;
-          return -1;   // a blockPtr that is nobody's blockset. Shown, not "corrected".
-        }
-
-        onActivated: brg.map.blocksetInd = currentValue
-      }
-
-      // A fact about an unusual save, in the same muted voice as everything else here. It is not an
-      // error -- a console draws it perfectly happily -- so it does not shout.
-      Text {
-        Layout.fillWidth: true
-        visible: !brg.map.blocksetIsTileset
-        text: brg.map.blocksetInd < 0
-              ? qsTr("The blocks pointer is not any tileset's. The game would read whatever sits at "
-                     + "that address.")
-              : qsTr("The blocks come from %1 and the tiles from %2.")
-                .arg(brg.map.blocksetName).arg(brg.map.tilesetName)
-        font.pixelSize: 10
-        color: brg.settings.textColorMid
-        wrapMode: Text.WordWrap
-        }
       }
     }
   }

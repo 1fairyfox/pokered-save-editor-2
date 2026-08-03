@@ -89,6 +89,7 @@ Item {
     x: -180   // the chip sits on the right of the bar; open the panel back toward the left
     width: 240
     padding: 10
+    margins: 8   // keep inside the window at the semi-fluid minimum (never clip the bottom)
 
     modal: false
     focus: true

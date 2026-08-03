@@ -58,6 +58,11 @@ Item {
   property bool menuOpen: false
   property string menuTip: ""
 
+  /// A subtle amber caution dot in the top-right corner — the app's existing "attention" idiom
+  /// (MapPicker's ⊞ dot, the "!" scratch mark). Used to mark the people-walk button, because that
+  /// simulation is DESTRUCTIVE: it moves the real sprite data. (project leadership, 2026-08-03)
+  property bool marked: false
+
   signal toggled()
   signal menuToggled()
 
@@ -175,6 +180,18 @@ Item {
 
         MapToolTip { shown: menuHover.hovered && sim.menuTip !== "" && !sim.menuOpen; text: sim.menuTip }
       }
+    }
+
+    // The caution dot — top-right, clear of the ▶ and the ⌄. @see marked
+    Rectangle {
+      visible: sim.marked
+      width: 7; height: 7; radius: 3.5
+      x: frame.width - width - 3
+      y: 3
+      z: 5
+      color: "#e69f00"
+      border.width: 1
+      border.color: "#8a6d00"
     }
   }
 }

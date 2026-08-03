@@ -118,6 +118,7 @@ Item {
     x: -20
     width: 300
     padding: 10
+    margins: 8   // keep inside the window at the semi-fluid minimum (never clip the bottom)
 
     modal: false
     focus: true
