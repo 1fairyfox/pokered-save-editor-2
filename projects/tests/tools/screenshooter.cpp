@@ -100,7 +100,7 @@ bool grab(GuiApp& app, const QString& rel)
   }
   // grabWindow() returns PHYSICAL pixels (a HiDPI display renders at its DPR, e.g.
   // 1695x1110 on a 150% screen). Downsample to the LOGICAL window size so output is a
-  // stable 1130x740 regardless of display scaling (a smooth downscale is, if anything,
+  // stable logical size (e.g. 750x480) regardless of display scaling (a smooth downscale is, if anything,
   // crisper than a native DPR-1 render).
   const QSize logical(app.view()->width(), app.view()->height());
   if (logical.isValid() && !logical.isEmpty() && img.size() != logical)
@@ -445,8 +445,9 @@ int main(int argc, char** argv)
   GuiApp app(QStringLiteral("saves/natural-clean/BaseSAV.sav"));
 
   // Capture at the small rectangle the UI is designed for: a rounded **750x480**
-  // (the app's own saved window size is ~751x480). The harness's 1130x740 is only
-  // the fresh-profile default and made every shot look "too big". Override with
+  // (the app's own saved window size is ~751x480). This now also matches the app's
+  // fresh-profile default (mainwindow.cpp kDefaultWindowSize) — the old 1130x740
+  // default was a ~1.5x DPI-inflated miscalculation, corrected 2026-08-03. Override with
   // PSE_SHOT_SIZE="WxH". Resize BEFORE start() so the QML lays out at the final size
   // exactly once -- a resize AFTER layout left some MultiEffect-layered tiles
   // (Home's greyed Maps/Options) unrendered.

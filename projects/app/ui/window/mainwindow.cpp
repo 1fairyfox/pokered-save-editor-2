@@ -70,7 +70,15 @@ namespace {
 // The canonical first-run window geometry — the size/position a brand-new user
 // sees before any resize. Single source of truth for loadState() (both the
 // debug always-default path and the release saved-state fallback).
-const QSize  kDefaultWindowSize{1130, 740};
+//
+// 750×480 is the small rectangle the semi-fluid UI is actually designed around
+// (the app's own historically-saved size was ~751×480; see the screenshooter).
+// The earlier 1130×740 was a resurfacing-era miscalculation: it is ~1.5× this —
+// the display's 150% DPI factor baked INTO the stored size, which Qt then scales
+// AGAIN at runtime, so the window opened ~2.25× its intended size. These are
+// LOGICAL px; Qt applies the monitor's DPI once, on top, keeping the design
+// identical across monitors. (project leadership, 2026-08-03)
+const QSize  kDefaultWindowSize{750, 480};
 const QPoint kDefaultWindowPos {200, 200};
 } // namespace
 

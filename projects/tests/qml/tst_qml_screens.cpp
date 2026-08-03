@@ -192,7 +192,7 @@ void TestQmlScreens::initTestCase()
   // A sized offscreen window: screens get a real, non-null, sized parent (as if
   // pushed onto the app's StackView) so anchors/parent.width resolve cleanly.
   m_window = new QQuickWindow;
-  m_window->resize(1130, 740);
+  m_window->resize(750, 480);  // the UI's true design size (see mainwindow.cpp kDefaultWindowSize)
 
   g_prev = qInstallMessageHandler(messageHandler);
 }
