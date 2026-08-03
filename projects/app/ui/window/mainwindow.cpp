@@ -66,6 +66,14 @@ private:
 #endif
 #include "mainwindow.h"
 
+namespace {
+// The canonical first-run window geometry — the size/position a brand-new user
+// sees before any resize. Single source of truth for loadState() (both the
+// debug always-default path and the release saved-state fallback).
+const QSize  kDefaultWindowSize{1130, 740};
+const QPoint kDefaultWindowPos {200, 200};
+} // namespace
+
 #include "../../src/bridge/bridge.h"
 #include "../../src/bridge/router.h"
 #include "../../src/boot/shortcutdefs.h"
@@ -98,6 +106,16 @@ MainWindow::MainWindow(QWidget *parent) :
   // First setup UI
   ui.setupUi(this);
   qDebug() << "[MainWindow] setupUi —" << t.elapsed() << "ms";
+
+  // The UI is authored as a SEMI-FLUID surface around a fixed design size
+  // (kDefaultWindowSize, in logical px): it grows gracefully, but control
+  // placement breaks if shrunk below that floor. Enforce the floor as a hard
+  // minimum so the window can expand but never collapse the layout. This is
+  // DPI-independent — Qt keeps the logical size identical on every monitor
+  // regardless of display scaling, so the design is consistent across screens
+  // (a 150% panel just renders the same layout at more physical pixels).
+  // (project leadership, 2026-08-03)
+  this->setMinimumSize(kDefaultWindowSize);
 
   // Save global class instance
   MainWindow::instance = this;
@@ -464,9 +482,19 @@ void MainWindow::saveState()
 
 void MainWindow::loadState()
 {
+#ifdef QT_DEBUG
+  // DEV WORKFLOW (project leadership, 2026-08-03): debug builds ALWAYS open at the
+  // canonical first-run default geometry, ignoring any persisted WindowState, so
+  // development stays anchored to the initial public-facing view most users see at
+  // first glance — before any changes, and the view many users never resize away
+  // from. Release builds fall through and restore the user's saved size/position.
+  this->resize(kDefaultWindowSize);
+  this->move(kDefaultWindowPos);
+  return;
+#else
   settings.beginGroup("WindowState");
-  QSize  savedSize = settings.value("size", QSize(1130, 740)).toSize();
-  QPoint savedPos  = settings.value("pos",  QPoint(200, 200)).toPoint();
+  QSize  savedSize = settings.value("size", kDefaultWindowSize).toSize();
+  QPoint savedPos  = settings.value("pos",  kDefaultWindowPos).toPoint();
   settings.endGroup();
 
   this->resize(savedSize);
@@ -481,7 +509,8 @@ void MainWindow::loadState()
       break;
     }
   }
-  this->move(onScreen ? savedPos : QPoint(200, 200));
+  this->move(onScreen ? savedPos : kDefaultWindowPos);
+#endif
 }
 
 void MainWindow::setupShortcuts()
