@@ -100,4 +100,8 @@ Bridge::Bridge(FileManagement* file)
   // Setup paired select boxes after storage models are created and init
   pokemonBoxSelectModel1 = new PokemonBoxSelectModel(pokemonStorageModel1);
   pokemonBoxSelectModel2 = new PokemonBoxSelectModel(pokemonStorageModel2);
+
+  // Re-snapshot the map fields' "last saved" baseline whenever the file is written, so the field
+  // revert (↩) buttons revert to the last SAVE, not just the last load. @see MapModel::captureSaved
+  connect(file, &FileManagement::saved, map, &MapModel::captureSaved);
 }

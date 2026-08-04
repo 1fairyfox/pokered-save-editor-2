@@ -175,6 +175,10 @@ MapModel::MapModel(AreaMap* map, AreaPlayer* player, AreaTileset* tileset, AreaG
   // them separate is what stops a 3 Hz animation from re-deriving the whole overworld buffer for
   // every listener of `changed()`, three times a second, forever.
   connect(this, &MapModel::changed, this, &MapModel::sourceChanged);
+
+  // Snapshot the loaded values as the first "last saved" baseline for the field revert buttons.
+  // (The bridge re-snapshots on FileManagement::saved.) @see captureSaved
+  captureSaved();
 }
 
 // `map` is nullable -- this class says so itself: the constructor null-checks every pointer it
@@ -1214,6 +1218,23 @@ void MapModel::randomizeLastBlackoutMap()
     return;
   setLastBlackoutMap(store.at(Random::inst()->rangeExclusive(0, store.size()))->getInd());
 }
+
+// ── Revert (the field ↩ buttons) — restore the last-saved value ─────────────────────────────────
+//
+// captureSaved() snapshots the four editable map fields on load and on every save; the reverts push
+// the snapshot back through the ordinary setter, so each writes only its own field.
+void MapModel::captureSaved()
+{
+  m_savedTileset      = tilesetInd();
+  m_savedBlockset     = blocksetInd();
+  m_savedLastMap      = lastMap();
+  m_savedLastBlackout = lastBlackoutMap();
+}
+
+void MapModel::revertTileset()          { if (m_savedTileset >= 0)      setTilesetInd(m_savedTileset); }
+void MapModel::revertBlockset()         { if (m_savedBlockset >= 0)     setBlocksetInd(m_savedBlockset); }
+void MapModel::revertLastMap()          { if (m_savedLastMap >= 0)      setLastMap(m_savedLastMap); }
+void MapModel::revertLastBlackoutMap()  { if (m_savedLastBlackout >= 0) setLastBlackoutMap(m_savedLastBlackout); }
 
 bool MapModel::blocksetIsTileset() const
 {

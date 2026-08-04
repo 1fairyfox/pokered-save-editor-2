@@ -221,6 +221,7 @@ bool FileManagement::saveFile()
 
   data->flattenData();
   writeSaveData(path, data->data);
+  emit saved();
   return true;
 }
 
@@ -233,6 +234,7 @@ bool FileManagement::saveFileAs()
   data->flattenData();
   writeSaveData(filename, data->data);
   setPath(filename);
+  emit saved();
   return true;
 }
 
@@ -244,6 +246,7 @@ bool FileManagement::saveFileCopy()
 
   data->flattenData();
   writeSaveData(filename, data->data);
+  emit saved();
   return true;
 }
 

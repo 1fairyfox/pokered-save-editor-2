@@ -50,6 +50,7 @@ Item {
     property int value: 0
     signal picked(int v)
     signal randomize()
+    signal revert()
     spacing: 3
 
     Text { text: dmr.label; font.pixelSize: 10; color: brg.settings.textColorMid }
@@ -110,7 +111,12 @@ Item {
       }
       }
 
-      FieldButtons { Layout.alignment: Qt.AlignVCenter; onRandomize: dmr.randomize() }
+      FieldButtons {
+        Layout.alignment: Qt.AlignVCenter
+        showRevert: true
+        onRandomize: dmr.randomize()
+        onRevert: dmr.revert()
+      }
     }
 
     Text {
@@ -188,6 +194,7 @@ Item {
         value: brg.map.lastMap
         onPicked: (v) => brg.map.lastMap = v
         onRandomize: brg.map.randomizeLastMap()
+        onRevert: brg.map.revertLastMap()
       }
 
       DesignatedMapRow {
@@ -197,6 +204,7 @@ Item {
         value: brg.map.lastBlackoutMap
         onPicked: (v) => brg.map.lastBlackoutMap = v
         onRandomize: brg.map.randomizeLastBlackoutMap()
+        onRevert: brg.map.revertLastBlackoutMap()
       }
 
       // A stale stored size — shown only when it disagrees, with its Fix.

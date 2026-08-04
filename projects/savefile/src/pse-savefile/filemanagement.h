@@ -80,6 +80,7 @@ signals:
   void pathChanged(QString newPath, QString oldPath); ///< The active path changed.
   void recentFilesChanged(QList<QString> files);      ///< The recent-files list changed.
   void dataChanged();                                 ///< The live SaveFile was replaced.
+  void saved();                                       ///< The working file was written to disk (a new "last saved" baseline).
   /// A load failed on a file that exists (unreadable / truncated). The app layer
   /// reacts by showing the file-error screen; read lastErrorMessage (plain) and
   /// lastErrorDetail (the real technical one-liner).

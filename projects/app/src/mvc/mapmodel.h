@@ -1347,6 +1347,19 @@ public:
   Q_INVOKABLE void randomizeLastMap();
   Q_INVOKABLE void randomizeLastBlackoutMap();
 
+  // ── Revert a field to its LAST-SAVED value (the field buttons' ↩) ────────────────────────────
+  //
+  // The baseline is snapshotted by captureSaved() on load and on every save (FileManagement::saved),
+  // so this restores the value as of the last write to disk. It routes through the ordinary setter,
+  // so it writes only that field — never a broad rewrite. (project leadership, 2026-08-03.)
+  Q_INVOKABLE void revertTileset();
+  Q_INVOKABLE void revertBlockset();
+  Q_INVOKABLE void revertLastMap();
+  Q_INVOKABLE void revertLastBlackoutMap();
+
+  /// Snapshot the four editable map fields as the "last saved" baseline. Called on load + on save.
+  void captureSaved();
+
 signals:
   /// The loaded map, the tileset or the player moved -- everything above may have changed.
   void changed();
@@ -1404,6 +1417,12 @@ signals:
   void mapPreviewChanged();
 
 private:
+  /// The last-saved baseline for the field revert buttons. -1 = no baseline captured yet. @see captureSaved
+  int m_savedTileset = -1;
+  int m_savedBlockset = -1;
+  int m_savedLastMap = -1;
+  int m_savedLastBlackout = -1;
+
   /// Rebuild the selection when the map changes under it.
   void revalidateSelection();
 

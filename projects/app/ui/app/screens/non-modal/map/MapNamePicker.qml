@@ -224,7 +224,12 @@ Item {
           onActivated: brg.map.tilesetInd = currentValue
         }
 
-        FieldButtons { Layout.alignment: Qt.AlignVCenter; onRandomize: brg.map.randomizeTileset() }
+        FieldButtons {
+          Layout.alignment: Qt.AlignVCenter
+          showRevert: true
+          onRandomize: brg.map.randomizeTileset()
+          onRevert: brg.map.revertTileset()
+        }
       }
 
       // Indoor / Cave / Outdoor — which tiles MOVE (the tileset's 0x3522 byte). Cave is not Indoor:
@@ -328,7 +333,12 @@ Item {
           onActivated: brg.map.blocksetInd = currentValue
         }
 
-        FieldButtons { Layout.alignment: Qt.AlignVCenter; onRandomize: brg.map.randomizeBlockset() }
+        FieldButtons {
+          Layout.alignment: Qt.AlignVCenter
+          showRevert: true
+          onRandomize: brg.map.randomizeBlockset()
+          onRevert: brg.map.revertBlockset()
+        }
       }
 
       // When blocks and graphics disagree (rare, legal), say so and OFFER to sync — a button, never a
