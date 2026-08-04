@@ -119,7 +119,7 @@ Item {
       // blockset controls below it stay put rather than scrolling away with the list.
       Rectangle {
         Layout.fillWidth: true
-        Layout.preferredHeight: 84   // ~half — keep the whole panel well short of the window edges
+        Layout.preferredHeight: 114   // ~3 rows + internal scroll — short of the window edges
         radius: 5
         border.width: 1
         border.color: brg.settings.dividerColor
