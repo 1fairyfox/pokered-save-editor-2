@@ -1242,6 +1242,14 @@ bool MapModel::blocksetIsTileset() const
   return blocksetInd() == tilesetInd();
 }
 
+bool MapModel::tilesetHasWater() const
+{
+  // Whether tile $14 is really water in THIS tileset — so the animation description can say "this
+  // tileset's water tile" vs "some other graphic that gets distorted anyway". @see TileTraitsDB.
+  auto* e = TileTraitsDB::inst()->at(tilesetInd());
+  return e != nullptr && e->hasWater;
+}
+
 QString MapModel::blocksetName() const
 {
   auto* el = canonAt(blocksetInd());
@@ -1356,6 +1364,15 @@ QVariantList MapModel::mapList() const
   for (auto* el : sorted) {
     auto* src = MapEngine::sourceMap(el->getInd());
     const bool copy = (src != nullptr && src != el);
+
+    // Hide the unused/glitch (copy) maps unless the toggle is on — but never hide one that is in use
+    // (the current map, or a designated Outside-is / Wake-up-at target), or its combo would blank.
+    if (copy && !m_mapShowGlitch
+        && el->getInd() != mapInd()
+        && el->getInd() != lastMap()
+        && el->getInd() != lastBlackoutMap())
+      continue;
+
     const QString group = displayGroup(el);
 
     // The heading rides on the first entry of each group, so QML can draw it without a second model.
@@ -1396,6 +1413,14 @@ QVariantList MapModel::mapSortModes() const
   add(SortAlphabetical, QObject::tr("A–Z"));
   add(SortInternal,     QObject::tr("By number"));
   return out;
+}
+
+void MapModel::setMapShowGlitch(bool on)
+{
+  if (on == m_mapShowGlitch)
+    return;
+  m_mapShowGlitch = on;
+  emit mapShowGlitchChanged();
 }
 
 int MapModel::frame() const

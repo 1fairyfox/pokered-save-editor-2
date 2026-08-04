@@ -149,6 +149,25 @@ Item {
         placeholderText: qsTr("Search maps…")
       }
 
+      // Off by default — reveals the unused/glitch maps (the copy ids) in the list. It targets the
+      // map entries, so it sits with them. (project leadership, 2026-08-03.)
+      CheckBox {
+        id: glitchToggle
+        Layout.fillWidth: true
+        implicitHeight: 24
+        topPadding: 0
+        bottomPadding: 0
+        checked: brg.map.mapShowGlitch
+        onToggled: brg.map.mapShowGlitch = checked
+        contentItem: Label {
+          text: qsTr("Show unused maps")
+          font.pixelSize: 11
+          color: brg.settings.textColorMid
+          leftPadding: glitchToggle.indicator.width + 5
+          verticalAlignment: Text.AlignVCenter
+        }
+      }
+
       // A fixed-height list that scrolls internally, so the tileset / blockset controls below it stay
       // put rather than scrolling away with the list.
       Rectangle {
@@ -169,6 +188,7 @@ Item {
           // makes the binding re-run when the sort changes (mapList() is otherwise a plain call).
           model: {
             brg.map.mapSort;
+            brg.map.mapShowGlitch;
             const q = mapSearch.text.trim().toLowerCase();
             const all = brg.map.mapList();
             if (q === "")
@@ -331,12 +351,20 @@ Item {
         Layout.fillWidth: true
         text: {
           switch (brg.map.tileAnim) {
-            case 0: return qsTr("Nothing animates. ⚠️ Surf needs the water tile, so Indoor breaks Surf.");
-            case 1: return qsTr("Water animates, flowers don't — Surf-friendly. Tile $14 goes through a "
-                                + "water distortion, typically only used for real water tiles.");
-            case 2: return qsTr("Water and flowers animate — Surf-friendly. Tile $14 gets the water "
-                                + "distortion (usually only real water tiles), and tile $03 is replaced "
-                                + "by the animated flower.");
+            case 0: return qsTr("Nothing animates.") + (brg.map.tilesetHasWater
+                      ? qsTr(" ⚠️ Surf needs the water tile, so Indoor breaks Surf here.")
+                      : qsTr(" (This tileset has no water anyway.)"));
+            case 1: return brg.map.tilesetHasWater
+                      ? qsTr("Water animates, flowers don't — Surf-friendly. Tile $14 is this tileset's "
+                             + "water tile, and the wave distortion runs on it.")
+                      : qsTr("Water animates, flowers don't. ⚠️ This tileset has no water — tile $14 is "
+                             + "some other graphic, so the wave distortion just warps it.");
+            case 2: return brg.map.tilesetHasWater
+                      ? qsTr("Water and flowers animate — Surf-friendly. Tile $14 (this tileset's water) "
+                             + "gets the wave distortion, and tile $03 is replaced by the animated flower.")
+                      : qsTr("Water and flowers animate. ⚠️ This tileset has no water — tile $14 is some "
+                             + "other graphic the wave distortion warps, and tile $03 is replaced by the "
+                             + "animated flower.");
           }
           return (brg.map.tileAnim % 2 === 1)
                  ? qsTr("%1 — the console reads bit 0, so this behaves as water only.").arg(brg.map.tileAnim)

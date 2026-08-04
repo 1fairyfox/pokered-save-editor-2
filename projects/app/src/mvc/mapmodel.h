@@ -139,6 +139,11 @@ class MapModel : public QObject
   /// Loaded tileset id (`wCurMapTileset`) -- where the map's GRAPHICS come from.
   Q_PROPERTY(int tilesetInd READ tilesetInd WRITE setTilesetInd NOTIFY changed)
 
+  /// Does the loaded tileset actually have water at tile $14? Lets the animation description say
+  /// "this tileset's water tile" vs "some other graphic". @see TileTraitsDB::Entry::hasWater
+  Q_PROPERTY(bool tilesetHasWater READ tilesetHasWater NOTIFY changed)
+  bool tilesetHasWater() const;
+
   /// Which tileset's BLOCKS the map is built from (the save's `blockPtr`). Normally the same
   /// tileset as the graphics -- but they are two separate pointers in the save, and a console
   /// draws exactly what they say. -1 when `blockPtr` matches no tileset in the game at all.
@@ -669,6 +674,12 @@ public:
   int mapSort() const { return m_mapSort; }
   void setMapSort(int mode);
   Q_INVOKABLE QVariantList mapSortModes() const;   ///< `{ value, name }` for the sort selector.
+
+  /// Show the unused/glitch maps (the copy ids) in every map list. OFF by default; a toggle reveals
+  /// them, like the contrast glitch switch. In-use maps (current, Outside-is, Wake-up-at) always show.
+  Q_PROPERTY(bool mapShowGlitch READ mapShowGlitch WRITE setMapShowGlitch NOTIFY mapShowGlitchChanged)
+  bool mapShowGlitch() const { return m_mapShowGlitch; }
+  void setMapShowGlitch(bool on);
 
   /**
    * @brief Where each connected map bleeds into the ring: `{ dir, name, x, y, w, h }`, buffer px.
@@ -1376,6 +1387,8 @@ signals:
   void changed();
   /// The shared map-list sort mode changed — every map list re-reads mapList().
   void mapSortChanged();
+  /// The glitch/unused-maps visibility toggled — every map list re-reads mapList().
+  void mapShowGlitchChanged();
   /// The animation step moved on (a view setting; the save is untouched).
   void frameChanged();
   /// The rendered image's URL changed -- a new frame, or a new map/tileset/palette.
@@ -1437,6 +1450,7 @@ private:
   int m_savedLastBlackout = -1;
 
   int m_mapSort = SortTileset;   ///< The shared map-list sort mode. @see mapSort
+  bool m_mapShowGlitch = false;  ///< Show unused/glitch (copy) maps in the lists. @see mapShowGlitch
 
   /// Rebuild the selection when the map changes under it.
   void revalidateSelection();
