@@ -42,6 +42,10 @@ Item {
   property bool openState: false
   onOpenStateChanged: openState ? pop.open() : pop.close()
 
+  /// The tileset & blocks controls live behind a "More settings" disclosure — collapsed by default so
+  /// the panel is just the map picker until you ask for more (project leadership, 2026-08-03).
+  property bool advancedOpen: false
+
   // ── The face: the bold map name + a ▾ that says "I drop a menu" ────────────────────────────────
   Rectangle {
     id: face
@@ -149,25 +153,6 @@ Item {
         placeholderText: qsTr("Search maps…")
       }
 
-      // Off by default — reveals the unused/glitch maps (the copy ids) in the list. It targets the
-      // map entries, so it sits with them. (project leadership, 2026-08-03.)
-      CheckBox {
-        id: glitchToggle
-        Layout.fillWidth: true
-        implicitHeight: 24
-        topPadding: 0
-        bottomPadding: 0
-        checked: brg.map.mapShowGlitch
-        onToggled: brg.map.mapShowGlitch = checked
-        contentItem: Label {
-          text: qsTr("Show unused maps")
-          font.pixelSize: 11
-          color: brg.settings.textColorMid
-          leftPadding: glitchToggle.indicator.width + 5
-          verticalAlignment: Text.AlignVCenter
-        }
-      }
-
       // A fixed-height list that scrolls internally, so the tileset / blockset controls below it stay
       // put rather than scrolling away with the list.
       Rectangle {
@@ -258,204 +243,258 @@ Item {
         }
       }
 
+      // "Show unused maps" — sits directly under the list it targets (project leadership, 2026-08-03).
+      // Off by default; enabling it reveals the unused/glitch copy ids in the list above.
+      CheckBox {
+        id: glitchToggle
+        Layout.fillWidth: true
+        implicitHeight: 24
+        topPadding: 0
+        bottomPadding: 0
+        checked: brg.map.mapShowGlitch
+        onToggled: brg.map.mapShowGlitch = checked
+        contentItem: Label {
+          text: qsTr("Show unused maps")
+          font.pixelSize: 11
+          color: brg.settings.textColorMid
+          leftPadding: glitchToggle.indicator.width + 5
+          verticalAlignment: Text.AlignVCenter
+        }
+      }
+
       Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: brg.settings.dividerColor }
 
-      // ── Tileset (the graphics) + what animates ──────────────────────────────────────────────
+      // ── "Tileset & blocks" — collapsed behind a disclosure so the panel stays a clean map picker ──
+      // project leadership, 2026-08-03: hide the graphics/blocks behind a more-settings link.
       Text {
-        text: qsTr("Tileset — the graphics")
+        Layout.fillWidth: true
+        text: (root.advancedOpen ? "▾  " : "▸  ") + qsTr("Tileset & blocks")
         font.pixelSize: 11
         font.bold: true
-        color: brg.settings.textColorMid
+        color: moreHover.hovered ? brg.settings.textColorDark : brg.settings.textColorMid
+        HoverHandler { id: moreHover; cursorShape: Qt.PointingHandCursor }
+        TapHandler { onTapped: root.advancedOpen = !root.advancedOpen }
       }
 
-      RowLayout {
+      ColumnLayout {
         Layout.fillWidth: true
-        spacing: 6
+        visible: root.advancedOpen
+        spacing: 8
 
-        ComboBox {
+        // Combined by default: tiles & blocks are ONE selection that moves both together (the usual
+        // case, where they agree). If they differ — legal but rare — it splits into two selectors so
+        // each can be set on its own. (project leadership, 2026-08-03.)
+
+        // ── Combined selector (tiles == blocks) ──
+        RowLayout {
           Layout.fillWidth: true
-          Layout.preferredHeight: 32
-          font.pixelSize: 12
+          visible: brg.map.blocksetIsTileset
+          spacing: 6
 
-          model: brg.map.tilesetList()
-          textRole: "name"
-          valueRole: "ind"
-
-          currentIndex: {
-            const list = model;
-            for (let i = 0; i < list.length; i++)
-              if (list[i].ind === brg.map.tilesetInd)
-                return i;
-            return -1;
+          ComboBox {
+            Layout.fillWidth: true
+            Layout.preferredHeight: 32
+            font.pixelSize: 12
+            model: brg.map.tilesetList()
+            textRole: "name"
+            valueRole: "ind"
+            currentIndex: {
+              const list = model;
+              for (let i = 0; i < list.length; i++)
+                if (list[i].ind === brg.map.tilesetInd)
+                  return i;
+              return -1;
+            }
+            // The combined selector moves BOTH — the whole point of combining them.
+            onActivated: { brg.map.tilesetInd = currentValue; brg.map.blocksetInd = currentValue; }
           }
 
-          onActivated: brg.map.tilesetInd = currentValue
+          FieldButtons {
+            Layout.alignment: Qt.AlignVCenter
+            showRevert: true
+            onRandomize: { brg.map.randomizeTileset(); brg.map.blocksetInd = brg.map.tilesetInd; }
+            onRevert: { brg.map.revertTileset(); brg.map.revertBlockset(); }
+          }
         }
 
-        FieldButtons {
-          Layout.alignment: Qt.AlignVCenter
-          showRevert: true
-          onRandomize: brg.map.randomizeTileset()
-          onRevert: brg.map.revertTileset()
-        }
-      }
+        // ── Split selectors (tiles != blocks) ──
+        ColumnLayout {
+          Layout.fillWidth: true
+          visible: !brg.map.blocksetIsTileset
+          spacing: 6
 
-      // Indoor / Cave / Outdoor — which tiles MOVE (the tileset's 0x3522 byte). Cave is not Indoor:
-      // cave water animates.
-      RowLayout {
-        Layout.fillWidth: true
-        spacing: 0
-
-        Repeater {
-          model: [
-            { v: 0, name: qsTr("Indoor")  },
-            { v: 1, name: qsTr("Cave")    },
-            { v: 2, name: qsTr("Outdoor") }
-          ]
-
-          Rectangle {
-            required property var modelData
-            required property int index
-
+          Text {
             Layout.fillWidth: true
-            implicitHeight: 26
+            text: qsTr("Tileset")
+            font.pixelSize: 10
+            color: brg.settings.textColorMid
+          }
+          RowLayout {
+            Layout.fillWidth: true
+            spacing: 6
+            ComboBox {
+              Layout.fillWidth: true
+              Layout.preferredHeight: 32
+              font.pixelSize: 12
+              model: brg.map.tilesetList()
+              textRole: "name"
+              valueRole: "ind"
+              currentIndex: {
+                const list = model;
+                for (let i = 0; i < list.length; i++)
+                  if (list[i].ind === brg.map.tilesetInd)
+                    return i;
+                return -1;
+              }
+              onActivated: brg.map.tilesetInd = currentValue
+            }
+            FieldButtons {
+              Layout.alignment: Qt.AlignVCenter
+              showRevert: true
+              onRandomize: brg.map.randomizeTileset()
+              onRevert: brg.map.revertTileset()
+            }
+          }
 
-            readonly property bool active: brg.map.tileAnim === modelData.v
+          Text {
+            Layout.fillWidth: true
+            text: qsTr("Blocks")
+            font.pixelSize: 10
+            color: brg.settings.textColorMid
+          }
+          RowLayout {
+            Layout.fillWidth: true
+            spacing: 6
+            ComboBox {
+              Layout.fillWidth: true
+              Layout.preferredHeight: 32
+              font.pixelSize: 12
+              model: brg.map.tilesetList()
+              textRole: "name"
+              valueRole: "ind"
+              currentIndex: {
+                const list = model;
+                for (let i = 0; i < list.length; i++)
+                  if (list[i].ind === brg.map.blocksetInd)
+                    return i;
+                return -1;
+              }
+              onActivated: brg.map.blocksetInd = currentValue
+            }
+            FieldButtons {
+              Layout.alignment: Qt.AlignVCenter
+              showRevert: true
+              onRandomize: brg.map.randomizeBlockset()
+              onRevert: brg.map.revertBlockset()
+            }
+          }
 
-            color: active ? brg.settings.accentColor
-                 : segHover.hovered ? "#f0f0f0" : "transparent"
+          // They disagree — say so and OFFER to recombine (a button, never a silent rewrite; the same
+          // muted-notice idiom the stored-size Fix uses).
+          Text {
+            Layout.fillWidth: true
+            text: brg.map.blocksetInd < 0
+                  ? qsTr("The blocks pointer is not any tileset's. The game would read whatever sits at "
+                         + "that address.")
+                  : qsTr("The blocks come from %1 and the tiles from %2.")
+                    .arg(brg.map.blocksetName).arg(brg.map.tilesetName)
+            font.pixelSize: 10
+            color: brg.settings.textColorMid
+            wrapMode: Text.WordWrap
+          }
+          RowLayout {
+            Layout.fillWidth: true
+            spacing: 6
+            Button {
+              flat: true
+              font.pixelSize: 10
+              text: qsTr("Match blocks → %1").arg(brg.map.tilesetName)
+              onClicked: brg.map.blocksetInd = brg.map.tilesetInd
+            }
+            Button {
+              flat: true
+              font.pixelSize: 10
+              visible: brg.map.blocksetInd >= 0
+              text: qsTr("Match tiles → %1").arg(brg.map.blocksetName)
+              onClicked: brg.map.tilesetInd = brg.map.blocksetInd
+            }
+            Item { Layout.fillWidth: true }
+          }
+        }
 
-            border.width: 1
-            border.color: brg.settings.dividerColor
+        // Indoor / Cave / Outdoor — which tiles MOVE (the tileset's 0x3522 byte). Cave is not Indoor:
+        // cave water animates.
+        RowLayout {
+          Layout.fillWidth: true
+          spacing: 0
 
-            topLeftRadius: index === 0 ? 4 : 0
-            bottomLeftRadius: index === 0 ? 4 : 0
-            topRightRadius: index === 2 ? 4 : 0
-            bottomRightRadius: index === 2 ? 4 : 0
+          Repeater {
+            model: [
+              { v: 0, name: qsTr("Indoor")  },
+              { v: 1, name: qsTr("Cave")    },
+              { v: 2, name: qsTr("Outdoor") }
+            ]
 
-            HoverHandler { id: segHover; cursorShape: Qt.PointingHandCursor }
-            TapHandler { onTapped: brg.map.tileAnim = modelData.v }
+            Rectangle {
+              required property var modelData
+              required property int index
 
-            Text {
-              anchors.centerIn: parent
-              text: modelData.name
-              font.pixelSize: 11
-              font.bold: parent.active
-              color: parent.active ? brg.settings.textColorLight : brg.settings.textColorDark
+              Layout.fillWidth: true
+              implicitHeight: 26
+
+              readonly property bool active: brg.map.tileAnim === modelData.v
+
+              color: active ? brg.settings.accentColor
+                   : segHover.hovered ? "#f0f0f0" : "transparent"
+
+              border.width: 1
+              border.color: brg.settings.dividerColor
+
+              topLeftRadius: index === 0 ? 4 : 0
+              bottomLeftRadius: index === 0 ? 4 : 0
+              topRightRadius: index === 2 ? 4 : 0
+              bottomRightRadius: index === 2 ? 4 : 0
+
+              HoverHandler { id: segHover; cursorShape: Qt.PointingHandCursor }
+              TapHandler { onTapped: brg.map.tileAnim = modelData.v }
+
+              Text {
+                anchors.centerIn: parent
+                text: modelData.name
+                font.pixelSize: 11
+                font.bold: parent.active
+                color: parent.active ? brg.settings.textColorLight : brg.settings.textColorDark
+              }
             }
           }
         }
-      }
-
-      Text {
-        Layout.fillWidth: true
-        text: {
-          switch (brg.map.tileAnim) {
-            case 0: return qsTr("Nothing animates.") + (brg.map.tilesetHasWater
-                      ? qsTr(" ⚠️ Surf needs the water tile, so Indoor breaks Surf here.")
-                      : qsTr(" (This tileset has no water anyway.)"));
-            case 1: return brg.map.tilesetHasWater
-                      ? qsTr("Water animates, flowers don't — Surf-friendly. Tile $14 is this tileset's "
-                             + "water tile, and the wave distortion runs on it.")
-                      : qsTr("Water animates, flowers don't. ⚠️ This tileset has no water — tile $14 is "
-                             + "some other graphic, so the wave distortion just warps it.");
-            case 2: return brg.map.tilesetHasWater
-                      ? qsTr("Water and flowers animate — Surf-friendly. Tile $14 (this tileset's water) "
-                             + "gets the wave distortion, and tile $03 is replaced by the animated flower.")
-                      : qsTr("Water and flowers animate. ⚠️ This tileset has no water — tile $14 is some "
-                             + "other graphic the wave distortion warps, and tile $03 is replaced by the "
-                             + "animated flower.");
-          }
-          return (brg.map.tileAnim % 2 === 1)
-                 ? qsTr("%1 — the console reads bit 0, so this behaves as water only.").arg(brg.map.tileAnim)
-                 : qsTr("%1 — the console reads bit 0, so this behaves as water and flowers.").arg(brg.map.tileAnim);
-        }
-        font.pixelSize: 10
-        color: brg.settings.textColorMid
-        wrapMode: Text.WordWrap
-      }
-
-      Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: brg.settings.dividerColor }
-
-      // ── Blockset (the blocks) ───────────────────────────────────────────────────────────────
-      Text {
-        text: qsTr("Blockset — what the map is built from")
-        font.pixelSize: 11
-        font.bold: true
-        color: brg.settings.textColorMid
-      }
-
-      RowLayout {
-        Layout.fillWidth: true
-        spacing: 6
-
-        ComboBox {
-          Layout.fillWidth: true
-          Layout.preferredHeight: 32
-          font.pixelSize: 12
-
-          model: brg.map.tilesetList()
-          textRole: "name"
-          valueRole: "ind"
-
-          currentIndex: {
-            const list = model;
-            for (let i = 0; i < list.length; i++)
-              if (list[i].ind === brg.map.blocksetInd)
-                return i;
-            return -1;
-          }
-
-          onActivated: brg.map.blocksetInd = currentValue
-        }
-
-        FieldButtons {
-          Layout.alignment: Qt.AlignVCenter
-          showRevert: true
-          onRandomize: brg.map.randomizeBlockset()
-          onRevert: brg.map.revertBlockset()
-        }
-      }
-
-      // When blocks and graphics disagree (rare, legal), say so and OFFER to sync — a button, never a
-      // silent rewrite (the same muted-notice idiom the stored-size Fix uses).
-      ColumnLayout {
-        Layout.fillWidth: true
-        visible: !brg.map.blocksetIsTileset
-        spacing: 6
 
         Text {
           Layout.fillWidth: true
-          text: brg.map.blocksetInd < 0
-                ? qsTr("The blocks pointer is not any tileset's. The game would read whatever sits at "
-                       + "that address.")
-                : qsTr("The blocks come from %1 and the tiles from %2.")
-                  .arg(brg.map.blocksetName).arg(brg.map.tilesetName)
+          text: {
+            switch (brg.map.tileAnim) {
+              case 0: return qsTr("Nothing animates.") + (brg.map.tilesetHasWater
+                        ? qsTr(" ⚠️ Surf needs the water tile, so Indoor breaks Surf here.")
+                        : qsTr(" (This tileset has no water anyway.)"));
+              case 1: return brg.map.tilesetHasWater
+                        ? qsTr("Water animates, flowers don't — Surf-friendly. Tile $14 is this tileset's "
+                               + "water tile, and the wave distortion runs on it.")
+                        : qsTr("Water animates, flowers don't. ⚠️ This tileset has no water — tile $14 is "
+                               + "some other graphic, so the wave distortion just warps it.");
+              case 2: return brg.map.tilesetHasWater
+                        ? qsTr("Water and flowers animate — Surf-friendly. Tile $14 (this tileset's water) "
+                               + "gets the wave distortion, and tile $03 is replaced by the animated flower.")
+                        : qsTr("Water and flowers animate. ⚠️ This tileset has no water — tile $14 is some "
+                               + "other graphic the wave distortion warps, and tile $03 is replaced by the "
+                               + "animated flower.");
+            }
+            return (brg.map.tileAnim % 2 === 1)
+                   ? qsTr("%1 — the console reads bit 0, so this behaves as water only.").arg(brg.map.tileAnim)
+                   : qsTr("%1 — the console reads bit 0, so this behaves as water and flowers.").arg(brg.map.tileAnim);
+          }
           font.pixelSize: 10
           color: brg.settings.textColorMid
           wrapMode: Text.WordWrap
-        }
-
-        RowLayout {
-          Layout.fillWidth: true
-          spacing: 6
-
-          Button {
-            flat: true
-            font.pixelSize: 10
-            text: qsTr("Match blocks → %1").arg(brg.map.tilesetName)
-            onClicked: brg.map.blocksetInd = brg.map.tilesetInd
-          }
-
-          Button {
-            flat: true
-            font.pixelSize: 10
-            visible: brg.map.blocksetInd >= 0
-            text: qsTr("Match tiles → %1").arg(brg.map.blocksetName)
-            onClicked: brg.map.tilesetInd = brg.map.blocksetInd
-          }
-
-          Item { Layout.fillWidth: true }
         }
       }
     }

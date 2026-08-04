@@ -1329,6 +1329,8 @@ QVariantList MapModel::mapList() const
       }
       case SortInternal:
         return QString();
+      case SortConnections:
+        return e->getConnect().isEmpty() ? QObject::tr("No connections") : QObject::tr("Connected");
       case SortTileset:
       default:
         return isCopy(e) ? QObject::tr("Unfinished copies")
@@ -1345,6 +1347,15 @@ QVariantList MapModel::mapList() const
     case SortInternal:
       std::stable_sort(sorted.begin(), sorted.end(), [](MapDBEntry* a, MapDBEntry* b) {
         return a->getInd() < b->getInd();
+      });
+      break;
+    case SortConnections:
+      // Maps that connect to a neighbour first, then the isolated ones — alphabetical within each.
+      std::stable_sort(sorted.begin(), sorted.end(), [&coll](MapDBEntry* a, MapDBEntry* b) {
+        const bool ca = !a->getConnect().isEmpty();
+        const bool cb = !b->getConnect().isEmpty();
+        if (ca != cb) return ca;
+        return coll.compare(a->getName(), b->getName()) < 0;
       });
       break;
     case SortTileset:
@@ -1397,7 +1408,7 @@ QVariantList MapModel::mapList() const
 
 void MapModel::setMapSort(int mode)
 {
-  if (mode < SortTileset || mode > SortInternal || mode == m_mapSort)
+  if (mode < SortTileset || mode > SortConnections || mode == m_mapSort)
     return;
   m_mapSort = mode;
   emit mapSortChanged();
@@ -1410,6 +1421,7 @@ QVariantList MapModel::mapSortModes() const
     QVariantMap m; m["value"] = v; m["name"] = n; out.append(m);
   };
   add(SortTileset,      QObject::tr("By tileset"));
+  add(SortConnections,  QObject::tr("By connections"));
   add(SortAlphabetical, QObject::tr("A–Z"));
   add(SortInternal,     QObject::tr("By number"));
   return out;

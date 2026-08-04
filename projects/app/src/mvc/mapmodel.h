@@ -668,7 +668,7 @@ public:
   /// The shared sort/grouping for every map list (name picker, designated-map combos, warp
   /// destinations…). One setting, so they all agree. ⚠️ Progression mode is a queued follow-up — it
   /// needs a curated per-map story-order table (branching groups), which is its own data phase.
-  enum MapSort { SortTileset = 0, SortAlphabetical = 1, SortInternal = 2 };
+  enum MapSort { SortTileset = 0, SortAlphabetical = 1, SortInternal = 2, SortConnections = 3 };
   Q_ENUM(MapSort)
   Q_PROPERTY(int mapSort READ mapSort WRITE setMapSort NOTIFY mapSortChanged)
   int mapSort() const { return m_mapSort; }
