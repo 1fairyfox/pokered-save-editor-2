@@ -46,6 +46,12 @@ Item {
   /// the panel is just the map picker until you ask for more (project leadership, 2026-08-03).
   property bool advancedOpen: false
 
+  /// Tileset & blocks: ONE combined selector by default, or two separate ones. The user chooses with
+  /// explicit "Separate" / "Merge" buttons (project leadership, 2026-08-03). We always show the split
+  /// view when the save's tileset and blocks genuinely differ — one combo can't represent two values.
+  property bool blocksSeparated: false
+  readonly property bool blocksSplitShown: blocksSeparated || !brg.map.blocksetIsTileset
+
   // ── The face: the bold map name + a ▾ that says "I drop a menu" ────────────────────────────────
   Rectangle {
     id: face
@@ -113,24 +119,18 @@ Item {
 
       // ── The map list — the "select box", right at the top so it's usable the instant you open ──
       //
-      // Header: the "Map" label + the shared SORT selector (project leadership, 2026-08-03: sorting is
-      // shared across every map list). Below it a search box narrows the list.
+      // One top row: the shared SORT selector on the LEFT, the search box filling the rest (project
+      // leadership, 2026-08-03: *"combine search maps with map selection, sort selection next to the
+      // search bar on the left."*). The unused-maps toggle is gone from here — it now lives in the
+      // global "!" options panel (Tier 1: Unused). Sorting is shared across every map list.
       RowLayout {
         Layout.fillWidth: true
         spacing: 6
 
-        Text {
-          Layout.fillWidth: true
-          text: qsTr("Map")
-          font.pixelSize: 11
-          font.bold: true
-          color: brg.settings.textColorMid
-        }
-
         ComboBox {
           id: sortCombo
-          Layout.preferredWidth: 120
-          Layout.preferredHeight: 26
+          Layout.preferredWidth: 116
+          Layout.preferredHeight: 30
           font.pixelSize: 11
           model: brg.map.mapSortModes()
           textRole: "name"
@@ -143,14 +143,14 @@ Item {
           }
           onActivated: brg.map.mapSort = currentValue
         }
-      }
 
-      TextField {
-        id: mapSearch
-        Layout.fillWidth: true
-        Layout.preferredHeight: 30
-        font.pixelSize: 12
-        placeholderText: qsTr("Search maps…")
+        TextField {
+          id: mapSearch
+          Layout.fillWidth: true
+          Layout.preferredHeight: 30
+          font.pixelSize: 12
+          placeholderText: qsTr("Search maps…")
+        }
       }
 
       // A fixed-height list that scrolls internally, so the tileset / blockset controls below it stay
@@ -173,7 +173,7 @@ Item {
           // makes the binding re-run when the sort changes (mapList() is otherwise a plain call).
           model: {
             brg.map.mapSort;
-            brg.map.mapShowGlitch;
+            brg.map.showUnused;
             const q = mapSearch.text.trim().toLowerCase();
             const all = brg.map.mapList();
             if (q === "")
@@ -243,25 +243,6 @@ Item {
         }
       }
 
-      // "Show unused maps" — sits directly under the list it targets (project leadership, 2026-08-03).
-      // Off by default; enabling it reveals the unused/glitch copy ids in the list above.
-      CheckBox {
-        id: glitchToggle
-        Layout.fillWidth: true
-        implicitHeight: 24
-        topPadding: 0
-        bottomPadding: 0
-        checked: brg.map.mapShowGlitch
-        onToggled: brg.map.mapShowGlitch = checked
-        contentItem: Label {
-          text: qsTr("Show unused maps")
-          font.pixelSize: 11
-          color: brg.settings.textColorMid
-          leftPadding: glitchToggle.indicator.width + 5
-          verticalAlignment: Text.AlignVCenter
-        }
-      }
-
       Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: brg.settings.dividerColor }
 
       // ── "Tileset & blocks" — collapsed behind a disclosure so the panel stays a clean map picker ──
@@ -281,14 +262,14 @@ Item {
         visible: root.advancedOpen
         spacing: 8
 
-        // Combined by default: tiles & blocks are ONE selection that moves both together (the usual
-        // case, where they agree). If they differ — legal but rare — it splits into two selectors so
-        // each can be set on its own. (project leadership, 2026-08-03.)
+        // ONE combined selector by default; the "Separate" / "Merge" buttons switch between one control
+        // (tiles & blocks move together) and two (each set on its own). The split view also shows
+        // whenever the save's two values genuinely differ. (project leadership, 2026-08-03.)
 
-        // ── Combined selector (tiles == blocks) ──
+        // ── Combined selector (one control, moves both) ──
         RowLayout {
           Layout.fillWidth: true
-          visible: brg.map.blocksetIsTileset
+          visible: !root.blocksSplitShown
           spacing: 6
 
           ComboBox {
@@ -315,19 +296,38 @@ Item {
             onRandomize: { brg.map.randomizeTileset(); brg.map.blocksetInd = brg.map.tilesetInd; }
             onRevert: { brg.map.revertTileset(); brg.map.revertBlockset(); }
           }
+
+          // Split them into two independent selectors (no write — just reveals the second control).
+          Button {
+            flat: true
+            font.pixelSize: 10
+            text: qsTr("Separate")
+            onClicked: root.blocksSeparated = true
+          }
         }
 
-        // ── Split selectors (tiles != blocks) ──
+        // ── Split selectors (two controls) ──
         ColumnLayout {
           Layout.fillWidth: true
-          visible: !brg.map.blocksetIsTileset
+          visible: root.blocksSplitShown
           spacing: 6
 
-          Text {
+          RowLayout {
             Layout.fillWidth: true
-            text: qsTr("Tileset")
-            font.pixelSize: 10
-            color: brg.settings.textColorMid
+            spacing: 6
+            Text {
+              Layout.fillWidth: true
+              text: qsTr("Tileset")
+              font.pixelSize: 10
+              color: brg.settings.textColorMid
+            }
+            // Merge back to one control: blocks follow the tileset, then collapse the split view.
+            Button {
+              flat: true
+              font.pixelSize: 10
+              text: qsTr("Merge")
+              onClicked: { brg.map.blocksetInd = brg.map.tilesetInd; root.blocksSeparated = false; }
+            }
           }
           RowLayout {
             Layout.fillWidth: true
@@ -389,10 +389,10 @@ Item {
             }
           }
 
-          // They disagree — say so and OFFER to recombine (a button, never a silent rewrite; the same
-          // muted-notice idiom the stored-size Fix uses).
+          // If the two genuinely differ, say what the game would draw (a fact, not an alarm).
           Text {
             Layout.fillWidth: true
+            visible: !brg.map.blocksetIsTileset
             text: brg.map.blocksetInd < 0
                   ? qsTr("The blocks pointer is not any tileset's. The game would read whatever sits at "
                          + "that address.")
@@ -401,24 +401,6 @@ Item {
             font.pixelSize: 10
             color: brg.settings.textColorMid
             wrapMode: Text.WordWrap
-          }
-          RowLayout {
-            Layout.fillWidth: true
-            spacing: 6
-            Button {
-              flat: true
-              font.pixelSize: 10
-              text: qsTr("Match blocks → %1").arg(brg.map.tilesetName)
-              onClicked: brg.map.blocksetInd = brg.map.tilesetInd
-            }
-            Button {
-              flat: true
-              font.pixelSize: 10
-              visible: brg.map.blocksetInd >= 0
-              text: qsTr("Match tiles → %1").arg(brg.map.blocksetName)
-              onClicked: brg.map.tilesetInd = brg.map.blocksetInd
-            }
-            Item { Layout.fillWidth: true }
           }
         }
 

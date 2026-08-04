@@ -181,12 +181,6 @@ Rectangle {
 
     Item { Layout.fillWidth: true }
 
-    // ── Colour (the output palette) — its own chip, right side ──────────────────────────────────
-    //
-    // project leadership, 2026-07-19: *"the color picker goes in the top bar at the right."* Its face is the
-    // four colours it is currently painting with. A VIEW setting — no save byte.
-    ColourPicker { id: colourPicker }
-
     Rectangle {
       implicitWidth: 1
       implicitHeight: 18
@@ -195,66 +189,143 @@ Rectangle {
       Layout.rightMargin: 2
     }
 
-    // ── The clutter switch, hard right ────────────────────────────────────────────────────────
+    // ── Colour (the output palette) — grouped with the options panel past the divider ────────────
     //
-    // ⚠️ project leadership, 2026-07-13, and it is a good idea: *"Have a switch right-aligned on the top
-    // toolbar that toggles on values that will be overwritten as options to change. Have it OFF by
-    // default, give it a good label. When it's off, the fields that relate to things there's no
-    // point in changing will not be present and add clutter."*
-    //
-    // Off: they simply are not there. On: they are, each wearing its yellow "!".
-    //
-    // ⚠️ AN ICON, NOT A LABELLED SWITCH (project leadership: *"it's way too long — don't put a long label
-    // to the left of it … maybe an icon of sorts."*). It is a chip with a mark on it now, and the
-    // words are in its tooltip — the bargain this toolbar makes everywhere else.
-    Rectangle {
-      objectName: "showScratchToggle"   // the DEBUG harness drives the panel through this
+    // project leadership, 2026-07-19: *"the color picker goes in the top bar at the right."* Moved to the
+    // RIGHT of the divider 2026-08-03 so it groups with the "!" options panel. A VIEW setting — no
+    // save byte; its face is the four colours it is currently painting with.
+    ColourPicker { id: colourPicker }
 
+    // ── The abnormal-values options panel (!) — hard right ───────────────────────────────────────
+    //
+    // Was a single "show useless edits" toggle; now a dropdown panel of TIERS of abnormal options
+    // (project leadership, 2026-08-03). The face's little light says which tier is currently revealed:
+    //   • grey  — nothing abnormal shown
+    //   • blue  — Tier 2 only (no-effect edits: overwritten on load, read-only, or never read)
+    //   • amber — Tier 1 (unused / unstable: the game DOES act on them, with unintended effects)
+    //
+    // The tiers are two independent switches, each turning its whole class on across the map screen.
+    // Tier 1 also governs the unused/glitch MAPS in the selection list (brg.map.showUnused).
+    Item {
+      id: optionsButton
+      objectName: "mapOptionsButton"   // the DEBUG harness drives the panel through this
       implicitWidth: 30
       implicitHeight: 26
-      radius: 13
 
-      readonly property bool on: brg.map.showScratch
+      /// Open/shut by name for the harness / screenshot review.
+      property bool openState: false
+      onOpenStateChanged: openState ? optionsPop.open() : optionsPop.close()
 
-      color: on ? "#ffd54f"
-           : scratchHover.hovered ? Qt.rgba(0, 0, 0, 0.10)
-           : Qt.rgba(0, 0, 0, 0.05)
+      readonly property bool t1: brg.map.showUnused    // unused / unstable (dangerous)
+      readonly property bool t2: brg.map.showScratch   // no-effect (harmless)
 
-      border.width: 1
-      border.color: on ? "#8a6d00" : brg.settings.dividerColor
-
-      Behavior on color { ColorAnimation { duration: 90 } }
-
-      // The same "!" that marks every one of the fields it reveals. One mark, one meaning.
-      Text {
+      Rectangle {
+        id: optionsFace
         anchors.fill: parent
-        text: "!"
-        font.pixelSize: 13
-        font.bold: true
-        color: parent.on ? "#3a2e00" : brg.settings.textColorMid
-        horizontalAlignment: Text.AlignHCenter
-        verticalAlignment: Text.AlignVCenter
-        opacity: parent.on ? 1.0 : 0.55
+        radius: 13
+
+        color: (optHover.hovered || optionsButton.openState) ? Qt.rgba(0, 0, 0, 0.10)
+             : Qt.rgba(0, 0, 0, 0.05)
+        border.width: 1
+        border.color: optionsButton.t1 ? "#b3261e"
+                    : optionsButton.t2 ? "#3a6ea5"
+                    : brg.settings.dividerColor
+        Behavior on color { ColorAnimation { duration: 90 } }
+
+        Text {
+          anchors.centerIn: parent
+          text: "!"
+          font.pixelSize: 13
+          font.bold: true
+          color: optionsButton.t1 ? "#b3261e"
+               : optionsButton.t2 ? "#3a6ea5"
+               : brg.settings.textColorMid
+          opacity: (optionsButton.t1 || optionsButton.t2) ? 1.0 : 0.55
+        }
+
+        // The "level" light — a small dot, top-right, coloured by the highest tier currently shown.
+        Rectangle {
+          width: 7; height: 7; radius: 3.5
+          anchors.right: parent.right
+          anchors.top: parent.top
+          anchors.margins: 2
+          visible: optionsButton.t1 || optionsButton.t2
+          color: optionsButton.t1 ? "#e53935" : "#42a5f5"
+          border.width: 1
+          border.color: "#ffffff"
+        }
       }
 
-      HoverHandler { id: scratchHover; cursorShape: Qt.PointingHandCursor }
-
-      // ⚠️ ReleaseWithinBounds -- it takes an EXCLUSIVE GRAB, so the press stops here. The default
-      // (DragThreshold) does not grab, and Qt then goes on delivering the point to every other
-      // pointer handler underneath. That is the bug that made the map's ground tap fire through the
-      // panels. @see MapCanvas.overPanel
+      HoverHandler { id: optHover; cursorShape: Qt.PointingHandCursor }
       TapHandler {
         gesturePolicy: TapHandler.ReleaseWithinBounds
-        onTapped: brg.map.showScratch = !brg.map.showScratch
+        onTapped: optionsButton.openState = !optionsButton.openState
       }
 
       MapToolTip {
-        shown: scratchHover.hovered
-        // "USELESS EDITS" -- leadership's name for this whole class (2026-07-18): everything the
-        // game overwrites on load OR never reads at all. One toggle, the whole map screen.
-        text: qsTr("Show useless edits — values the game overwrites when it loads your save, or "
-                   + "never reads at all (reset scratch, the sprite cache, placeholder and dead "
-                   + "flags).\n\nReal bytes, all editable — they just have no effect you can keep.")
+        shown: optHover.hovered && !optionsButton.openState
+        text: qsTr("Uncommon options — reveal abnormal values the app normally hides: unused/unstable "
+                   + "ones the game acts on with unintended effects, and no-effect ones it overwrites "
+                   + "or never reads.")
+      }
+
+      Popup {
+        id: optionsPop
+        y: optionsButton.height + 6
+        x: optionsButton.width - width   // right-aligned under the chip, stays inside the window
+        width: 288
+        padding: 10
+        margins: 8
+        modal: false
+        focus: true
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
+        onClosed: optionsButton.openState = false
+
+        background: Rectangle {
+          color: "#ffffff"
+          radius: 6
+          border.width: 1
+          border.color: brg.settings.dividerColor
+        }
+
+        ColumnLayout {
+          anchors.fill: parent
+          spacing: 8
+
+          Text {
+            Layout.fillWidth: true
+            text: qsTr("Uncommon options")
+            font.pixelSize: 11
+            font.bold: true
+            color: brg.settings.textColorMid
+          }
+
+          // ── Tier 1: Unused / unstable — the game acts on them, with unintended effects ──────────
+          OptionTierRow {
+            Layout.fillWidth: true
+            dotColor: "#e53935"
+            title: qsTr("Unused & unstable")
+            blurb: qsTr("Values the game does read and act on, but that are unused, unfinished, or "
+                        + "developer leftovers — editing them has real, often unintended effects "
+                        + "(glitches, even crashes). Also shows the unused/glitch maps in the list.")
+            checked: brg.map.showUnused
+            onToggled: brg.map.showUnused = !brg.map.showUnused
+          }
+
+          Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: brg.settings.dividerColor }
+
+          // ── Tier 2: No-effect — overwritten on load, read-only, or never read ──────────────────
+          OptionTierRow {
+            Layout.fillWidth: true
+            dotColor: "#42a5f5"
+            title: qsTr("No-effect edits")
+            blurb: qsTr("Values the game overwrites when it loads your save, or never reads at all — "
+                        + "reset scratch, the sprite cache, placeholder and dead flags. Real bytes, "
+                        + "all editable — they just have no effect you can keep.")
+            checked: brg.map.showScratch
+            onToggled: brg.map.showScratch = !brg.map.showScratch
+          }
+        }
       }
     }
   }

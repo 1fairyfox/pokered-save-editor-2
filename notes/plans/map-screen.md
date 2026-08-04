@@ -347,6 +347,40 @@ animation and the walk into one "Simulate" button):
   height and scrolls. Splitting the old all-in-one `⊞` panel into two shorter popups removed the actual
   clipping culprit. *"It shouldn't be possible [to clip] — at least scroll — the UI/UX is semi-fluid."*
 
+### Update 2026-08-03 (later) — the map-selection panel + the "!" options-tier panel
+
+Project leadership refined the map-selection panel (`MapNamePicker`) and turned the top-bar `!` chip
+into a tiered options panel. This SUPERSEDES the standalone `▩ TilesetBlocksPicker` above: tileset &
+blocks now live inside the map-name panel behind a **"Tileset & blocks ▸" disclosure** (there is no `▩`
+button), and the old single "show useless edits" `!` toggle is replaced by a dropdown.
+
+- **The map-selection panel** opens as a clean picker: one top row with the **shared sort selector on
+  the left** + the **search box** filling the rest, then the fixed-height map list, then the
+  disclosure. No "Map" label row, no in-panel unused-maps checkbox.
+- **Shared sort modes** (`MapModel::MapSort`, one setting across every map list): **By tileset**
+  (grouped, default) · **By connections** — grouped by the map's connection **signature** ("North ·
+  South", "East", … "No connections"), `connMask` from `MapDBEntry::getConnect()` · **By size** —
+  semantic **area buckets** (Tiny ≤25, Small ≤80, Medium ≤180, Large ≤360, Huge, + Unknown for copies),
+  smallest at the top of each group · **A–Z** · **By number**. Thresholds are by `w×h` in blocks and
+  tunable.
+- **Tileset & blocks: one control by default, `Separate` / `Merge` buttons** to switch to/from two
+  independent selectors (the split view also shows automatically when the save's two values genuinely
+  differ — one combo can't represent both). `Merge` sets blocks ← tileset then collapses; `Separate`
+  just reveals the second combo (no write).
+- **The "!" is now an options-tier dropdown** (`OptionTierRow.qml`), a chip like the others. Two tiers,
+  each a switch that reveals/hides a whole class of abnormal values across the map screen:
+  - **Tier 1 — "Unused & unstable"** (`MapModel::showUnused`, was `mapShowGlitch`): values the game
+    **does read and act on**, but that are unused / dev / unfinished, so edits have real but
+    **unintended** effects (glitches, crashes). Also governs the **unused/glitch maps** in the list.
+  - **Tier 2 — "No-effect edits"** (`MapModel::showScratch`, unchanged): overwritten on load, read-only,
+    or never read.
+  - The chip's **level light** is grey (none) → blue (Tier 2) → **red** (Tier 1), and its `!` takes the
+    same colour, so the bar shows at a glance whether anything abnormal is revealed.
+  - Naming/organization is a first pass and open to refinement; leadership invited *"better sorting,
+    organizing, option sets."* Only the map list consumes Tier 1 today; per-field Tier-1 tagging across
+    the panels is future work (existing abnormal fields still wear the Tier-2 "!" scratch mark).
+- **Colour** button moved to the **right** of the divider, grouping it with the `!` options panel.
+
 Full domain write-up (read it before building this):
 [`../reference/map-animation.md`](../reference/map-animation.md) — verified against the disassembly.
 

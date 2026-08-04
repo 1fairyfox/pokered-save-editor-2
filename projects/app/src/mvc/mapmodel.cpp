@@ -1319,8 +1319,59 @@ QVariantList MapModel::mapList() const
   coll.setNumericMode(true);
   coll.setCaseSensitivity(Qt::CaseInsensitive);
 
+  // The map's connection SIGNATURE — the set of edges it joins a neighbour on, as a bit mask
+  // (N=1, S=2, E=4, W=8). This is what "By connections" groups on: every map that connects the
+  // same way sits together. (project leadership, 2026-08-03: group by the connections it supports.)
+  auto connMask = [](MapDBEntry* e) -> int {
+    const auto c = e->getConnect();
+    int m = 0;
+    if (c.contains(MapDBEntryConnect::NORTH)) m |= 1;
+    if (c.contains(MapDBEntryConnect::SOUTH)) m |= 2;
+    if (c.contains(MapDBEntryConnect::EAST))  m |= 4;
+    if (c.contains(MapDBEntryConnect::WEST))  m |= 8;
+    return m;
+  };
+  // The heading for a signature: the directions spelled out ("North · South"), or "No connections".
+  auto connLabel = [](int m) -> QString {
+    if (m == 0) return QObject::tr("No connections");
+    QStringList p;
+    if (m & 1) p << QObject::tr("North");
+    if (m & 2) p << QObject::tr("South");
+    if (m & 4) p << QObject::tr("East");
+    if (m & 8) p << QObject::tr("West");
+    return p.join(QStringLiteral(" · "));
+  };
+
+  // A map's SIZE bucket, by area in blocks (w×h). Six ranks so the spread reads without being fussy;
+  // thresholds are by area and tunable. Rank 5 = no stored size (copies), sorted last. (project
+  // leadership, 2026-08-03: group by size, semantic names, smallest at the top of each group.)
+  auto sizeArea = [](MapDBEntry* e) -> int {
+    const int w = e->getWidth(), h = e->getHeight();
+    return (w > 0 && h > 0) ? (w * h) : -1;
+  };
+  auto sizeBucket = [&sizeArea](MapDBEntry* e) -> int {
+    const int a = sizeArea(e);
+    if (a < 0)   return 5;   // unknown (copies with no own dimensions)
+    if (a <= 25) return 0;   // rooms & houses (≈ up to 5×5)
+    if (a <= 80) return 1;   // small
+    if (a <= 180) return 2;  // medium
+    if (a <= 360) return 3;  // large
+    return 4;                // huge
+  };
+  auto sizeLabel = [](int rank) -> QString {
+    switch (rank) {
+      case 0: return QObject::tr("Tiny");
+      case 1: return QObject::tr("Small");
+      case 2: return QObject::tr("Medium");
+      case 3: return QObject::tr("Large");
+      case 4: return QObject::tr("Huge");
+      default: return QObject::tr("Unknown size");
+    }
+  };
+
   // The DISPLAY heading for an entry, per the active sort. Tileset: the tileset (copies read
-  // "Unfinished copies"); A–Z: the first letter; By number: none (flat).
+  // "Unfinished copies"); A–Z: the first letter; Connections: the direction signature; Size: the
+  // bucket name; By number: none.
   auto displayGroup = [&](MapDBEntry* e) -> QString {
     switch (m_mapSort) {
       case SortAlphabetical: {
@@ -1329,8 +1380,10 @@ QVariantList MapModel::mapList() const
       }
       case SortInternal:
         return QString();
+      case SortSize:
+        return sizeLabel(sizeBucket(e));
       case SortConnections:
-        return e->getConnect().isEmpty() ? QObject::tr("No connections") : QObject::tr("Connected");
+        return connLabel(connMask(e));
       case SortTileset:
       default:
         return isCopy(e) ? QObject::tr("Unfinished copies")
@@ -1350,11 +1403,25 @@ QVariantList MapModel::mapList() const
       });
       break;
     case SortConnections:
-      // Maps that connect to a neighbour first, then the isolated ones — alphabetical within each.
-      std::stable_sort(sorted.begin(), sorted.end(), [&coll](MapDBEntry* a, MapDBEntry* b) {
-        const bool ca = !a->getConnect().isEmpty();
-        const bool cb = !b->getConnect().isEmpty();
-        if (ca != cb) return ca;
+      // Cluster maps by their connection signature (mask), then alphabetical within each group.
+      // "No connections" (mask 0) sorts LAST so the isolated maps sit at the bottom.
+      std::stable_sort(sorted.begin(), sorted.end(), [&coll, &connMask](MapDBEntry* a, MapDBEntry* b) {
+        const int ma = connMask(a), mb = connMask(b);
+        const int ka = (ma == 0) ? 0x7fffffff : ma;
+        const int kb = (mb == 0) ? 0x7fffffff : mb;
+        if (ka != kb) return ka < kb;
+        return coll.compare(a->getName(), b->getName()) < 0;
+      });
+      break;
+    case SortSize:
+      // Group by size bucket (smallest bucket first, unknown last); within a group, smallest area at
+      // the top, then alphabetical for ties.
+      std::stable_sort(sorted.begin(), sorted.end(),
+                       [&coll, &sizeBucket, &sizeArea](MapDBEntry* a, MapDBEntry* b) {
+        const int ba = sizeBucket(a), bb = sizeBucket(b);
+        if (ba != bb) return ba < bb;
+        const int aa = sizeArea(a), ab = sizeArea(b);
+        if (aa != ab) return aa < ab;
         return coll.compare(a->getName(), b->getName()) < 0;
       });
       break;
@@ -1378,7 +1445,7 @@ QVariantList MapModel::mapList() const
 
     // Hide the unused/glitch (copy) maps unless the toggle is on — but never hide one that is in use
     // (the current map, or a designated Outside-is / Wake-up-at target), or its combo would blank.
-    if (copy && !m_mapShowGlitch
+    if (copy && !m_showUnused
         && el->getInd() != mapInd()
         && el->getInd() != lastMap()
         && el->getInd() != lastBlackoutMap())
@@ -1408,7 +1475,7 @@ QVariantList MapModel::mapList() const
 
 void MapModel::setMapSort(int mode)
 {
-  if (mode < SortTileset || mode > SortConnections || mode == m_mapSort)
+  if (mode < SortTileset || mode > SortSize || mode == m_mapSort)
     return;
   m_mapSort = mode;
   emit mapSortChanged();
@@ -1422,17 +1489,18 @@ QVariantList MapModel::mapSortModes() const
   };
   add(SortTileset,      QObject::tr("By tileset"));
   add(SortConnections,  QObject::tr("By connections"));
+  add(SortSize,         QObject::tr("By size"));
   add(SortAlphabetical, QObject::tr("A–Z"));
   add(SortInternal,     QObject::tr("By number"));
   return out;
 }
 
-void MapModel::setMapShowGlitch(bool on)
+void MapModel::setShowUnused(bool on)
 {
-  if (on == m_mapShowGlitch)
+  if (on == m_showUnused)
     return;
-  m_mapShowGlitch = on;
-  emit mapShowGlitchChanged();
+  m_showUnused = on;
+  emit showUnusedChanged();
 }
 
 int MapModel::frame() const

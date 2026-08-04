@@ -618,6 +618,7 @@
         <file>ui/app/screens/non-modal/map/ContrastPicker.qml</file>
         <file>ui/app/screens/non-modal/map/ColourPicker.qml</file>
         <file>ui/app/screens/non-modal/map/MapNamePicker.qml</file>
+        <file>ui/app/screens/non-modal/map/OptionTierRow.qml</file>
         <file>ui/app/screens/non-modal/map/MapSwitch.qml</file>
         <file>ui/app/screens/non-modal/map/MapCanvas.qml</file>
         <file>ui/app/screens/non-modal/map/MapDock.qml</file>

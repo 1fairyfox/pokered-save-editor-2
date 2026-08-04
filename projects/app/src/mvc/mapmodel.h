@@ -668,18 +668,21 @@ public:
   /// The shared sort/grouping for every map list (name picker, designated-map combos, warp
   /// destinations…). One setting, so they all agree. ⚠️ Progression mode is a queued follow-up — it
   /// needs a curated per-map story-order table (branching groups), which is its own data phase.
-  enum MapSort { SortTileset = 0, SortAlphabetical = 1, SortInternal = 2, SortConnections = 3 };
+  enum MapSort { SortTileset = 0, SortAlphabetical = 1, SortInternal = 2, SortConnections = 3,
+                 SortSize = 4 };
   Q_ENUM(MapSort)
   Q_PROPERTY(int mapSort READ mapSort WRITE setMapSort NOTIFY mapSortChanged)
   int mapSort() const { return m_mapSort; }
   void setMapSort(int mode);
   Q_INVOKABLE QVariantList mapSortModes() const;   ///< `{ value, name }` for the sort selector.
 
-  /// Show the unused/glitch maps (the copy ids) in every map list. OFF by default; a toggle reveals
-  /// them, like the contrast glitch switch. In-use maps (current, Outside-is, Wake-up-at) always show.
-  Q_PROPERTY(bool mapShowGlitch READ mapShowGlitch WRITE setMapShowGlitch NOTIFY mapShowGlitchChanged)
-  bool mapShowGlitch() const { return m_mapShowGlitch; }
-  void setMapShowGlitch(bool on);
+  /// Show UNUSED values across the map screen — Tier 1 of the abnormal-options switch (the top-bar "!"
+  /// panel). For the map lists this means the unused/glitch (copy) maps; in-use maps (current,
+  /// Outside-is, Wake-up-at) always show. OFF by default. These are values the game DOES read and act
+  /// on, but which are unused/dev/unfinished, so editing them has real but unintended effects.
+  Q_PROPERTY(bool showUnused READ showUnused WRITE setShowUnused NOTIFY showUnusedChanged)
+  bool showUnused() const { return m_showUnused; }
+  void setShowUnused(bool on);
 
   /**
    * @brief Where each connected map bleeds into the ring: `{ dir, name, x, y, w, h }`, buffer px.
@@ -1388,7 +1391,7 @@ signals:
   /// The shared map-list sort mode changed — every map list re-reads mapList().
   void mapSortChanged();
   /// The glitch/unused-maps visibility toggled — every map list re-reads mapList().
-  void mapShowGlitchChanged();
+  void showUnusedChanged();
   /// The animation step moved on (a view setting; the save is untouched).
   void frameChanged();
   /// The rendered image's URL changed -- a new frame, or a new map/tileset/palette.
@@ -1450,7 +1453,7 @@ private:
   int m_savedLastBlackout = -1;
 
   int m_mapSort = SortTileset;   ///< The shared map-list sort mode. @see mapSort
-  bool m_mapShowGlitch = false;  ///< Show unused/glitch (copy) maps in the lists. @see mapShowGlitch
+  bool m_showUnused = false;  ///< Tier 1: show unused/glitch (copy) maps + unused values. @see showUnused
 
   /// Rebuild the selection when the map changes under it.
   void revalidateSelection();
