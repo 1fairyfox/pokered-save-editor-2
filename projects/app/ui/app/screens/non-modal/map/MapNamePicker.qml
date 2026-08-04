@@ -200,24 +200,31 @@ Item {
         color: brg.settings.textColorMid
       }
 
-      ComboBox {
+      RowLayout {
         Layout.fillWidth: true
-        Layout.preferredHeight: 32
-        font.pixelSize: 12
+        spacing: 6
 
-        model: brg.map.tilesetList()
-        textRole: "name"
-        valueRole: "ind"
+        ComboBox {
+          Layout.fillWidth: true
+          Layout.preferredHeight: 32
+          font.pixelSize: 12
 
-        currentIndex: {
-          const list = model;
-          for (let i = 0; i < list.length; i++)
-            if (list[i].ind === brg.map.tilesetInd)
-              return i;
-          return -1;
+          model: brg.map.tilesetList()
+          textRole: "name"
+          valueRole: "ind"
+
+          currentIndex: {
+            const list = model;
+            for (let i = 0; i < list.length; i++)
+              if (list[i].ind === brg.map.tilesetInd)
+                return i;
+            return -1;
+          }
+
+          onActivated: brg.map.tilesetInd = currentValue
         }
 
-        onActivated: brg.map.tilesetInd = currentValue
+        FieldButtons { Layout.alignment: Qt.AlignVCenter; onRandomize: brg.map.randomizeTileset() }
       }
 
       // Indoor / Cave / Outdoor — which tiles MOVE (the tileset's 0x3522 byte). Cave is not Indoor:
@@ -274,8 +281,9 @@ Item {
             case 0: return qsTr("Nothing animates. ⚠️ Surf needs the water tile, so Indoor breaks Surf.");
             case 1: return qsTr("Water animates, flowers don't — Surf-friendly. Tile $14 goes through a "
                                 + "water distortion, typically only used for real water tiles.");
-            case 2: return qsTr("Water and flowers animate — Surf-friendly. Tile $14 goes through a "
-                                + "water distortion, typically only used for real water tiles.");
+            case 2: return qsTr("Water and flowers animate — Surf-friendly. Tile $14 gets the water "
+                                + "distortion (usually only real water tiles), and tile $03 is replaced "
+                                + "by the animated flower.");
           }
           return (brg.map.tileAnim % 2 === 1)
                  ? qsTr("%1 — the console reads bit 0, so this behaves as water only.").arg(brg.map.tileAnim)
@@ -296,24 +304,31 @@ Item {
         color: brg.settings.textColorMid
       }
 
-      ComboBox {
+      RowLayout {
         Layout.fillWidth: true
-        Layout.preferredHeight: 32
-        font.pixelSize: 12
+        spacing: 6
 
-        model: brg.map.tilesetList()
-        textRole: "name"
-        valueRole: "ind"
+        ComboBox {
+          Layout.fillWidth: true
+          Layout.preferredHeight: 32
+          font.pixelSize: 12
 
-        currentIndex: {
-          const list = model;
-          for (let i = 0; i < list.length; i++)
-            if (list[i].ind === brg.map.blocksetInd)
-              return i;
-          return -1;
+          model: brg.map.tilesetList()
+          textRole: "name"
+          valueRole: "ind"
+
+          currentIndex: {
+            const list = model;
+            for (let i = 0; i < list.length; i++)
+              if (list[i].ind === brg.map.blocksetInd)
+                return i;
+            return -1;
+          }
+
+          onActivated: brg.map.blocksetInd = currentValue
         }
 
-        onActivated: brg.map.blocksetInd = currentValue
+        FieldButtons { Layout.alignment: Qt.AlignVCenter; onRandomize: brg.map.randomizeBlockset() }
       }
 
       // When blocks and graphics disagree (rare, legal), say so and OFFER to sync — a button, never a

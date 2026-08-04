@@ -1177,6 +1177,44 @@ void MapModel::setBlocksetInd(int ind)
   changed();
 }
 
+// ── One-click SAFE randomize (the field 🎲 buttons) ─────────────────────────────────────────────
+//
+// Each draws a random VALID entry from the real DB store and routes it through the ordinary setter,
+// so it can only ever produce a value a manual pick could — never a glitch/hack/crash value — and it
+// writes exactly what the combo would. (project leadership, 2026-08-03: "sensible random, no glitch or
+// hacky or crashy stuff, one-click instant".)
+void MapModel::randomizeTileset()
+{
+  const auto& store = TilesetDB::inst()->getStore();
+  if (store.isEmpty())
+    return;
+  setTilesetInd(store.at(Random::inst()->rangeExclusive(0, store.size()))->ind);
+}
+
+void MapModel::randomizeBlockset()
+{
+  const auto& store = TilesetDB::inst()->getStore();
+  if (store.isEmpty())
+    return;
+  setBlocksetInd(store.at(Random::inst()->rangeExclusive(0, store.size()))->ind);
+}
+
+void MapModel::randomizeLastMap()
+{
+  const auto& store = MapsDB::inst()->getStore();
+  if (store.isEmpty())
+    return;
+  setLastMap(store.at(Random::inst()->rangeExclusive(0, store.size()))->getInd());
+}
+
+void MapModel::randomizeLastBlackoutMap()
+{
+  const auto& store = MapsDB::inst()->getStore();
+  if (store.isEmpty())
+    return;
+  setLastBlackoutMap(store.at(Random::inst()->rangeExclusive(0, store.size()))->getInd());
+}
+
 bool MapModel::blocksetIsTileset() const
 {
   return blocksetInd() == tilesetInd();

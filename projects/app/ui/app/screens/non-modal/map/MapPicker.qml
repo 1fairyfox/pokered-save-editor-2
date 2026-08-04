@@ -49,11 +49,16 @@ Item {
     property string blurb: ""
     property int value: 0
     signal picked(int v)
+    signal randomize()
     spacing: 3
 
     Text { text: dmr.label; font.pixelSize: 10; color: brg.settings.textColorMid }
 
-    ComboBox {
+    RowLayout {
+      Layout.fillWidth: true
+      spacing: 6
+
+      ComboBox {
       id: dmrCombo
       Layout.fillWidth: true
       Layout.preferredHeight: 30
@@ -103,6 +108,9 @@ Item {
           }
         }
       }
+      }
+
+      FieldButtons { Layout.alignment: Qt.AlignVCenter; onRandomize: dmr.randomize() }
     }
 
     Text {
@@ -179,6 +187,7 @@ Item {
         blurb: qsTr("Designated map when a warp goes back outside.")
         value: brg.map.lastMap
         onPicked: (v) => brg.map.lastMap = v
+        onRandomize: brg.map.randomizeLastMap()
       }
 
       DesignatedMapRow {
@@ -187,6 +196,7 @@ Item {
         blurb: qsTr("Designated black out, DIG, and ESCAPE ROPE map.")
         value: brg.map.lastBlackoutMap
         onPicked: (v) => brg.map.lastBlackoutMap = v
+        onRandomize: brg.map.randomizeLastBlackoutMap()
       }
 
       // A stale stored size — shown only when it disagrees, with its Fix.

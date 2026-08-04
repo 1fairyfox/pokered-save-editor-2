@@ -1336,6 +1336,17 @@ public:
   /// they change; never a free-typed address, because no version of that is a good idea.
   Q_INVOKABLE void restoreTilesetPointers();
 
+  // ── One-click SAFE randomize — the field buttons' 🎲 ─────────────────────────────────────────
+  //
+  // Each picks a random VALID value out of the real DB list (a genuine tileset / map), so it can
+  // never land on a glitch/hack/crash value — the "sensible random, no glitch" project leadership asked
+  // for (2026-08-03), distinct from the future configurable random engine. Each routes through the
+  // ordinary setter, so it writes exactly what a manual pick would and nothing more.
+  Q_INVOKABLE void randomizeTileset();
+  Q_INVOKABLE void randomizeBlockset();
+  Q_INVOKABLE void randomizeLastMap();
+  Q_INVOKABLE void randomizeLastBlackoutMap();
+
 signals:
   /// The loaded map, the tileset or the player moved -- everything above may have changed.
   void changed();
