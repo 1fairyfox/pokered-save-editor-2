@@ -656,8 +656,19 @@ public:
   int contrastPercent() const;
 
   /// Every map in the game -- `{ ind, name, incomplete, copyOf }`, glitch/half-baked ids included
-  /// and labelled. 248 of them, and every one renders.
+  /// and labelled. 248 of them, and every one renders. Sorted/grouped per @ref mapSort — the ONE
+  /// shared setting every map list in the app reads (project leadership, 2026-08-03).
   Q_INVOKABLE QVariantList mapList() const;
+
+  /// The shared sort/grouping for every map list (name picker, designated-map combos, warp
+  /// destinations…). One setting, so they all agree. ⚠️ Progression mode is a queued follow-up — it
+  /// needs a curated per-map story-order table (branching groups), which is its own data phase.
+  enum MapSort { SortTileset = 0, SortAlphabetical = 1, SortInternal = 2 };
+  Q_ENUM(MapSort)
+  Q_PROPERTY(int mapSort READ mapSort WRITE setMapSort NOTIFY mapSortChanged)
+  int mapSort() const { return m_mapSort; }
+  void setMapSort(int mode);
+  Q_INVOKABLE QVariantList mapSortModes() const;   ///< `{ value, name }` for the sort selector.
 
   /**
    * @brief Where each connected map bleeds into the ring: `{ dir, name, x, y, w, h }`, buffer px.
@@ -1363,6 +1374,8 @@ public:
 signals:
   /// The loaded map, the tileset or the player moved -- everything above may have changed.
   void changed();
+  /// The shared map-list sort mode changed — every map list re-reads mapList().
+  void mapSortChanged();
   /// The animation step moved on (a view setting; the save is untouched).
   void frameChanged();
   /// The rendered image's URL changed -- a new frame, or a new map/tileset/palette.
@@ -1422,6 +1435,8 @@ private:
   int m_savedBlockset = -1;
   int m_savedLastMap = -1;
   int m_savedLastBlackout = -1;
+
+  int m_mapSort = SortTileset;   ///< The shared map-list sort mode. @see mapSort
 
   /// Rebuild the selection when the map changes under it.
   void revalidateSelection();

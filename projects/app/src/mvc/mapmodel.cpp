@@ -72,6 +72,7 @@
 #include <pse-db/entries/mapdbentrywarpin.h>
 #include <pse-db/entries/mapdbentrywarpout.h>
 #include <pse-common/random.h>
+#include <QCollator>
 
 #include "./mapmodel.h"
 #include "../engine/mapengine.h"
@@ -1296,32 +1297,66 @@ QVariantList MapModel::mapList() const
   // group is the map's own TILESET -- which is real data out of maps.json, not a category we made up:
   // "Overworld" gathers the towns and routes, "Cave" the caves, "Pokecenter" every Poké Center, and
   // so on. The unfinished copies get their own group, because that is what they are.
-  QString lastGroup;
-
   QVector<MapDBEntry*> sorted;
   for (auto* el : MapsDB::inst()->getStore())
     sorted.append(el);
 
-  std::stable_sort(sorted.begin(), sorted.end(), [](MapDBEntry* a, MapDBEntry* b) {
-    auto groupOf = [](MapDBEntry* e) {
-      auto* src = MapEngine::sourceMap(e->getInd());
-      const bool copy = (src != nullptr && src != e);
-      // The copies sort last -- they are curiosities, not places.
-      return copy ? QStringLiteral("zzz") + e->getTileset() : e->getTileset();
-    };
+  auto isCopy = [](MapDBEntry* e) {
+    auto* s = MapEngine::sourceMap(e->getInd());
+    return s != nullptr && s != e;
+  };
 
-    const QString ga = groupOf(a);
-    const QString gb = groupOf(b);
-    return (ga == gb) ? (a->getInd() < b->getInd()) : (ga < gb);
-  });
+  // Natural, case-insensitive name compare for A–Z ("Route 2" before "Route 10").
+  QCollator coll;
+  coll.setNumericMode(true);
+  coll.setCaseSensitivity(Qt::CaseInsensitive);
 
+  // The DISPLAY heading for an entry, per the active sort. Tileset: the tileset (copies read
+  // "Unfinished copies"); A–Z: the first letter; By number: none (flat).
+  auto displayGroup = [&](MapDBEntry* e) -> QString {
+    switch (m_mapSort) {
+      case SortAlphabetical: {
+        const QString n = e->getName();
+        return n.isEmpty() ? QStringLiteral("#") : n.left(1).toUpper();
+      }
+      case SortInternal:
+        return QString();
+      case SortTileset:
+      default:
+        return isCopy(e) ? QObject::tr("Unfinished copies")
+                         : (e->getTileset().isEmpty() ? QObject::tr("Other") : e->getTileset());
+    }
+  };
+
+  switch (m_mapSort) {
+    case SortAlphabetical:
+      std::stable_sort(sorted.begin(), sorted.end(), [&coll](MapDBEntry* a, MapDBEntry* b) {
+        return coll.compare(a->getName(), b->getName()) < 0;
+      });
+      break;
+    case SortInternal:
+      std::stable_sort(sorted.begin(), sorted.end(), [](MapDBEntry* a, MapDBEntry* b) {
+        return a->getInd() < b->getInd();
+      });
+      break;
+    case SortTileset:
+    default:
+      // Group by tileset, copies last ("zzz"), then by id within a group.
+      std::stable_sort(sorted.begin(), sorted.end(), [&isCopy](MapDBEntry* a, MapDBEntry* b) {
+        auto key = [&isCopy](MapDBEntry* e) {
+          return isCopy(e) ? QStringLiteral("zzz") + e->getTileset() : e->getTileset();
+        };
+        const QString ka = key(a), kb = key(b);
+        return (ka == kb) ? (a->getInd() < b->getInd()) : (ka < kb);
+      });
+      break;
+  }
+
+  QString lastGroup;
   for (auto* el : sorted) {
     auto* src = MapEngine::sourceMap(el->getInd());
     const bool copy = (src != nullptr && src != el);
-
-    const QString group = copy ? QObject::tr("Unfinished copies")
-                               : (el->getTileset().isEmpty() ? QObject::tr("Other")
-                                                             : el->getTileset());
+    const QString group = displayGroup(el);
 
     // The heading rides on the first entry of each group, so QML can draw it without a second model.
     QVariantMap m;
@@ -1331,10 +1366,35 @@ QVariantList MapModel::mapList() const
     m["isCopy"] = copy;
     m["copyOf"] = copy ? src->getName() : QString();
 
+    // The map's size (WxH blocks), right-aligned in the row for uniformity with the other lists.
+    const int w = el->getWidth();
+    const int h = el->getHeight();
+    m["size"] = (w > 0 && h > 0) ? QStringLiteral("%1×%2").arg(w).arg(h) : QString();
+
     lastGroup = group;
     out.append(m);
   }
 
+  return out;
+}
+
+void MapModel::setMapSort(int mode)
+{
+  if (mode < SortTileset || mode > SortInternal || mode == m_mapSort)
+    return;
+  m_mapSort = mode;
+  emit mapSortChanged();
+}
+
+QVariantList MapModel::mapSortModes() const
+{
+  QVariantList out;
+  auto add = [&out](int v, const QString& n) {
+    QVariantMap m; m["value"] = v; m["name"] = n; out.append(m);
+  };
+  add(SortTileset,      QObject::tr("By tileset"));
+  add(SortAlphabetical, QObject::tr("A–Z"));
+  add(SortInternal,     QObject::tr("By number"));
   return out;
 }
 

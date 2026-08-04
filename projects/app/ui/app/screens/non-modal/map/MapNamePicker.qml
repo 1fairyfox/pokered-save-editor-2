@@ -108,15 +108,49 @@ Item {
       spacing: 8
 
       // ── The map list — the "select box", right at the top so it's usable the instant you open ──
-      Text {
-        text: qsTr("Map")
-        font.pixelSize: 11
-        font.bold: true
-        color: brg.settings.textColorMid
+      //
+      // Header: the "Map" label + the shared SORT selector (project leadership, 2026-08-03: sorting is
+      // shared across every map list). Below it a search box narrows the list.
+      RowLayout {
+        Layout.fillWidth: true
+        spacing: 6
+
+        Text {
+          Layout.fillWidth: true
+          text: qsTr("Map")
+          font.pixelSize: 11
+          font.bold: true
+          color: brg.settings.textColorMid
+        }
+
+        ComboBox {
+          id: sortCombo
+          Layout.preferredWidth: 120
+          Layout.preferredHeight: 26
+          font.pixelSize: 11
+          model: brg.map.mapSortModes()
+          textRole: "name"
+          valueRole: "value"
+          currentIndex: {
+            const l = model;
+            for (let i = 0; i < l.length; i++)
+              if (l[i].value === brg.map.mapSort) return i;
+            return 0;
+          }
+          onActivated: brg.map.mapSort = currentValue
+        }
       }
 
-      // A fixed-height list that scrolls internally (248 maps grouped by tileset), so the tileset /
-      // blockset controls below it stay put rather than scrolling away with the list.
+      TextField {
+        id: mapSearch
+        Layout.fillWidth: true
+        Layout.preferredHeight: 30
+        font.pixelSize: 12
+        placeholderText: qsTr("Search maps…")
+      }
+
+      // A fixed-height list that scrolls internally, so the tileset / blockset controls below it stay
+      // put rather than scrolling away with the list.
       Rectangle {
         Layout.fillWidth: true
         Layout.preferredHeight: 114   // ~3 rows + internal scroll — short of the window edges
@@ -126,24 +160,32 @@ Item {
         clip: true
 
         ListView {
-          id: mapList
+          id: mapListView
           anchors.fill: parent
           anchors.margins: 1
           clip: true
-          model: brg.map.mapList()
-          currentIndex: {
-            const l = mapList.model;
-            for (let i = 0; i < l.length; i++)
-              if (l[i].ind === brg.map.mapInd) return i;
-            return -1;
+
+          // The shared sort (mapSort) AND the search box both feed the model. Referencing mapSort
+          // makes the binding re-run when the sort changes (mapList() is otherwise a plain call).
+          model: {
+            brg.map.mapSort;
+            const q = mapSearch.text.trim().toLowerCase();
+            const all = brg.map.mapList();
+            if (q === "")
+              return all;
+            return all.filter(function(m) {
+              return ("" + m.name).toLowerCase().indexOf(q) >= 0 || ("" + m.ind).indexOf(q) >= 0;
+            });
           }
+
           ScrollBar.vertical: ScrollBar { }
 
           delegate: ItemDelegate {
             required property var modelData
             required property int index
-            width: mapList.width
-            height: (modelData.group !== "" ? 20 : 0) + 26
+            width: mapListView.width
+            // Group headings only when NOT searching (a filtered list's first-of-group headings drift).
+            height: (modelData.group !== "" && mapSearch.text === "" ? 20 : 0) + 26
             highlighted: modelData.ind === brg.map.mapInd
 
             // Picking a map opens the PREVIEW on the canvas (it does not commit) and closes the panel.
@@ -156,7 +198,7 @@ Item {
             contentItem: ColumnLayout {
               spacing: 0
               Text {
-                visible: modelData.group !== ""
+                visible: modelData.group !== "" && mapSearch.text === ""
                 Layout.fillWidth: true
                 text: modelData.group
                 font.pixelSize: 10; font.bold: true
@@ -182,6 +224,12 @@ Item {
                   visible: modelData.isCopy
                   text: qsTr("→ %1").arg(modelData.copyOf)
                   font.pixelSize: 10; font.italic: true
+                  color: brg.settings.textColorMid
+                }
+                // The map size (WxH blocks), right-aligned — uniform with the app's other lists.
+                Text {
+                  text: modelData.size
+                  font.pixelSize: 10; font.family: "monospace"
                   color: brg.settings.textColorMid
                 }
               }
