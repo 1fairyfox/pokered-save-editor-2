@@ -53,12 +53,14 @@ Item {
   required property string art
   required property bool inSet
 
-  /// ⭐ The save's filter flag is currently switching this sprite OFF. The canvas shows the
-  /// CONTINUE-LOAD view (leadership, 2026-07-18: *"the map should show the rendered view on
-  /// continue load so filter flags need to have effect ... in oaks lab the pokedex shouldnt be
-  /// shown"*) -- so a hidden sprite's artwork is not drawn, exactly as the console would not draw
-  /// it. Its flag BOX stays on the map (that layer says what belongs here), and selecting it
-  /// through its tab shows the artwork as a ghost so it can still be worked on.
+  /// ⭐ The save's filter flag is currently switching this sprite OFF, so it is **not drawn** — the
+  /// canvas shows the CONTINUE-LOAD view (leadership, 2026-07-18: *"the map should show the rendered
+  /// view on continue load so filter flags need to have effect ... in oaks lab the pokedex shouldnt
+  /// be shown"*), and the console would draw nothing here.
+  ///
+  /// Its flag BOX stays on the map (that layer is what says something belongs here) and it is still
+  /// reachable through its tab in the strip. @see the `visible` note below for why the ghost that
+  /// used to be drawn instead was removed.
   property bool hiddenByFlag: false
 
   /// The sub-tile SLIDE, in buffer pixels, while a step is in progress.
@@ -123,13 +125,22 @@ Item {
   // (leadership, 2026-07-18: *"these boxes often render in front of the sprites looking bad"*).
   z: sprite.dragging ? 30 : (sprite.selected ? 25 : 1)
 
-  // ⭐ A SPRITE IS NEVER HIDDEN (leadership, 2026-07-18: *"i said earlier a sprite should never
-  // ever be hidden figure another solution out"* -- overruling the first Continue-view cut, which
-  // made a filter-flagged sprite vanish entirely). The solution: a sprite the save's filter flag
-  // has switched off renders as a GHOST, always -- dimmed artwork, silhouette intact -- so the
-  // Continue-load truth is readable at a glance ("this one won't be there") while the sprite
-  // stays visible, hoverable, clickable and draggable like everything else on the map.
-  visible: true
+  // ⭐ A HIDDEN SPRITE IS NOT DRAWN. AT ALL. (leadership, 2026-08-18: *"Dont show slightly
+  // transparent sprites and stuff"* … *"Dont show hidden sprites"* … *"The map state should never
+  // show ghost objects"*.)
+  //
+  // ⚠️ THIS SUPERSEDES THE 2026-07-18 RULING that a sprite is never hidden and renders as a ghost
+  // instead. That rule was written to solve a real problem -- a filter-flagged sprite vanishing left
+  // you no way to reach it -- but the cure was worse: the map stopped telling the truth. A ghost is a
+  // thing that is *both* there and not there, and once map states started flipping flags the canvas
+  // filled up with half-present people who could not be trusted either way. The map's job is to show
+  // what the console would draw on Continue, and the console draws nothing here.
+  //
+  // The original problem stays solved without the ghost: the sprite's FLAG BOX remains on the map
+  // (that layer is what says "something belongs here"), and it is still reachable, selectable and
+  // draggable through its tab in the strip -- which is how every other invisible thing on this canvas
+  // is reached. Nothing became unreachable; it just stopped pretending to be present.
+  visible: !sprite.hiddenByFlag
 
   /// The silhouette's ink -- out of the CANONICAL table (brg.map.ink), so the outline, its tab and
   /// the Layers panel row are literally the same value: the Player his blue row, everybody else
@@ -188,8 +199,11 @@ Item {
     width: sprite.width + 2 * edge
     height: sprite.height + 2 * edge
 
-    opacity: sprite.hiddenByFlag ? 0.55 : (sprite.dragging ? 0.6 : 1.0)
-    layer.enabled: sprite.hiddenByFlag || sprite.dragging
+    // ⚠️ NO GHOST FADE. A sprite is drawn at FULL strength or not drawn at all -- the hidden case is
+    // gone entirely (@see `visible` above). The only fade left is the DRAG, which is a live gesture
+    // the user is performing, not a claim about the save.
+    opacity: sprite.dragging ? 0.6 : 1.0
+    layer.enabled: sprite.dragging
     layer.smooth: false           // pixel art stays pixel art through the flatten
 
     Repeater {

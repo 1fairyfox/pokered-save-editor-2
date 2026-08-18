@@ -212,7 +212,11 @@ Page {
             tip: qsTr("Layers — everything drawn over the map, in groups") },
           { id: "characters", icon: "qrc:/assets/icons/fontawesome/users.svg", title: qsTr("Characters"),
             tip: qsTr("Characters — the people and objects you can put on the map. Drag one out.") },
-          { id: "wild", icon: "qrc:/assets/icons/fontawesome/paw.svg", title: qsTr("Wild Pokémon"),
+          // Wild Pokémon = TALL GRASS, not a paw print (leadership, 2026-08-18: *"Change paw icon,
+          // try something different"*). A paw says "animal"; the thing this panel edits is the
+          // encounter table of the grass and water you walk through, and wheat-awn is the closest
+          // Font Awesome has to a patch of tall grass.
+          { id: "wild", icon: "qrc:/assets/icons/fontawesome/wheat-awn.svg", title: qsTr("Wild Pokémon"),
             tip: qsTr("Wild Pokémon — the grass and water encounters on this map") }
         ]
         sources: ({ "layers": "LayersPanel.qml",
@@ -288,7 +292,14 @@ Page {
               activeId: (mapScreen.tool === "placeWarp"
                          || mapScreen.tool === "placeSprite"
                          || mapScreen.tool === "placeSign") ? mapScreen.tool : ""
-              tip: qsTr("Make — place a warp, a character or a sign")
+              tip: qsTr("Make — place a character, a warp or a sign")
+
+              // ⭐ THE FACE STARTS ON "PLACE A CHARACTER", not on the warp (leadership, 2026-08-18:
+              // *"Default the create people icon instead of create warp icon"*). Now that a click on
+              // the face PICKS the tool rather than opening a menu, whatever sits here is the
+              // one-click maker — and putting people there is the right bet: they are the thing you
+              // place most, and the flyout order is unchanged for the other two.
+              lastPicked: "placeSprite"
 
               onChosen: (id) => mapScreen.tool = id
             }

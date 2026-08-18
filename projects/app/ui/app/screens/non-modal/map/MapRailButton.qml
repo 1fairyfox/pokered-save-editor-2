@@ -93,11 +93,21 @@ Rectangle {
   /// filled shape that runs edge to edge of its box. Matching the *number* made the icon ~40% bigger
   /// and several times heavier on the page.
   ///
-  /// So at rest the icon takes the MID ink, not the dark one — it is chrome, not content — and it
-  /// only goes full-strength when the button is active or under the cursor.
-  readonly property color markColor: btn.active ? brg.settings.textColorLight
-                                                : ma.containsMouse ? brg.settings.textColorDark
-                                                                   : brg.settings.textColorMid
+  /// ⭐ EVERY VALUE COMES OUT OF THE THEME — no literal colours anywhere in this file, so the rail
+  /// re-colours with `Settings::setColorScheme()` like the rest of the app.
+  ///
+  /// ⚠️ An accent-TINTED rest ink was tried first and rejected on sight (leadership: *"the current
+  /// looks bad"*). Slate-blue icons on a pale rail read as *disabled*, not as chrome — the accent is
+  /// the app's "this is selected" colour, so spending it on the resting state made every button look
+  /// half-lit. The rail is back to the neutral text ramp, which is still entirely themed:
+  ///
+  ///   * **active** → `textColorLight`, white on the accent fill (the header's own treatment);
+  ///   * **hover**  → `textColorDark` — it firms up as you reach it;
+  ///   * **rest**   → `textColorMid` — present, quiet, clearly not the selected one.
+  readonly property color markColor:
+      btn.active          ? brg.settings.textColorLight
+    : ma.containsMouse    ? brg.settings.textColorDark
+                          : brg.settings.textColorMid
 
   Text {
     anchors.centerIn: parent
@@ -110,17 +120,30 @@ Rectangle {
   // The SVG is black on transparent, so it is RECOLOURED rather than tinted — a MultiEffect
   // colourization, the same treatment the rest of the app's Font Awesome buttons use.
   //
-  // ⚠️ 34% OF THE BUTTON, NOT 46%. An FA icon fills its box; a glyph does not. Sizing the icon to
-  // the old glyph's *font size* made it visibly huge (leadership: *"extremely huge"*). 34% of a 32 px
-  // button is ~11 px — which is the old dingbat's actual drawn height, not its font size. @see
-  // markColor for the other half of the same mistake.
+  // ⚠️ NORMALISED ON **HEIGHT**, NOT ON A SQUARE BOX — and this is the whole reason one icon looked
+  // wrong while its neighbours looked fine.
+  //
+  // Project leadership: *"the cursor icon looks too big still, looks like its mainly the arrow
+  // button."* Exactly right, and it is not a fudge factor — it is the viewBoxes:
+  //
+  //     arrow-pointer   320 x 512   (tall + narrow)
+  //     users           640 x 512   (short + wide)
+  //     wheat-awn       512 x 512   (square)
+  //
+  // Font Awesome draws every icon on a **fixed 512 height** with whatever width the shape needs.
+  // Fitting them all into one SQUARE box therefore normalises the wrong dimension: the tall arrow
+  // fills the box's full height, while a wide icon is scaled DOWN until its width fits and ends up
+  // ~20% shorter. Same number, visibly different sizes — the arrow largest of all.
+  //
+  // Setting only `sourceSize.height` and leaving the width at 0 makes Qt scale to that height and
+  // keep the aspect, which is FA's own model: equal heights, natural widths. Every icon now reads at
+  // the same weight. (30% of a 32 px button ≈ 10 px — @see markColor for the colour half.)
   Image {
     id: iconImg
     anchors.centerIn: parent
     visible: false                      // the effect draws it; @see reference/qt-patterns.md
     source: btn.icon
-    sourceSize.width: Math.round(btn.size * 0.34)
-    sourceSize.height: Math.round(btn.size * 0.34)
+    sourceSize.height: Math.round(btn.size * 0.30)
     fillMode: Image.PreserveAspectFit
     mipmap: true
   }
