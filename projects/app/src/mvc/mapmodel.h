@@ -38,6 +38,7 @@ class WorldGeneral;
 class World;
 class Area;
 class PlayerBasics;
+class Rival;
 class SaveFile;
 
 /**
@@ -541,7 +542,7 @@ public:
            AreaWarps* warps = nullptr, WorldGeneral* world = nullptr,
            AreaSign* signs = nullptr, AreaPokemon* pokemon = nullptr,
            World* worldAll = nullptr, Area* area = nullptr, PlayerBasics* basics = nullptr,
-           SaveFile* saveFile = nullptr);
+           SaveFile* saveFile = nullptr, Rival* rival = nullptr);
 
   // ── MAP STATES — the per-map progression blueprints ───────────────────────────
   //
@@ -1532,7 +1533,25 @@ private:
   bool viewBrokenSession = false;
   World* worldAll = nullptr;      ///< The whole World node -- scripts/events/missables (may be null in tests).
   Area* area = nullptr;           ///< The whole Area node -- for map-change construction (may be null in tests).
-  PlayerBasics* basics = nullptr; ///< The trainer's basics -- the badge bits (may be null in tests).
+  PlayerBasics* basics = nullptr; ///< The trainer's basics -- the badge bits + the player's NAME.
+
+  /// The rival -- his NAME, for expanding `<rival>` in the game's text (may be null in tests).
+  Rival* rival = nullptr;
+
+  /// ⭐ THE GAME'S OWN TEXT, MADE READABLE -- run @p raw through `FontsDB::expandStr` with THIS save's
+  /// player and rival names.
+  ///
+  /// ⚠️ EVERY PLACE THAT SHOWS GAME TEXT MUST GO THROUGH HERE. Project leadership, 2026-08-18:
+  /// *"`<PLAYER>`'s house is still even on the text id list for npcs and signs and stuff. You need to
+  /// be using the friendly conversion function thing."* Doing it at one call site (the canvas plate)
+  /// fixed the plate and left the combo rows, the status bar and the text-id pickers still showing
+  /// raw control codes -- which is worse than not doing it at all, because now the app disagrees with
+  /// itself about what a sign says.
+  ///
+  /// @p keepLines false flattens the game's line breaks to " / " for a one-line row; true keeps them
+  /// for a plate or tooltip that wraps. Either way the CONVERSION is the same -- the two presentations
+  /// differ only in what happens to the newlines. (@see signTextPreview / signTextFull)
+  QString friendlyText(const QString& raw, bool keepLines) const;
 
   /// The one save file, so the preview can snapshot + restore the whole 32 KB (may be null in tests).
   SaveFile* saveFile = nullptr;

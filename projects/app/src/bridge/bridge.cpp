@@ -79,7 +79,11 @@ Bridge::Bridge(FileManagement* file)
                      file->data->dataExpanded->player->basics,
                      // The one SaveFile — the preview snapshots + restores the whole 32 KB through it
                      // (flatten/expand), so every "no" exit of the map-change preview is byte-exact.
-                     file->data)),
+                     file->data,
+                     // ⭐ The RIVAL, for his name. Every piece of game text the map screen shows goes
+                     // through `MapModel::friendlyText`, which expands `<player>`/`<rival>` from THIS
+                     // save — so renaming your trainer renames the signs. @see friendlyText.
+                     file->data->dataExpanded->rival)),
     mapLayers(new MapLayersModel(map)),
     mapClock(new MapClock(map)),
     mapSim(new MapSim(map))

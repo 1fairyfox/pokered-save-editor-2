@@ -49,64 +49,16 @@ Item {
   /// shows. @see MapModel::signTextFull
   required property string previewFull
 
-  /// ⭐ THE GAME'S OWN TEXT EXPANDER — `FontsDB::expandStr`, the same one the name editors use.
+  /// ⚠️ THE CONVERSION LIVES IN THE MODEL NOW — `MapModel::friendlyText`, not here.
   ///
-  /// Project leadership, 2026-08-18: *"Tooltips dont render names, `<PLAYER>`'s house should read as
-  /// character name's house"* … then, when a hand-rolled substitution went in: *"Use pokedex friendly
-  /// function to properly convert the sign text as it also converts some symbols over to utf-8."*
+  /// It was done in this file first, and that fixed the plate while leaving the text-id picker, the
+  /// combo rows and the status bar still printing raw control codes (project leadership: *"`<PLAYER>`'s
+  /// house is still even on the text id list for npcs and signs and stuff"*). One call site is worse
+  /// than none: the app then disagrees with itself about what the same sign says.
   ///
-  /// ⚠️ AND THE HAND-ROLLED VERSION WAS WRONG, not merely duplicated. The text imported from
-  /// `pret/pokered` keeps the engine's control codes verbatim (43 `<PLAYER>`s and 23 `<RIVAL>`s
-  /// across `maps.json`) because the DB stores what the ROM stores — but names are only ONE kind of
-  /// token in there. The game's character set is not ASCII: `<m>`/`<f>` are the gender symbols, and
-  /// the font carries an accented **é** and a pile of other glyphs a regex over two names never
-  /// touches. A private `.replace()` fixed the two tokens somebody had noticed and silently left
-  /// every other one on screen as literal angle brackets.
-  ///
-  /// `expandStr` is the project's one text codec: it walks the string through the real font table,
-  /// honours the dialog control codes, and substitutes the rival and player names from THIS save —
-  /// so renaming your trainer renames the signs, and every symbol arrives as proper UTF-8.
-  /// ⚠️ TWO VOCABULARIES MEET HERE, and they spell the same two tokens differently.
-  ///
-  /// `maps.json`'s sign text is imported from `pret/pokered`, which writes the name tokens in CAPS
-  /// (`<PLAYER>`, `<RIVAL>` — 43 and 23 of them). `FontsDB`'s codec knows them by the app's own
-  /// lowercase names (`<player>` = code 0x52, `<rival>` = 0x53). Hand `expandStr` the capitalised
-  /// form and it does not recognise it at all: it falls through to plain letters and the sign reads
-  /// the literal word **"RIVAL's house"** — which is precisely what the first cut of this did.
-  ///
-  /// Those two are the ONLY capitalised tokens in the file (checked, not assumed), so the adapter is
-  /// exactly two substitutions and it lives HERE, at the boundary — not in the codec, which the name
-  /// editors depend on, and not in the data, which must keep saying what pret says.
-  readonly property var pretTokens: [[/<PLAYER>/g, "<player>"], [/<RIVAL>/g, "<rival>"]]
-
-  /// ⚠️ THE CODEC IS RUN PER LINE, and the line breaks never enter it.
-  ///
-  /// Project leadership, 2026-08-18: *"Sign text needs to somehow display newlines instead of one big
-  /// run on."* `expandStr` walks the string through the game's own font table, and a `\n` is not a
-  /// character in that table — the game breaks lines with its own control codes — so every newline
-  /// went in and did not come out, and a two-line placard arrived as one long sentence.
-  ///
-  /// Splitting first keeps the structure in OUR hands and hands the codec only what it understands:
-  /// each line is expanded on its own, then the real breaks are put back. It also means a control
-  /// code that ends a line (`<page>`, `<cont>`) truncates that line rather than the whole sign.
-  function withNames(s) {
-    if (s === "")
-      return s;
-
-    const rival  = brg.file.data.dataExpanded.rival.name;
-    const player = brg.file.data.dataExpanded.player.basics.playerName;
-
-    const lines = s.split("\n");
-    for (let n = 0; n < lines.length; n++) {
-      let t = lines[n];
-      for (let i = 0; i < sign.pretTokens.length; i++)
-        t = t.replace(sign.pretTokens[i][0], sign.pretTokens[i][1]);
-      lines[n] = brg.fonts.expandStr(t, 255, rival, player);
-    }
-
-    return lines.join("\n");
-  }
-
+  /// `preview` (one line, breaks flattened to " / ") and `previewFull` (the game's own breaks kept)
+  /// now arrive ALREADY converted — one conversion, two presentations. The traps that were learned
+  /// here are recorded at `MapModel::friendlyText` and `pretTokensToCodec`.
   /// False when the text id points past this map's text table -- the game would read whatever text
   /// comes next in the cartridge. Shown, never refused.
   required property bool textValid
@@ -249,7 +201,7 @@ Item {
       lineHeight: 1.15
 
       text: sign.textValid
-            ? (sign.previewFull !== "" ? sign.withNames(sign.previewFull) : qsTr("(no text)"))
+            ? (sign.previewFull !== "" ? sign.previewFull : qsTr("(no text)"))
             : qsTr("id points past this map's text")
       font.pixelSize: 11
       color: sign.textValid ? "white" : "#ffb74d"

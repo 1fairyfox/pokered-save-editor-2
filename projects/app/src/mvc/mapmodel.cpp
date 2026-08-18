@@ -68,6 +68,8 @@
 #include <pse-savefile/expanded/world/worldmissables.h>
 #include <pse-savefile/expanded/area/area.h>
 #include <pse-savefile/expanded/player/playerbasics.h>
+#include <pse-savefile/expanded/rival.h>
+#include <pse-db/fontsdb.h>
 #include <pse-db/mapstatesdb.h>
 #include <pse-db/entries/mapdbentrywarpin.h>
 #include <pse-db/entries/mapdbentrywarpout.h>
@@ -104,9 +106,10 @@ QVariantMap option(int value, const QString& name, bool hack = false);
 MapModel::MapModel(AreaMap* map, AreaPlayer* player, AreaTileset* tileset, AreaGeneral* general,
                    AreaLoadedSprites* sprites, AreaSprites* npcs, AreaWarps* warps,
                    WorldGeneral* world, AreaSign* signs, AreaPokemon* pokemon,
-                   World* worldAll, Area* area, PlayerBasics* basics, SaveFile* saveFile)
+                   World* worldAll, Area* area, PlayerBasics* basics, SaveFile* saveFile,
+                   Rival* rivalArg)
   : sprites(sprites), npcs(npcs), warps(warps), signsData(signs), world(world),
-    worldAll(worldAll), area(area), basics(basics), saveFile(saveFile),
+    worldAll(worldAll), area(area), basics(basics), rival(rivalArg), saveFile(saveFile),
     map(map), player(player), tileset(tileset), general(general), pokemon(pokemon)
 {
   // The doors get their own signal for exactly the reason the cast does: `changed()` re-renders the
@@ -2468,6 +2471,19 @@ static QString signOneLine(const QString& text)
   return s;
 }
 
+/// ⚠️ pret writes the two name tokens in CAPS; `FontsDB` knows them lowercase (`<player>` = 0x52,
+/// `<rival>` = 0x53). Hand the codec the capitalised form and it does not recognise it at all -- it
+/// falls through to plain letters and the sign reads the literal word "RIVAL's house". These two are
+/// the only capitalised tokens in `maps.json` (checked, not assumed), so the adapter is exactly two
+/// substitutions, and it lives HERE at the boundary -- not in the codec the name editors depend on,
+/// and not in the data, which must keep saying what pret says.
+static QString pretTokensToCodec(QString s)
+{
+  s.replace(QStringLiteral("<PLAYER>"), QStringLiteral("<player>"));
+  s.replace(QStringLiteral("<RIVAL>"),  QStringLiteral("<rival>"));
+  return s;
+}
+
 /// The map's text-table entry for a 1-based @p textId, or nullptr if the id points past the table
 /// (or the map is unknown). The DB carries the words; the save carries only the id.
 static const MapDBEntryText* textEntryFor(int mapInd, int textId)
@@ -2479,6 +2495,33 @@ static const MapDBEntryText* textEntryFor(int mapInd, int textId)
   return m->getTextEntriesAt(textId - 1);
 }
 
+QString MapModel::friendlyText(const QString& raw, bool keepLines) const
+{
+  if (raw.isEmpty())
+    return raw;
+
+  const QString playerName = (basics != nullptr) ? basics->getPlayerName() : QString();
+  const QString rivalName  = (rival  != nullptr) ? rival->name             : QString();
+
+  // ⚠️ THE CODEC IS RUN PER LINE, and the line breaks never enter it. `expandStr` walks the string
+  // through the game's own font table, and `\n` is not a character in that table -- the game breaks
+  // lines with its own control codes -- so every newline goes in and does not come out. Splitting
+  // first keeps the structure in OUR hands and hands the codec only what it understands.
+  const QStringList lines = raw.split(QLatin1Char('\n'));
+  QStringList out;
+  out.reserve(lines.size());
+
+  for (const QString& line : lines)
+    out.append(FontsDB::inst()->expandStr(pretTokensToCodec(line), 255, rivalName, playerName));
+
+  // The two presentations, one conversion: keep the game's breaks for something that wraps, or
+  // flatten them to " / " for a row that has one line to work with.
+  if (keepLines)
+    return out.join(QLatin1Char('\n'));
+
+  return signOneLine(out.join(QLatin1Char('\n')));
+}
+
 QString MapModel::signTextPreview(int textId) const
 {
   const MapDBEntryText* e = textEntryFor(mapInd(), textId);
@@ -2488,7 +2531,7 @@ QString MapModel::signTextPreview(int textId) const
   if (e->getScripted())
     return tr("(scripted text)");
 
-  return signOneLine(e->getText());
+  return friendlyText(e->getText(), false);
 }
 
 QString MapModel::signTextFull(int textId) const
@@ -2500,8 +2543,8 @@ QString MapModel::signTextFull(int textId) const
   if (e->getScripted())
     return tr("(scripted text)");
 
-  // Verbatim: the game's own line breaks, nothing elided. The canvas plate wraps and has the room.
-  return e->getText();
+  // The game's own line breaks kept, nothing elided. The canvas plate wraps and has the room.
+  return friendlyText(e->getText(), true);
 }
 
 QVariantList MapModel::signList() const
@@ -2736,7 +2779,15 @@ QVariantList MapModel::signTextList() const
     if (e == nullptr)
       continue;
 
-    const QString words = e->getScripted() ? tr("(scripted text)") : signOneLine(e->getText());
+    // ⚠️ `friendlyText`, NOT `signOneLine`. This is the TEXT-ID PICKER -- the list every sign and
+    // every talkable character chooses its words from -- and it was showing the raw control codes:
+    // project leadership, 2026-08-18, *"`<PLAYER>`'s house is still even on the text id list for npcs
+    // and signs and stuff."*
+    //
+    // Converting at one call site is worse than not converting at all, because then the plate on the
+    // canvas and the row in the picker disagree about what the same sign says. One conversion, both
+    // presentations: `false` here flattens the game's line breaks to " / " for a single-row list.
+    const QString words = e->getScripted() ? tr("(scripted text)") : friendlyText(e->getText(), false);
     QVariantMap row = option(e->getId(), tr("%1 — %2").arg(e->getId()).arg(words));
     row["category"] = e->getCategory();
 

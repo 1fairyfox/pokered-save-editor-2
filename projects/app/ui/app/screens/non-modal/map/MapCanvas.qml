@@ -1658,7 +1658,26 @@ Item {
           canvasRoot.selectedBlockX = bx;
           canvasRoot.selectedBlockY = by;
 
-          if (canvasRoot.selectedBlockSpots.length > 0) {
+          // ⚠️ A TILE TRAIT IS NOT "SOMETHING ON THIS BLOCK". Project leadership, 2026-08-18:
+          // *"Clicking empty tile still does not close the details page."* Both halves of this were
+          // already written and both were behaving — the panel closes, the selection clears — and it
+          // still felt broken, because *"empty"* to a person and "empty" to the model were different
+          // things.
+          //
+          // Nearly every block carries a tile trait: grass, water, a wall, a ledge, a counter. Those
+          // are facts about the TILESET, not things placed on the map, so a patch of grass counted as
+          // having details and the click opened a panel about the grass. The blocks that genuinely
+          // had nothing were the rare ones.
+          //
+          // Tile traits keep their own path — their TAB still opens the Wild Pokémon or Tileset
+          // panel, which is the standardisation from July ("clicking water doesnt even bring up wild
+          // mons"). What they no longer do is make a bare click on the ground behave like a click on
+          // an object.
+          const placed = canvasRoot.selectedBlockSpots.filter(function(s) {
+            return s.kind !== "tileTrait";
+          });
+
+          if (placed.length > 0) {
             canvasRoot.blockInspectRequested();
             return;
           }
