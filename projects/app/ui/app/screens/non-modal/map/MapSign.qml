@@ -79,17 +79,32 @@ Item {
   /// editors depend on, and not in the data, which must keep saying what pret says.
   readonly property var pretTokens: [[/<PLAYER>/g, "<player>"], [/<RIVAL>/g, "<rival>"]]
 
+  /// ⚠️ THE CODEC IS RUN PER LINE, and the line breaks never enter it.
+  ///
+  /// Project leadership, 2026-08-18: *"Sign text needs to somehow display newlines instead of one big
+  /// run on."* `expandStr` walks the string through the game's own font table, and a `\n` is not a
+  /// character in that table — the game breaks lines with its own control codes — so every newline
+  /// went in and did not come out, and a two-line placard arrived as one long sentence.
+  ///
+  /// Splitting first keeps the structure in OUR hands and hands the codec only what it understands:
+  /// each line is expanded on its own, then the real breaks are put back. It also means a control
+  /// code that ends a line (`<page>`, `<cont>`) truncates that line rather than the whole sign.
   function withNames(s) {
     if (s === "")
       return s;
 
-    let t = s;
-    for (let i = 0; i < sign.pretTokens.length; i++)
-      t = t.replace(sign.pretTokens[i][0], sign.pretTokens[i][1]);
+    const rival  = brg.file.data.dataExpanded.rival.name;
+    const player = brg.file.data.dataExpanded.player.basics.playerName;
 
-    return brg.fonts.expandStr(t, 255,
-                               brg.file.data.dataExpanded.rival.name,
-                               brg.file.data.dataExpanded.player.basics.playerName);
+    const lines = s.split("\n");
+    for (let n = 0; n < lines.length; n++) {
+      let t = lines[n];
+      for (let i = 0; i < sign.pretTokens.length; i++)
+        t = t.replace(sign.pretTokens[i][0], sign.pretTokens[i][1]);
+      lines[n] = brg.fonts.expandStr(t, 255, rival, player);
+    }
+
+    return lines.join("\n");
   }
 
   /// False when the text id points past this map's text table -- the game would read whatever text

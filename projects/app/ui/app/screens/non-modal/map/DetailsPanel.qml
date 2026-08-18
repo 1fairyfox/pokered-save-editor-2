@@ -491,133 +491,32 @@ Item {
           property bool rawScript: false   // the script "Something else…" disclosure
 
           Label {
-            text: qsTr("Map state")
+            text: qsTr("This map, right now")
             font.bold: true
             font.pixelSize: 12
             Layout.fillWidth: true
           }
 
-          // ── The PROGRESSION STATE — the researched stages of this map's story ────────────────
+          // ⚠️ THE PROGRESSION STATE PICKER IS NOT HERE. It lives in World / Persistent Storage.
           //
-          // Fed by the map-state blueprints (notes/reference/map-states.md): resting stages read
-          // "1. First ambush armed", genuine branches "2a."/"2b.". Cutscene (transient) values are
-          // NOT listed here (leadership, 2026-07-19: "remove cutscenes from the map state"); the raw
-          // step controls below still reach any script byte. Picking one applies the stage's WHOLE save block (script
-          // byte + events + this map's missables + badges); ◀ ▶ roll one stage at a time.
+          // Project leadership, 2026-08-18: *"Map state should not be in map details, but current
+          // step only belongs in map details with reference to the World/Persistent Storage."*
+          //
+          // The split is the persistence rule they set earlier the same day: a **progression stage**
+          // is a whole save block -- event flags, this map's filter flags, badges, and the map's
+          // STORED script byte -- all of which survive a map change and a reload, so it is persistent
+          // storage and belongs on that page. What is left here is the one byte that is genuinely
+          // about the map you are standing on right now.
+          //
+          // Two controls named "Current state step" in two panels reading two DIFFERENT bytes is what
+          // sent them looking in the first place ("the world says pallet town is daisy current step
+          // but the map details panel says default"), so the two are now named apart and each says
+          // which byte it is.
+          // ── Current state step (the LIVE script byte) ────────────────────────────────────────
           Label {
             Layout.fillWidth: true
             Layout.topMargin: 2
-            visible: brg.map.hasStateBlueprint(-1)
-            text: qsTr("Progression state")
-            font.pixelSize: 11
-            color: brg.settings.textColorMid
-          }
-
-          RowLayout {
-            Layout.fillWidth: true
-            spacing: 6
-            visible: brg.map.hasStateBlueprint(-1)
-
-            ComboBox {
-              id: stateCombo
-              objectName: "progressionStateCombo"   // the DEBUG harness scrolls/reads this
-              Layout.fillWidth: true
-              Layout.preferredHeight: 30
-              font.pixelSize: 12
-              textRole: "label"
-              valueRole: "id"
-              model: {
-                details.revision;
-                // No "Custom / not recognized" row (leadership, 2026-07-19): the model's
-                // currentStateId() always determines a best stage from the dead-giveaway
-                // flags and/or the current map script — the list is only real states
-                // (researched stages + every raw step value, synthesized "s<value>").
-                const states = brg.map.stateList(-1);
-                let out = [];
-                for (let i = 0; i < states.length; i++) {
-                  const s = states[i];
-                  if (s.kind === "step") {  // synthesized raw step ("s<value>")
-                    out.push({ id: s.id, label: qsTr("Step %1 — %2").arg(s.script).arg(s.name),
-                               desc: s.desc, kind: s.kind });
-                    continue;
-                  }
-                  const tag = s.derived ? qsTr(" (derived)") : "";
-                  out.push({ id: s.id, label: s.id + ". " + s.name + tag,
-                             desc: s.desc, kind: s.kind });
-                }
-                return out;
-              }
-              currentIndex: {
-                details.revision;
-                const cur = brg.map.currentStateId(-1);
-                const l = model;
-                for (let i = 0; i < l.length; i++)
-                  if (l[i].id === cur) return i;
-                return -1;
-              }
-              onActivated: {
-                if (currentValue !== "" && currentValue !== undefined)
-                  brg.map.applyState(currentValue, -1);
-              }
-              delegate: ItemDelegate {
-                required property var modelData
-                width: parent ? parent.width : 0
-                contentItem: RowLayout {
-                  spacing: 6
-                  Text {
-                    Layout.fillWidth: true
-                    text: modelData.label
-                    font.pixelSize: 12
-                    font.italic: modelData.kind === "step"
-                    color: brg.settings.textColorDark
-                    elide: Text.ElideRight
-                  }
-                }
-              }
-            }
-
-            Button {
-              id: rollBackBtn
-              Layout.preferredWidth: 30
-              Layout.preferredHeight: 30
-              text: "◀"
-              font.pixelSize: 10
-              onClicked: brg.map.rollBack(-1)
-              MapToolTip {
-                shown: rollBackBtn.hovered
-                text: qsTr("Roll this map back one progression stage")
-              }
-            }
-            Button {
-              id: rollFwdBtn
-              Layout.preferredWidth: 30
-              Layout.preferredHeight: 30
-              text: "▶"
-              font.pixelSize: 10
-              onClicked: brg.map.rollForward(-1)
-              MapToolTip {
-                shown: rollFwdBtn.hovered
-                text: qsTr("Roll this map forward one progression stage")
-              }
-            }
-          }
-
-          // What the selected state MEANS — the stage's own story description.
-          Label {
-            Layout.fillWidth: true
-            visible: brg.map.hasStateBlueprint(-1) && text !== ""
-            wrapMode: Text.Wrap
-            font.pixelSize: 10
-            opacity: 0.55
-            text: stateCombo.currentIndex >= 0 && stateCombo.model[stateCombo.currentIndex] !== undefined
-                  ? stateCombo.model[stateCombo.currentIndex].desc : ""
-          }
-
-          // ── Current state step (the raw script byte) + run-on-load ───────────────────────────
-          Label {
-            Layout.fillWidth: true
-            Layout.topMargin: 2
-            text: qsTr("Current state step")
+            text: qsTr("Current state step — the loaded map's live byte")
             font.pixelSize: 11
             color: brg.settings.textColorMid
           }
@@ -726,6 +625,36 @@ Item {
               onToggled: brg.map.runScriptOnLoad = !brg.map.runScriptOnLoad
             }
           }
+          // ⭐ ONE LINE AND A BUTTON — not an essay. Project leadership, 2026-08-18: *"no, offer to
+          // open World — and you have 2 paragraphs, text should not be that big or long. Have a
+          // button to auto-open persistent storage."* A pointer to another page is a door, so it
+          // should look like one; explaining the split in prose is the panel talking to itself.
+          RowLayout {
+            Layout.fillWidth: true
+            Layout.topMargin: 2
+            spacing: 8
+
+            Label {
+              Layout.fillWidth: true
+              text: qsTr("The stage that sets this lives in World.")
+              wrapMode: Text.Wrap
+              font.pixelSize: 10
+              opacity: 0.55
+            }
+
+            // ⚠️ `Button`, NOT `MapTextButton` — that pill is an INLINE component declared inside
+            // MapStoragePanel.qml, so it does not exist as a type anywhere else, and using it here
+            // took this whole panel down silently (an unresolved type does not warn, it just fails to
+            // compile and the panel opens BLANK). `tst_qml_screens::everyMapPanelCompiles` caught it
+            // in one run — which is precisely the hole that test was added to close after the same
+            // class of bug shipped in July. This panel already uses a plain Button for "Fix it".
+            Button {
+              text: qsTr("Open World")
+              font.pixelSize: 11
+              onClicked: if (details.canvas) details.canvas.storageRequested("mapState", -1)
+            }
+          }
+
           Label {
             Layout.fillWidth: true
             text: qsTr("Runs the step above on the next map load instead of the map's default. On a "
@@ -735,79 +664,13 @@ Item {
             opacity: 0.55
           }
 
-          // ── Always on bike ───────────────────────────────────────────────────────────────────
-          RowLayout {
-            Layout.fillWidth: true
-            Layout.topMargin: 4
-            spacing: 8
-            Label {
-              Layout.fillWidth: true
-              text: qsTr("Always on bike (Cycling Road)")
-              font.pixelSize: 12
-              wrapMode: Text.Wrap
-            }
-            MapSwitch {
-              checked: brg.map.alwaysOnBike
-              onToggled: brg.map.alwaysOnBike = !brg.map.alwaysOnBike
-            }
-          }
-
-          // ── Camera / view box (derived, synced by default) ───────────────────────────────────
-          RowLayout {
-            Layout.fillWidth: true
-            Layout.topMargin: 4
-            spacing: 8
-            Label {
-              Layout.fillWidth: true
-              text: brg.map.viewSynced ? qsTr("Camera — follows the player")
-                                       : qsTr("Camera — set loose")
-              font.pixelSize: 12
-              wrapMode: Text.Wrap
-            }
-            MapSwitch {
-              // On = broken loose. Flipping it toggles sync; re-attaching snaps the box to the player.
-              checked: !brg.map.viewSynced
-              onToggled: brg.map.setViewBreakSync(brg.map.viewSynced)
-            }
-          }
-          // The raw pointer, only on the power path.
-          ColumnLayout {
-            Layout.fillWidth: true
-            spacing: 3
-            visible: !brg.map.viewSynced
-            RowLayout {
-              Layout.fillWidth: true
-              spacing: 6
-              Label { text: qsTr("Address"); font.pixelSize: 10; opacity: 0.6 }
-              SpinBox {
-                Layout.fillWidth: true
-                Layout.preferredHeight: 28
-                font.pixelSize: 11
-                editable: true
-                from: 0
-                to: 65535
-                value: brg.map.viewPtr
-                onValueModified: brg.map.setViewPtr(value)
-              }
-            }
-            Label {
-              Layout.fillWidth: true
-              text: qsTr("The game trusts this pointer and draws the screen from it — an off-map value "
-                         + "shows garbage. You can also drag the view box around on the canvas.")
-              wrapMode: Text.Wrap
-              font.pixelSize: 10
-              opacity: 0.55
-            }
-          }
-          Label {
-            Layout.fillWidth: true
-            visible: brg.map.viewSynced
-            text: qsTr("The view box tracks the player automatically. Break it loose to place it by "
-                       + "hand.")
-            wrapMode: Text.Wrap
-            font.pixelSize: 10
-            opacity: 0.55
-          }
+          // ⚠️ "ALWAYS ON BIKE" AND THE CAMERA HAVE MOVED TO THE PLAYER.
+          //
+          // Project leadership, 2026-08-18: *"Move Camera — follows the player to player details.
+          // Always on bike also in character details."* Both are about the person, not the place: one
+          // is what he is riding, the other is where the screen sits relative to him. They only ever
+          // lived here because this group was the drawer everything map-shaped fell into. @see the
+          // Player section further down this file.
 
           // ── Reset-on-load scratch, behind the "Useless edits" toggle ────────────────────────
           ColumnLayout {
@@ -2047,6 +1910,88 @@ Item {
               onClicked: brg.map.fixMapHeader()
             }
           }
+        }
+
+        // ── ⭐ HIS BIKE, AND HIS CAMERA ─────────────────────────────────────────────────────
+        //
+        // Project leadership, 2026-08-18: *"Move Camera — follows the player to player details.
+        // Always on bike also in character details."* Both were in the map-state group, which was
+        // simply the drawer that everything map-shaped fell into. They are about the PERSON: one is
+        // what he is riding, the other is where the screen sits relative to him.
+
+        Rectangle { Layout.fillWidth: true; Layout.topMargin: 6; height: 1; color: brg.settings.dividerColor }
+
+        RowLayout {
+          Layout.fillWidth: true
+          Layout.topMargin: 4
+          spacing: 8
+          Label {
+            Layout.fillWidth: true
+            text: qsTr("Always on bike (Cycling Road)")
+            font.pixelSize: 12
+            wrapMode: Text.Wrap
+          }
+          MapSwitch {
+            checked: brg.map.alwaysOnBike
+            onToggled: brg.map.alwaysOnBike = !brg.map.alwaysOnBike
+          }
+        }
+
+        RowLayout {
+          Layout.fillWidth: true
+          Layout.topMargin: 4
+          spacing: 8
+          Label {
+            Layout.fillWidth: true
+            text: brg.map.viewSynced ? qsTr("Camera — follows the player")
+                                     : qsTr("Camera — set loose")
+            font.pixelSize: 12
+            wrapMode: Text.Wrap
+          }
+          MapSwitch {
+            // On = broken loose. Flipping it toggles sync; re-attaching snaps the box to the player.
+            checked: !brg.map.viewSynced
+            onToggled: brg.map.setViewBreakSync(brg.map.viewSynced)
+          }
+        }
+
+        // The raw pointer, only on the power path.
+        ColumnLayout {
+          Layout.fillWidth: true
+          spacing: 3
+          visible: !brg.map.viewSynced
+          RowLayout {
+            Layout.fillWidth: true
+            spacing: 6
+            Label { text: qsTr("Address"); font.pixelSize: 10; opacity: 0.6 }
+            SpinBox {
+              Layout.fillWidth: true
+              Layout.preferredHeight: 28
+              font.pixelSize: 11
+              editable: true
+              from: 0
+              to: 65535
+              value: brg.map.viewPtr
+              onValueModified: brg.map.setViewPtr(value)
+            }
+          }
+          Label {
+            Layout.fillWidth: true
+            text: qsTr("The game trusts this pointer and draws the screen from it — an off-map value "
+                       + "shows garbage. You can also drag the view box around on the canvas.")
+            wrapMode: Text.Wrap
+            font.pixelSize: 10
+            opacity: 0.55
+          }
+        }
+        Label {
+          Layout.fillWidth: true
+          visible: brg.map.viewSynced
+          text: qsTr("The view box tracks the player automatically. Break it loose to place it by "
+                     + "hand.")
+          wrapMode: Text.Wrap
+          font.pixelSize: 10
+          opacity: 0.55
         }
 
         // ── Every other byte of his map state, grouped ──────────────────────────────────────

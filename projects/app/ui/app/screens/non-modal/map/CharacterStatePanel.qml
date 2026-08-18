@@ -234,10 +234,17 @@ Item {
         // save, so a "resolve to a named trainer" picker would be false precision over a leftover value
         // (and would need per-map ROM header addresses we don't carry). The honest treatment: explain
         // it, keep the full-range hex (nothing refused), and offer a one-click Clear for the leftover.
+        //
+        // ⭐ AND IT IS GATED. Project leadership, 2026-08-18: *"Trainer pointer should be in useless
+        // options"* — and by the panel's own research it plainly is one: the game writes it while a
+        // trainer battle starts and never reads it back out of a save, which is the definition of a
+        // no-effect edit. It was explaining that in prose while sitting in the open; now it explains
+        // it behind the "!", with the rest of its kind.
         ColumnLayout {
           Layout.fillWidth: true
           Layout.topMargin: 6
           spacing: 2
+          visible: brg.map.showScratch
 
           RowLayout {
             Layout.fillWidth: true

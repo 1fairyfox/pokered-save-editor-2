@@ -319,13 +319,19 @@ ColumnLayout {
 
     // ⚠️ Not a checkbox saying "unsafe mode". A plain, quiet link — because the full range is not
     // forbidden, it is just not what you usually want. (The doctrine: hack values are first-class.)
+    //
+    // ⭐ AND ITS WORDS ARE THE HOUSE STANDARD: **"Something else…"** to open the full range,
+    // **"Pick from the list"** to come back. Project leadership, 2026-08-18, twice: *"You have a lot
+    // of links that define 'Showing ...', 'Show all ...', 'Show every value' — these arent good,
+    // remember its 'Something else...' thats the standard."*
+    //
+    // The old wording described the CURRENT STATE ("Showing the maps the console has an answer
+    // for…") and buried the action at the end of the sentence, so every one of these links read
+    // differently and none of them read like a control. A link is a verb: it says what happens when
+    // you press it, in the same two phrases everywhere.
     Label {
       Layout.fillWidth: true
-      text: field.showAll
-            ? qsTr("Showing every value. ⟲ Back to the safe ones")
-            : (field.kind === "dungeonHole"
-               ? qsTr("Showing the legal holes. Show every value…")
-               : qsTr("Showing the maps the console has an answer for. Show all 248…"))
+      text: field.showAll ? qsTr("Pick from the list") : qsTr("Something else…")
       font.pixelSize: 10
       color: brg.settings.accentColor
       wrapMode: Text.Wrap

@@ -2965,10 +2965,14 @@ QVariantList MapModel::warpStateFields() const
   // ── Where the special warps go ─────────────────────────────────────────────────────────────
   const QString goes = tr("Where the special warps go");
 
-  ret.append(field(goes, "lastBlackoutMap", tr("Wake up at"),
-                   tr("Blacking out, digging out with DIG, and using an ESCAPE ROPE all bring you "
-                      "here."),
-                   lastBlackoutMap(), 0, 255, "map"));
+  // ⚠️ "WAKE UP AT" IS NOT HERE ANY MORE — it is the ⊞ Designated Maps panel in the toolbar, and it
+  // was in both. Project leadership, 2026-08-18: *"Wake up at doesnt need to be in warp state its
+  // already in the top bar"* (and, in the same breath, *"Dont duplicate controls"*).
+  //
+  // It is the same byte (`wLastBlackoutMap`), so this was two live editors for one value sitting two
+  // clicks apart — the kind of thing that makes a screen feel untrustworthy, because sooner or later
+  // one of them looks stale. The toolbar copy wins: it sits with "Outside is…", which is its actual
+  // sibling (both are world routing, neither is about the map you happen to be looking at).
 
   ret.append(gun(field(goes, "specialWarpDestMap", tr("Fly sends you to"),
                        tr("Where the last FLY (or other special warp) was headed.\n\n⚠️ Only 13 maps "

@@ -450,11 +450,26 @@ void TestWarps::warpStateFields_nameEveryByteInEnglish()
 
   const QVariantList fields = r->map->warpStateFields();
 
+  // ⚠️ `lastBlackoutMap` IS NOT IN THIS LIST ANY MORE, and that is deliberate.
+  //
+  // It is still named in English and still editable — in the toolbar's ⊞ Designated Maps panel, as
+  // "Wake up at…", beside "Outside is…" (its actual sibling: both are world routing, neither is about
+  // the map you happen to be looking at). It was in BOTH, which is two live editors for one byte two
+  // clicks apart. Project leadership, 2026-08-18: *"Wake up at doesnt need to be in warp state its
+  // already in the top bar"* / *"Dont duplicate controls."*
+  //
+  // The rule this test defends is "no byte is a bare number with a cryptic label" — not "every byte
+  // must appear on THIS panel". The negative case below is what keeps the removal honest: if the
+  // field ever comes back here, the duplication comes back with it and this test says so.
   const QStringList expected = {
-    "lastBlackoutMap", "specialWarpDestMap", "dungeonWarpDestMap", "whichDungeonWarp", "warpDest",
+    "specialWarpDestMap", "dungeonWarpDestMap", "whichDungeonWarp", "warpDest",
     "flyOrDungeonWarp", "flyWarp", "dungeonWarp", "escapeWarp", "forcedWarp",
     "scriptedWarp", "isDungeonWarp", "warpedFromWarp", "warpedfromMap",
   };
+
+  QVERIFY2(fieldNamed(fields, QStringLiteral("lastBlackoutMap")).isEmpty(),
+           "'lastBlackoutMap' is back on the Warp state panel -- it lives in the toolbar's "
+           "Designated Maps panel, and having both is the duplicate control leadership removed");
 
   for (const QString& key : expected) {
     const QVariantMap f = fieldNamed(fields, key);

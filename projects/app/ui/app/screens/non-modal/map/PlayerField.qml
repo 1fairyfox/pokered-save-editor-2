@@ -175,8 +175,9 @@ ColumnLayout {
     Layout.fillWidth: true
     Layout.bottomMargin: 6
     visible: field.kind === "enum"
-    text: field.showRaw ? qsTr("Showing the raw value. ⟲ Back to the named ones")
-                        : qsTr("Set a raw value…")
+    // The house standard, everywhere: "Something else…" out, "Pick from the list" back.
+    // @see WarpField.qml for why the state-describing wording was dropped.
+    text: field.showRaw ? qsTr("Pick from the list") : qsTr("Something else…")
     font.pixelSize: 10
     color: brg.settings.accentColor
     wrapMode: Text.Wrap

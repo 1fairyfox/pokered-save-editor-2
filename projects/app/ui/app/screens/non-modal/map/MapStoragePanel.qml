@@ -842,122 +842,21 @@ Item {
                   ? stateCombo.model[stateCombo.currentIndex].desc : ""
           }
 
-          // ── Current state step — the raw script byte, from the map's OWN script-pointer
-          // list (leadership, 2026-07-19: "the world panel is missing the current map
-          // script"). The state picker above stays the favored control; this is the same
-          // power path the Details panel carries.
-          Label {
-            Layout.fillWidth: true
-            Layout.topMargin: 2
-            visible: scriptSection.steps.length > 0
-            text: qsTr("Current state step")
-            font.pixelSize: 11
-            color: brg.settings.textColorMid
-          }
-          ComboBox {
-            id: storageStepCombo
-            objectName: "storageStepCombo"   // the DEBUG harness scrolls/reads this
-            Layout.fillWidth: true
-            Layout.preferredHeight: 30
-            font.pixelSize: 12
-            visible: scriptSection.steps.length > 0 && !scriptSection.customMode
-            textRole: "name"
-            valueRole: "value"
-            model: { panel.revision; return scriptSection.steps; }
-            onActivated: {
-              if (panel.wScripts) {
-                panel.wScripts.scriptsSet(scriptSection.scriptInd, currentValue);
-                panel.editTick++;
-              }
-            }
-          }
-          readonly property int stepComboIndex: {
-            panel.revision; panel.editTick;
-            const l = scriptSection.steps;
-            for (let i = 0; i < l.length; i++)
-              if (l[i].value === scriptSection.value) return i;
-            return -1;
-          }
-          Binding {
-            // The same ComboBox model-reset trap as the state picker above (qt-patterns.md).
-            target: storageStepCombo
-            property: "currentIndex"
-            value: scriptSection.stepComboIndex
-            delayed: true
-          }
-          // What the selected step MEANS — the step's own story words (maps.json).
-          Label {
-            Layout.fillWidth: true
-            wrapMode: Text.Wrap
-            font.pixelSize: 10
-            opacity: 0.55
-            visible: storageStepCombo.visible && text !== ""
-            text: {
-              panel.revision; panel.editTick;
-              const l = scriptSection.steps;
-              for (let i = 0; i < l.length; i++)
-                if (l[i].value === scriptSection.value)
-                  return l[i].desc !== undefined ? l[i].desc : "";
-              return "";
-            }
-          }
-          // The "Something else…" link only when there IS a named list to step out of.
-          Label {
-            visible: scriptSection.steps.length > 0
-            text: scriptSection.customMode ? qsTr("Pick from the list") : qsTr("Something else…")
-            font.pixelSize: 10
-            color: brg.settings.accentColor
-            MouseArea {
-              anchors.fill: parent
-              cursorShape: Qt.PointingHandCursor
-              onClicked: scriptSection.customMode = !scriptSection.customMode
-            }
-          }
-
-          // The custom path: full byte range, never refused — warned when it's past the map's
-          // own table (the unbounded jp-hl dispatch; same crash mechanism the event-flag research
-          // documented).
-          RowLayout {
-            Layout.fillWidth: true
-            spacing: 6
-            visible: scriptSection.steps.length === 0 || scriptSection.customMode
-                     || !scriptSection.valueIsNamed
-
-            Label {
-              text: qsTr("Custom step value")
-              font.pixelSize: 11
-              color: brg.settings.textColorMid
-              Layout.fillWidth: true
-            }
-            TextField {
-              Layout.preferredWidth: 64
-              font.pixelSize: 12
-              horizontalAlignment: TextInput.AlignRight
-              text: scriptSection.value
-              inputMethodHints: Qt.ImhDigitsOnly
-              validator: IntValidator { bottom: 0; top: 255 }
-              onEditingFinished: {
-                const v = parseInt(text);
-                if (!isNaN(v) && panel.wScripts) {
-                  panel.wScripts.scriptsSet(scriptSection.scriptInd,
-                                            Math.max(0, Math.min(255, v)));
-                  panel.editTick++;
-                }
-              }
-            }
-          }
-          Label {
-            Layout.fillWidth: true
-            wrapMode: Text.Wrap
-            font.pixelSize: 10
-            color: "#d55e00"
-            visible: scriptSection.stepCount > 0 && scriptSection.value >= scriptSection.stepCount
-            text: qsTr("⚠ Step %1 is beyond this map's state table (0–%2). The game dispatches "
-                       + "state steps through an unbounded pointer table — an out-of-range step "
-                       + "makes it jump to garbage, a real crash risk. Stored as asked, never "
-                       + "rewritten.")
-                  .arg(scriptSection.value).arg(scriptSection.stepCount - 1)
-          }
+          // ⚠️ THE "CURRENT STATE STEP" CONTROL IS NOT HERE ANY MORE.
+          //
+          // Project leadership, 2026-08-18: *"Current state step does not belong in
+          // World/persistent storage as its a current map only thing."*
+          //
+          // It was added here on 2026-07-19 ("the world panel is missing the current map script"),
+          // and the two panels then showed two controls with the SAME NAME reading two DIFFERENT
+          // bytes -- this page's per-map STORED byte, and the Details panel's live `wCurMapScript`.
+          // That is exactly what sent leadership looking ("the world says pallet town is daisy
+          // current step but the map details panel says default"), and naming them apart would only
+          // have made the duplication legible rather than removing it.
+          //
+          // The line is now clean: the STAGE lives here, because a stage is a whole persistent save
+          // block (events, this map's filter flags, badges, the stored byte). The one live byte for
+          // the map you are standing on lives in Details, with a button back to this page.
           // (No ArmedNote here any more -- its sentence lives in the section's "?". Words are
           //  clutter; the picker itself says where the story is.)
 
