@@ -125,9 +125,18 @@ Item {
   // (leadership, 2026-07-18: *"these boxes often render in front of the sprites looking bad"*).
   z: sprite.dragging ? 30 : (sprite.selected ? 25 : 1)
 
-  // ⭐ A HIDDEN SPRITE IS NOT DRAWN. AT ALL. (leadership, 2026-08-18: *"Dont show slightly
-  // transparent sprites and stuff"* … *"Dont show hidden sprites"* … *"The map state should never
-  // show ghost objects"*.)
+  // ⭐ A HIDDEN SPRITE IS NOT HERE AT ALL — it never reaches this component.
+  //
+  // ⚠️ THIS FLAG IS NOW A BELT-AND-BRACES GUARD, NOT THE MECHANISM. Hiding the artwork was the first
+  // attempt and it was not enough: `MapCanvas.storageBlocks` builds the tab strip from the same
+  // `npcList()` rows, so an invisible sprite kept a fully-working drag HANDLE (leadership: *"i can
+  // move invisible professor around ... the sprites shouldnt even be on the map much less clickable
+  // or draggable if there disabled"*). The real fix is upstream: `MapModel::npcList()` does not emit
+  // a flag-hidden sprite at all, so there is no row, no delegate, no tab and nothing to select.
+  //
+  // (leadership, 2026-08-18: *"Dont show slightly transparent sprites and stuff"* … *"Dont show
+  // hidden sprites"* … *"The map state should never show ghost objects"* … *"Removing the filter flag
+  // literally needs to remove the whole sprite not make it invisible but still there"*.)
   //
   // ⚠️ THIS SUPERSEDES THE 2026-07-18 RULING that a sprite is never hidden and renders as a ghost
   // instead. That rule was written to solve a real problem -- a filter-flagged sprite vanishing left

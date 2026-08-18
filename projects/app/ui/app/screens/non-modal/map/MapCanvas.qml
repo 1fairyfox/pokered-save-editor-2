@@ -90,6 +90,32 @@ Item {
   onSelectedScriptChanged: if (canvasRoot.selectedScript >= 0) { canvasRoot.selectedNpc = -1; canvasRoot.selectedWarp = -1; canvasRoot.selectedSign = -1; canvasRoot.selectedConnection = -1; canvasRoot.selectedBlockX = -1; }
   onSelectedBlockXChanged: if (canvasRoot.selectedBlockX >= 0) { canvasRoot.selectedNpc = -1; canvasRoot.selectedWarp = -1; canvasRoot.selectedSign = -1; canvasRoot.selectedConnection = -1; canvasRoot.selectedScript = -1; }
 
+  // ⚠️ A SELECTION MUST NOT OUTLIVE THE THING IT POINTS AT.
+  //
+  // Project leadership, 2026-08-18: *"I removed Prof Oak with filter flag ... the details panel is
+  // now in a glitched state with no sprite loaded but its attempting to show the panel anyways."*
+  //
+  // Exactly so, and it is the obvious consequence of the other half of that brief: now that switching
+  // a filter flag off takes the sprite out of `npcList()` entirely, a slot number that was selected a
+  // moment ago can stop existing while it is still selected. The panel then edits a hole -- it asks
+  // the model for slot N, gets nothing, and renders its chrome around an empty answer.
+  //
+  // Nothing else needs to know. The selection simply lets go of anything that has left the map.
+  Connections {
+    target: brg.map
+    function onChanged() {
+      if (canvasRoot.selectedNpc < 0)
+        return;
+
+      const cast = brg.map.npcList();
+      for (let i = 0; i < cast.length; i++)
+        if (cast[i].slot === canvasRoot.selectedNpc)
+          return;
+
+      canvasRoot.selectedNpc = -1;
+    }
+  }
+
   readonly property bool hasSelectedBlock: canvasRoot.selectedBlockX >= 0
 
   /// Everything filed on the selected block, UNFILTERED by the layer toggles — so the block

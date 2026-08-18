@@ -1787,6 +1787,30 @@ QVariantList MapModel::npcList() const
     if (s->pictureID == 0)
       continue;
 
+    // ⭐ AND NEITHER IS A SPRITE THE SAVE'S FILTER FLAG HAS SWITCHED OFF. It is not in this list at
+    // all -- not invisible-but-present, ABSENT.
+    //
+    // Project leadership, 2026-08-18: *"Prof Oak the sprite is available to select on filter flags
+    // when hes not even on the map, in fact i can move invisible professor around. The sprites
+    // shouldnt even be on the map much less clickable or draggable if there disabled"* … *"Removing
+    // the filter flag literally needs to remove the whole sprite not make it invisible but still
+    // there."*
+    //
+    // ⚠️ AND HIDING IT IN THE VIEW WAS NEVER GOING TO BE ENOUGH, which is the lesson. This list is
+    // not just what gets drawn: `MapCanvas.storageBlocks` builds the tab strip out of it, so every
+    // row here becomes a draggable HANDLE as well as a picture. Making the artwork `visible: false`
+    // therefore left a fully-working handle attached to nothing you could see — you could select an
+    // invisible Oak from his tab and drag him around the map. One list, one truth: if the game would
+    // not draw him, he is not here.
+    //
+    // ⚠️ A real save can genuinely hold "slot has a picture AND the flag says hidden" — BaseSAV does
+    // for Oak — so the picture id alone is NOT the whole test. The flag is authoritative.
+    const int mind = s->getMissableIndex();
+    if (mind >= 0 && worldAll != nullptr && worldAll->missables != nullptr
+        && mind < worldAll->missables->missablesCount()
+        && worldAll->missables->missablesAt(mind))
+      continue;
+
     // mapX/mapY carry the game's +4 bias ("the topmost 2x2 tile has value 4").
     const int x = s->mapX - 4;
     const int y = s->mapY - 4;
@@ -1838,15 +1862,10 @@ QVariantList MapModel::npcList() const
     m["inSpriteSet"] = (s->pictureID == SpritePlayerPicture) || loaded.contains(s->pictureID);
     m["missable"]    = s->getMissableIndex();
 
-    // ⭐ Is the save's filter flag currently switching this sprite OFF? The canvas draws the
-    // Continue-load view (leadership, 2026-07-18: *"the map should show the rendered view on
-    // continue load so filter flags need to have effect"*) -- a hidden missable's ARTWORK is not
-    // drawn, exactly as the console would not draw it; its flag box stays, because the box is
-    // about what BELONGS there. (WorldMissables: bit set = HIDDEN.)
-    const int mi = s->getMissableIndex();
-    m["hidden"] = (mi >= 0 && worldAll != nullptr && worldAll->missables != nullptr
-                   && mi < worldAll->missables->missablesCount())
-                    ? worldAll->missables->missablesAt(mi) : false;
+    // ⚠️ ALWAYS FALSE NOW, and kept only so the field's absence cannot be mistaken for "unknown".
+    // A flag-hidden sprite never reaches this point -- @see the early return above. The canvas used
+    // to draw it faded ("the Continue-load view"), then not at all, and now it is not in the list.
+    m["hidden"] = false;
 
     ret.append(m);
   }

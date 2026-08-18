@@ -96,7 +96,7 @@ public:
 
   // Converts an english format string to code represented as how it would be
   // in-game
-  const QString expandStr(const QString msg, const int maxLen,
+  Q_INVOKABLE const QString expandStr(const QString msg, const int maxLen,
                           const QString rival, const QString player) const; ///< Expand English text to in-game form (substitutes rival/player).
 
   // Because counting text size is complicated, this makes it just 1 function

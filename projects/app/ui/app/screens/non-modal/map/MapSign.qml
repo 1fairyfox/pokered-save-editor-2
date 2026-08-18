@@ -49,21 +49,47 @@ Item {
   /// shows. @see MapModel::signTextFull
   required property string previewFull
 
-  /// ⭐ THE GAME'S NAME PLACEHOLDERS, EXPANDED. Project leadership, 2026-08-18: *"Tooltips dont
-  /// render names, <PLAYER>'s house should read as character name's house."*
+  /// ⭐ THE GAME'S OWN TEXT EXPANDER — `FontsDB::expandStr`, the same one the name editors use.
   ///
-  /// The text imported from `pret/pokered` keeps the engine's own control codes verbatim — 43
-  /// `<PLAYER>`s and 23 `<RIVAL>`s across `maps.json` — because the DB stores what the ROM stores.
-  /// The console substitutes them from `wPlayerName`/`wRivalName` as it prints, so showing the raw
-  /// token is showing the reader something the game never displays. We do the same substitution the
-  /// engine does, from the same two values in THIS save — so renaming your trainer renames the signs.
+  /// Project leadership, 2026-08-18: *"Tooltips dont render names, `<PLAYER>`'s house should read as
+  /// character name's house"* … then, when a hand-rolled substitution went in: *"Use pokedex friendly
+  /// function to properly convert the sign text as it also converts some symbols over to utf-8."*
+  ///
+  /// ⚠️ AND THE HAND-ROLLED VERSION WAS WRONG, not merely duplicated. The text imported from
+  /// `pret/pokered` keeps the engine's control codes verbatim (43 `<PLAYER>`s and 23 `<RIVAL>`s
+  /// across `maps.json`) because the DB stores what the ROM stores — but names are only ONE kind of
+  /// token in there. The game's character set is not ASCII: `<m>`/`<f>` are the gender symbols, and
+  /// the font carries an accented **é** and a pile of other glyphs a regex over two names never
+  /// touches. A private `.replace()` fixed the two tokens somebody had noticed and silently left
+  /// every other one on screen as literal angle brackets.
+  ///
+  /// `expandStr` is the project's one text codec: it walks the string through the real font table,
+  /// honours the dialog control codes, and substitutes the rival and player names from THIS save —
+  /// so renaming your trainer renames the signs, and every symbol arrives as proper UTF-8.
+  /// ⚠️ TWO VOCABULARIES MEET HERE, and they spell the same two tokens differently.
+  ///
+  /// `maps.json`'s sign text is imported from `pret/pokered`, which writes the name tokens in CAPS
+  /// (`<PLAYER>`, `<RIVAL>` — 43 and 23 of them). `FontsDB`'s codec knows them by the app's own
+  /// lowercase names (`<player>` = code 0x52, `<rival>` = 0x53). Hand `expandStr` the capitalised
+  /// form and it does not recognise it at all: it falls through to plain letters and the sign reads
+  /// the literal word **"RIVAL's house"** — which is precisely what the first cut of this did.
+  ///
+  /// Those two are the ONLY capitalised tokens in the file (checked, not assumed), so the adapter is
+  /// exactly two substitutions and it lives HERE, at the boundary — not in the codec, which the name
+  /// editors depend on, and not in the data, which must keep saying what pret says.
+  readonly property var pretTokens: [[/<PLAYER>/g, "<player>"], [/<RIVAL>/g, "<rival>"]]
+
   function withNames(s) {
     if (s === "")
       return s;
-    const p = brg.file.data.dataExpanded.player.basics.playerName;
-    const r = brg.file.data.dataExpanded.rival.name;
-    return s.replace(/<PLAYER>/g, p !== "" ? p : qsTr("PLAYER"))
-            .replace(/<RIVAL>/g,  r !== "" ? r : qsTr("RIVAL"));
+
+    let t = s;
+    for (let i = 0; i < sign.pretTokens.length; i++)
+      t = t.replace(sign.pretTokens[i][0], sign.pretTokens[i][1]);
+
+    return brg.fonts.expandStr(t, 255,
+                               brg.file.data.dataExpanded.rival.name,
+                               brg.file.data.dataExpanded.player.basics.playerName);
   }
 
   /// False when the text id points past this map's text table -- the game would read whatever text
