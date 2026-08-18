@@ -135,6 +135,11 @@ Item {
   /// reset-on-load scratch everywhere reveals the useless flags and rows here.
   readonly property bool showUseless: brg.map.showScratch
 
+  /// The TRULY-UNUSED gate — the toolbar "!" panel's third tier (project leadership, 2026-08-04):
+  /// flags the game never reads and never writes. Separate from `showUseless` (no-effect), which
+  /// still covers the rewritten-on-load and write-only ones.
+  readonly property bool showTruly: brg.map.showTrulyUnused
+
   // Switching pages starts at the TOP -- a page opened at wherever the last one was scrolled reads
   // as broken ("opens scrolled down way too low"). A reveal mid-flight owns the scroll instead.
   onPageChanged: if (!panel.revealSettling) scroller.contentItem.contentY = 0
@@ -263,6 +268,61 @@ Item {
   }
 
   readonly property var curPage: storageMaps[panel.page]
+
+  // ── The map picker's inputs — the SHARED selector, narrowed to the maps that have storage ───────
+  //
+  // Project leadership, 2026-08-18: *"the persistent storage thing needs to have the same map
+  // selection as the others but it needs to not have the maps that dont have storage — in other
+  // words filtered but same map select thing."* So this is `MapField`/`MapSelectList` exactly as the
+  // designated maps and warp targets use it (same sort, same search, same grouped rows) with an
+  // `allowedIds` whitelist — NOT a second, lookalike list that would drift from the real one.
+  //
+  // ⚠️ A page is a set of map IDS, not one map (Safari's ten sub-maps share a page; a script entry
+  // can span several). So the whitelist is every id of every page, and picking any one of them
+  // selects the page that owns it.
+
+  /// Every map id that has storage, flattened out of the pages. The General page's -1 is NOT here —
+  /// it is not a map, so it rides as a leading entry instead.
+  readonly property var storageMapIds: {
+    panel.revision;
+    const out = [];
+    for (let i = 0; i < panel.storageMaps.length; i++) {
+      const ids = panel.storageMaps[i].ids;
+      for (let j = 0; j < ids.length; j++)
+        if (ids[j] >= 0)
+          out.push(ids[j]);
+    }
+    return out;
+  }
+
+  /// The General page ("save data that belongs to no map") as a leading row, when it exists — the
+  /// same mechanism the warp picker uses for "← Back outside".
+  readonly property var storageLeadingEntries: {
+    panel.revision;
+    for (let i = 0; i < panel.storageMaps.length; i++)
+      if (panel.storageMaps[i].ids.indexOf(-1) !== -1)
+        return [{ ind: -1, name: panel.storageMaps[i].title, group: "",
+                  isCopy: false, copyOf: -1, size: "" }];
+    return [];
+  }
+
+  /// Which map id the field shows: the one you're ON when this page covers it (so the face agrees
+  /// with the canvas), otherwise the page's first id.
+  readonly property int pickedMapId: {
+    panel.revision;
+    if (panel.curPage === undefined || panel.curPage.ids.length === 0)
+      return -1;
+    return panel.curPage.ids.indexOf(brg.map.mapInd) !== -1 ? brg.map.mapInd
+                                                            : panel.curPage.ids[0];
+  }
+
+  /// The page that owns @p ind, or -1. @see storageMapIds
+  function pageForMapId(ind) {
+    for (let i = 0; i < panel.storageMaps.length; i++)
+      if (panel.storageMaps[i].ids.indexOf(ind) !== -1)
+        return i;
+    return -1;
+  }
 
   /// Is the shown map the one you're actually on? (Drives the "you're here" / "not here" note.)
   readonly property bool onShownMap: {
@@ -432,14 +492,22 @@ Item {
         Layout.margins: 10
         spacing: 6
 
-        // The map picker -- only maps that HAVE storage. Pre-selected to the current map when it has any.
-        ComboBox {
+        // The map picker -- THE shared selector (sort · search · grouped list), narrowed to the maps
+        // that actually have storage. @see panel.storageMapIds
+        MapField {
           id: mapCombo
+          objectName: "storageMapField"   // the DEBUG harness reads/drives this
           Layout.fillWidth: true
-          font.pixelSize: 12
-          model: panel.storageMaps.map(function(m) { return m.title; })
-          currentIndex: panel.page
-          onActivated: function(i) { panel.page = i; }
+
+          value: panel.pickedMapId
+          allowedIds: panel.storageMapIds
+          leadingEntries: panel.storageLeadingEntries
+
+          onPicked: (ind) => {
+            const p = panel.pageForMapId(ind);
+            if (p >= 0)
+              panel.page = p;
+          }
         }
 
         // "You're here" / "you're elsewhere" -- ONE short line each way.
@@ -972,9 +1040,15 @@ Item {
             panel.revision;
             const l = list;
             if (l.length === 0) return false;
-            if (panel.showUseless) return true;
-            for (let i = 0; i < l.length; i++)
-              if (!l[i].useless) return true;
+            // Show the section if any row will actually be visible under the current tier switches: a
+            // normal (non-useless) row, or a truly-unused row with its tier on, or a no-effect row
+            // with its tier on.
+            for (let i = 0; i < l.length; i++) {
+              const r = l[i];
+              if (!r.useless) return true;
+              if (r.trulyUnused && panel.showTruly) return true;
+              if (r.useless && !r.trulyUnused && panel.showUseless) return true;
+            }
             return false;
           }
 
@@ -991,7 +1065,11 @@ Item {
             for (let i = 0; i < l.length; i++) {
               const e = l[i];
               let key, rank;
-              if (e.useless)      { key = qsTr("Useless flags");  rank = 300; }
+              // Useless splits in two (project leadership, 2026-08-04): the truly-unused (never
+              // read/written) get their OWN group + tier; the rest (rewritten-on-load, write-only)
+              // stay "No-effect".
+              if (e.trulyUnused) { key = qsTr("Truly unused flags"); rank = 350; }
+              else if (e.useless) { key = qsTr("No-effect flags"); rank = 300; }
               else if (e.shared)  { key = qsTr("Shared with %1").arg(e.sharedWith.join(", ")); rank = 200; }
               else if (e.stage !== "") { key = qsTr("Stage %1").arg(e.stage); rank = 10 + i / 10000; }
               else                { key = (e.group !== "" ? e.group : qsTr("Other")); rank = 100; }
@@ -1003,7 +1081,8 @@ Item {
               return rankOf[a] !== rankOf[b] ? rankOf[a] - rankOf[b] : a.localeCompare(b);
             });
             return keys.map(function(k) {
-              return { title: k, rows: byName[k], useless: rankOf[k] === 300 };
+              return { title: k, rows: byName[k],
+                       useless: rankOf[k] === 300, trulyUnused: rankOf[k] === 350 };
             });
           }
 
@@ -1042,10 +1121,14 @@ Item {
               spacing: 3
 
               readonly property bool isShared: modelData.title.indexOf(qsTr("Shared with")) === 0
-              readonly property bool isPlaceholder: grp.modelData.useless === true
+              readonly property bool isTruly: grp.modelData.trulyUnused === true
+              readonly property bool isPlaceholder: grp.modelData.useless === true || grp.isTruly
 
-              // Useless flags live behind the panel's Useless-edits switch, whole group.
-              visible: !grp.isPlaceholder || panel.showUseless
+              // Each abnormal group lives behind its own tier switch (project leadership, 2026-08-04):
+              // truly-unused behind the Truly-unused tier; no-effect behind the No-effect tier.
+              visible: grp.isTruly ? panel.showTruly
+                     : grp.modelData.useless === true ? panel.showUseless
+                     : true
 
               Item { Layout.preferredHeight: 4 }
 
@@ -1101,8 +1184,9 @@ Item {
                   Layout.fillWidth: true
                   spacing: 6
 
-                  // A useless row inside a real group (rare) still respects the gate.
-                  visible: !erow.modelData.useless || panel.showUseless
+                  // A useless row inside a real group (rare) still respects its OWN tier gate.
+                  visible: !erow.modelData.useless
+                           || (erow.modelData.trulyUnused ? panel.showTruly : panel.showUseless)
 
                   MapWarnIcon {
                     visible: erow.modelData.caution !== ""
