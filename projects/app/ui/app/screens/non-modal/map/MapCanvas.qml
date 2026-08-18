@@ -612,6 +612,22 @@ Item {
   property string hoverMovable: ""
   property bool hoverMovableFullCell: false
 
+  /// ⭐ A CONNECTION ARROW is under the pointer. Same idea as @ref hoverMovable — you are pointing at
+  /// a thing, not at the map beneath it — but connections live in the border ring rather than in a
+  /// block, so they cannot express themselves as a `"blockX,blockY"` key.
+  ///
+  /// Project leadership, 2026-08-18: *"when mousing over connection icons the blocks underneath
+  /// highlight when its not supposed to when mousing over objects."* Two faults in one sentence: the
+  /// arrows never announced themselves at all, **and** the white cell highlight was not consulting
+  /// the announcement even for the objects that did make it (sprites, doors and signs have set
+  /// `hoverMovable` since July purely to withdraw the tab strip). @see the highlight's own note.
+  property bool hoverConnection: false
+
+  /// Is the pointer on SOMETHING rather than on the map? The cell highlight stands down when it is.
+  readonly property bool hoverOverObject:
+      canvasRoot.hoverConnection
+      || (canvasRoot.hoverMovable !== "" && !canvasRoot.hoverMovableFullCell)
+
   /// The spot whose TAB the cursor is on (an entry of a storageBlocks `spots[]`), or null. Set by
   /// MapTabStrip; the hotspot boxes read it to light exactly their own outline.
   property var litSpot: null
@@ -1396,7 +1412,12 @@ Item {
         // says "this is the cell you are in", which is true whether or not any layer is showing.
         // Gating it on `showFlagBoxes` made it vanish exactly when the map had nothing else on it --
         // i.e. when it was the only thing telling you the grid was live.
-        visible: canvasRoot.hoverBlockX >= 0 && brg.map.valid
+        // ⭐ POINT AT A THING AND YOU GET THE THING — the cell does not also light up. The rule was
+        // already written down for the tab strip in July ("the highlight changes to the moveable
+        // object and away from the cell"), and the strip has honoured it ever since; this outline
+        // never did, so pointing at a sprite, a door, a sign or a connection lit BOTH. @see
+        // canvasRoot.hoverOverObject
+        visible: canvasRoot.hoverBlockX >= 0 && brg.map.valid && !canvasRoot.hoverOverObject
         x: canvasRoot.hoverBlockX * brg.map.blockSize * canvasRoot.zoom
         y: canvasRoot.hoverBlockY * brg.map.blockSize * canvasRoot.zoom
         width: brg.map.blockSize * canvasRoot.zoom
@@ -1480,7 +1501,22 @@ Item {
             // A click IS a detent -- there is nothing between one click and the next -- so this one
             // gets the same 90ms bridge the wheel does.
             const bite = (eventPoint.modifiers & Qt.AltModifier) ? (1 / 1.4) : 1.4;
-            view.zoomAround(canvasRoot.zoom * bite, eventPoint.position, true);
+
+            // ⚠️ THE ANCHOR MUST BE IN **VIEW** COORDINATES, and this handler's are not.
+            //
+            // `zoomAround(newZoom, centre, …)` reads `centre` as a point in the Flickable's own
+            // coordinates (`view.contentX + centre.x - canvas.x`). This TapHandler lives inside
+            // `canvas`, so its `eventPoint.position` is CANVAS-local — which is exactly why the two
+            // lines above divide it by the zoom to get map pixels, and why the panel test above maps
+            // it to global first. Handing it over raw made the anchor wrong by the whole scroll
+            // offset, so the zoom tool threw the map somewhere else entirely; the further you had
+            // scrolled, the further it jumped. Project leadership: *"Fix the zoom its whacky as heck,
+            // it should zoom where the cursor is."*
+            //
+            // The wheel and pinch handlers are children of `view`, so THEIR positions were already
+            // right — which is why this only ever misbehaved with the zoom tool in hand.
+            const inView = canvas.mapToItem(view, eventPoint.position.x, eventPoint.position.y);
+            view.zoomAround(canvasRoot.zoom * bite, inView, true);
             return;
           }
 

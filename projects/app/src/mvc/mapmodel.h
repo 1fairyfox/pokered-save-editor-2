@@ -863,6 +863,15 @@ public:
    */
   Q_INVOKABLE QVariantList npcList() const;
 
+  /// Show or hide the object that missable index @p missableInd governs -- **the console's own
+  /// two-part gesture**, not just the flag bit.
+  ///
+  /// ⚠️ USE THIS, NOT `WorldMissables::missablesSet()` ALONE, anywhere a filter flag is flipped by
+  /// the user. `HideObject` writes the bit **and** zeroes the sprite slot's picture id, and picture
+  /// id 0 means "unused slot" -- which `npcList()` skips. Writing only the bit therefore left the
+  /// object invisible no matter how often it was toggled on. @see the long note at the definition.
+  Q_INVOKABLE void setMissableShown(int missableInd, bool shown);
+
   /// Move sprite @p slot to map (@p x, @p y). **Exactly two bytes** (mapX, mapY), the game's +4
   /// bias included. The drag-on-the-canvas path. Out-of-bounds coordinates are clamped to the
   /// map -- a sprite parked in the border ring is one the game will never show you.

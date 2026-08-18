@@ -294,9 +294,11 @@ Item {
       visible: bsr.spot.kind === "filterFlag" && details.worldMissables !== null
       on: { details.worldTick; return details.worldMissables ? !details.worldMissables.missablesAt(bsr.spot.ind) : false }
       onText: qsTr("SHOWN"); offText: qsTr("HIDDEN"); onColor: "#0072b2"
+      // ⚠️ `setMissableShown`, NOT `missablesSet` — the bit alone leaves the sprite slot's picture
+      // id at 0 and the object never comes back. @see MapModel::setMissableShown
       onToggled: {
         if (!details.worldMissables) return;
-        details.worldMissables.missablesSet(bsr.spot.ind, !details.worldMissables.missablesAt(bsr.spot.ind));
+        brg.map.setMissableShown(bsr.spot.ind, details.worldMissables.missablesAt(bsr.spot.ind));
         details.worldTick++;
       }
     }

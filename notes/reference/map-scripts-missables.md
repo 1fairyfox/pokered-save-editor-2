@@ -85,6 +85,58 @@ links themselves are baked and ready for it.
   a `Binding` element, which re-asserts after internal writes. (Caught by the screenshot review:
   Oak's Lab stored step 18 while the combo displayed "Default".)
 
+## ⚠️ Showing a missable is TWO writes, not one (found 2026-08-18)
+
+The single most expensive thing on this page, because it looked like it worked.
+
+Project leadership, 2026-08-18: *"some toggles still dont work like the receptionist is not there
+despite toggled on, the map wasnt reconstructed well"* … *"Daisy sitting doesnt show when toggled on
+Blues house map."*
+
+**Hiding an object on a real Game Boy touches two places**, and `engine/overworld/missable_objects.asm`
+does both:
+
+| | what it writes | were we? |
+|---|---|---|
+| the flag | set/clear the `wMissableObjects` bit | ✅ yes |
+| the slot | `HideObject` stores **0** into that sprite slot's **picture id** | ❌ no |
+
+And **picture id 0 means "this slot is unused"** (`ram/wram.asm`) — which is precisely what
+`MapModel::npcList()` skips on:
+
+```cpp
+// Picture id 0 means the slot is unused (ram/wram.asm). Draw nothing.
+if (s->pictureID == 0)
+  continue;
+```
+
+So clearing the bit on its own left behind a slot that still declared itself unused. The renderer
+skipped it, and the object stayed invisible no matter how many times you toggled it. **The switch was
+writing a true byte into a save the renderer had already been told to ignore** — which is why it
+presented as "the map wasn't reconstructed well" rather than as a dead switch.
+
+**The fix is `MapModel::setMissableShown(missableInd, shown)`**, and every user-facing filter-flag
+control now routes through it (the World panel's switches, the Details panel's `FlagChip`). Calling
+`WorldMissables::missablesSet()` directly from the UI is now a bug.
+
+**The restore is deliberately minimal — do NOT rebuild the slot from the ROM.** The console only ever
+zeroed the picture, so the rest of that slot (coordinates, facing, movement, text id, trainer fields)
+is still the console's own data and is exactly right. Putting the picture back is the entire inverse
+operation. Rebuilding would also be the *"sprite is reset for no reason"* that leadership ruled out in
+the same brief. The picture comes from the slot's own second copy (`pictureIDCopy`,
+spritestatedata2 field d — which `HideObject` does not touch), falling back to the map's ROM object
+list (`MapDBEntry::getSprites()` → the entry whose `getMissable()` matches).
+
+**The finder is the save's own link, not a positional guess:** `wMissableObjectList` at `0x287A` maps
+sprite slot → missable index and survives hiding, so the slot is found by asking
+`SpriteData::getMissableIndex()`.
+
+⚠️ **Still open:** a missable on a map you are *not* standing on has **no loaded slot at all**, so its
+bit is the whole of its stored state until you go there. That is correct — but the *constructed*-map
+path (`changeMapConstructed` / `Area::setTo`) builds slots from the ROM and must honour the missable
+bits when it does, or the same class of "toggled on but not drawn" returns by another road. Not yet
+verified.
+
 ## Honesty ledger
 
 - Script values and missable bits are **durable** save data (inside `sMainData`).

@@ -1575,11 +1575,14 @@ Item {
                 MapSwitch {
                   objectName: "missableSwitch_" + mrow.modelData.ind   // the DEBUG harness flips these
                   checked: !mrow.hidden          // bit SET = HIDDEN; the switch says "on the map"
+
+                  // ⚠️ `setMissableShown`, NOT `missablesSet`. Hiding an object on the console is
+                  // TWO writes -- the flag bit AND the sprite slot's picture id -- and writing only
+                  // the bit left the object invisible however often you toggled it on. @see
+                  // MapModel::setMissableShown for the whole story.
                   onToggled: {
-                    if (panel.wMissables) {
-                      panel.wMissables.missablesSet(mrow.modelData.ind, mrow.hidden ? false : true);
-                      panel.editTick++;
-                    }
+                    brg.map.setMissableShown(mrow.modelData.ind, mrow.hidden);
+                    panel.editTick++;
                   }
                 }
               }

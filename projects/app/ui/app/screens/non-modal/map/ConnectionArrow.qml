@@ -93,6 +93,17 @@ Item {
     enabled: !arrow.canvas.panning && arrow.canvas.tool !== "zoom"
     cursorShape: Qt.PointingHandCursor
     onClicked: (m) => { m.accepted = true; pop.open(); }
+
+    // ⭐ TELL THE CANVAS A THING IS UNDER THE POINTER, so the cell highlight stands down — the same
+    // contract sprites, doors and signs keep through `hoverMovable`. An arrow lives in the border
+    // ring rather than in a block, so it cannot use that key and announces itself with its own flag
+    // instead. Project leadership, 2026-08-18: *"when mousing over connection icons the blocks
+    // underneath highlight when its not supposed to when mousing over objects."*
+    onContainsMouseChanged: arrow.canvas.hoverConnection = containsMouse
+
+    // The flag must not be left standing if this arrow goes away while hovered (an edge that gains a
+    // connection replaces its arrow), or the highlight would stay suppressed for good.
+    Component.onDestruction: if (arrow.canvas) arrow.canvas.hoverConnection = false
   }
 
   ToolTip {

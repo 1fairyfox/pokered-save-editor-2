@@ -1854,6 +1854,104 @@ QVariantList MapModel::npcList() const
   return ret;
 }
 
+// ── Showing and hiding a missable — the console's own two-part gesture ─────────
+//
+// ⚠️ THE BUG THIS EXISTS TO FIX, because it was invisible and it wasted a live pass.
+//
+// Project leadership, 2026-08-18: *"some toggles still dont work like the receptionist is not there
+// despite toggled on, the map wasnt reconstructed well"* and *"Daisy sitting doesnt show when toggled
+// on Blues house map."*
+//
+// Flipping a filter flag was writing **one bit** -- the `wMissableObjects` bit -- and nothing else.
+// But hiding an object on a real Game Boy is TWO writes, and the game does both:
+//
+//     ShowObject / HideObject  (engine/overworld/missable_objects.asm)
+//         set/clear the missable bit                        <- we were doing this
+//         AND write the sprite slot's PICTURE ID            <- we were not
+//
+// `HideObject` stores **0** into `wSpriteStateData1[slot]`'s picture byte, and picture id 0 means
+// "this slot is unused" (`ram/wram.asm`) -- which is exactly what `npcList()` skips on:
+//
+//     if (s->pictureID == 0)
+//       continue;   // Picture id 0 means the slot is unused. Draw nothing.
+//
+// So clearing the bit alone left a slot that still said "unused", the canvas skipped it, and the
+// object stayed invisible however many times you toggled it. The switch was writing a true byte to
+// a save the renderer had already been told to ignore.
+//
+// ⭐ The restore is deliberately MINIMAL, and that matters for byte fidelity. We do NOT rebuild the
+// slot from the ROM: the console only ever zeroed the picture, so every other byte in that slot --
+// coordinates, facing, movement, text id, the trainer fields -- is still the console's own data and
+// is exactly right. Putting the picture back is the whole of the inverse operation. (Rebuilding
+// would also be the "sprite is reset for no reason" that leadership explicitly ruled out in the same
+// brief.)
+//
+// The picture to restore comes from the slot's own second copy (`pictureIDCopy`, spritestatedata2
+// field d, which `HideObject` does NOT touch) and falls back to the map's ROM object list. Both are
+// checked because a save that was never hidden-then-shown may have either.
+void MapModel::setMissableShown(int missableInd, bool shown)
+{
+  if (missableInd < 0 || worldAll == nullptr || worldAll->missables == nullptr)
+    return;
+
+  // 1. The bit. Set == HIDDEN (notes/reference/map-scripts-missables.md).
+  if (missableInd < worldAll->missables->missablesCount())
+    worldAll->missables->missablesSet(missableInd, !shown);
+
+  // 2. The picture id -- but only for a slot on the map we are actually looking at. A missable that
+  //    belongs to another map has no loaded slot at all, and that is not an error: its bit is the
+  //    whole of its stored state until you stand there.
+  if (npcs == nullptr) {
+    changed();
+    return;
+  }
+
+  for (int i = 1; i < npcs->spriteCount(); i++) {
+    SpriteData* s = npcs->spriteAt(i);
+    if (s == nullptr || s->getMissableIndex() != missableInd)
+      continue;
+
+    if (!shown) {
+      // HideObject: remember the picture in the copy field, then zero the live one.
+      if (s->pictureID != 0) {
+        s->pictureIDCopy = s->pictureID;
+        s->pictureIDCopyChanged();
+        s->pictureID = 0;
+        s->pictureIDChanged();
+      }
+    } else if (s->pictureID == 0) {
+      // ShowObject: put the picture back. The copy field first; the ROM object list as the fallback.
+      int pic = s->pictureIDCopy;
+
+      if (pic == 0) {
+        MapDBEntry* m = MapsDB::inst()->getStoreAt(mapInd());
+        if (m != nullptr) {
+          for (int k = 0; k < m->getSpritesSize(); k++) {
+            const MapDBEntrySprite* e = m->getSpritesAt(k);
+            if (e == nullptr || e->getMissable() != missableInd)
+              continue;
+            if (e->getToSprite() != nullptr)
+              pic = int(e->getToSprite()->ind);
+            break;
+          }
+        }
+      }
+
+      if (pic != 0) {
+        s->pictureID = pic;
+        s->pictureIDChanged();
+        s->pictureIDCopy = pic;
+        s->pictureIDCopyChanged();
+      }
+    }
+
+    break;   // a missable index owns exactly one slot
+  }
+
+  castEdited = true;
+  changed();
+}
+
 // ── Editing the cast ──────────────────────────────────────────────────────────
 
 void MapModel::moveNpc(int slot, int x, int y)
