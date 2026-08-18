@@ -82,6 +82,56 @@ Item {
         color: brg.settings.textColorDark
       }
 
+      // ── The post-battle wild-encounter cooldown (wStatusFlags2 bit 0) ───────────────────────
+      //
+      // ⭐ MOVED HERE from the Details panel (project leadership, 2026-08-18: *"Wild pokemon, the 3
+      // step option needs to be there instead of details"*). It is an encounter control and it
+      // belongs with the encounter tables; it only ever sat on Details because that page was where
+      // the briefed odds and ends landed.
+      //
+      // It is DURABLE -- the console keeps it across a Continue (verified:
+      // scripts/emu/probe_wild_encounter_cooldown.py) -- so it wears no yellow "!": an edit sticks,
+      // and the game acts on it the moment the save loads. See
+      // notes/reference/wild-encounter-cooldown.md.
+      ColumnLayout {
+        Layout.fillWidth: true
+        Layout.leftMargin: 4
+        Layout.rightMargin: 4
+        spacing: 4
+
+        RowLayout {
+          Layout.fillWidth: true
+          spacing: 8
+
+          Label {
+            Layout.fillWidth: true
+            text: qsTr("3-step wild encounter cooldown")
+            font.pixelSize: 12
+            wrapMode: Text.Wrap
+            color: brg.settings.textColorDark
+          }
+
+          MapSwitch {
+            checked: { panel.revision; return brg.map.wildEncounterCooldown; }
+            onToggled: brg.map.wildEncounterCooldown = !brg.map.wildEncounterCooldown
+          }
+        }
+
+        Label {
+          Layout.fillWidth: true
+          text: qsTr("Gives 3 encounter-free steps when the save loads — the game's post-battle "
+                     + "cooldown. Normally set automatically right after a battle, and it clears "
+                     + "itself once you've walked those steps off.")
+          wrapMode: Text.Wrap
+          font.pixelSize: 10
+          opacity: 0.55
+          color: brg.settings.textColorDark
+        }
+      }
+
+      Rectangle { Layout.fillWidth: true; Layout.leftMargin: 4; Layout.rightMargin: 4
+                  height: 1; color: Qt.rgba(0, 0, 0, 0.10) }
+
       WildMonList {
         Layout.fillWidth: true
         Layout.leftMargin: 4

@@ -1570,19 +1570,31 @@ Item {
           canvasRoot.selectedBlockX = Math.floor(px / brg.map.blockSize);
           canvasRoot.selectedBlockY = Math.floor(py / brg.map.blockSize);
 
-          // ⭐ …but the panel only opens when there is something ON the block to open it for.
-          // Project leadership, 2026-08-18: *"if nothing is on a block, when clicked, it shouldnt
-          // open the details panel, only open it for actual things that have details"*.
+          // ⭐ SOMETHING HERE OPENS THE PANEL; NOTHING HERE CLOSES IT.
           //
-          // The block still SELECTS -- the outline lands, the status bar still names the block and
-          // its tile -- so pointing at bare ground still answers "what is this". What it no longer
-          // does is summon a whole panel to tell you there is nothing here.
+          // Project leadership, 2026-08-18: *"if nothing is on a block, when clicked, it shouldnt open
+          // the details panel, only open it for actual things that have details"* and then, plainly:
+          // *"The details panel closes when an empty square is clicked, it doesnt show 'Nothing
+          // there' or something."*
+          //
+          // The block still SELECTS either way -- the outline lands, the status bar still names the
+          // block and its tile -- so pointing at bare ground still answers "what is this". What bare
+          // ground must never do is summon a panel in order to report that it is bare.
           //
           // `selectedBlockSpots` is the honest test and it is already the panel's own source: it is
           // UNFILTERED by the layer toggles, so a block whose only spot sits on a hidden layer still
           // counts as having details (turning a layer off must not make a thing un-openable).
+          //
+          // ⚠️ `groundClicked` HAD NEVER BEEN EMITTED. It was declared here and handled in Map.qml
+          // since 2026-07-18 -- *"if a click opens a panel clicking off should close it"* -- and
+          // nothing in the codebase ever fired it, so the whole click-off-closes behaviour was dead
+          // code that read as implemented. This is its one true firing point: a tap that reached the
+          // bare ground, having already returned early for a panel, a popup, a tab, a maker tool and
+          // a pan.
           if (canvasRoot.selectedBlockSpots.length > 0)
             canvasRoot.blockInspectRequested();
+          else
+            canvasRoot.groundClicked();
         }
       }
 

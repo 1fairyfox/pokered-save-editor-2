@@ -467,44 +467,11 @@ Item {
         MapDetailRow { label: qsTr("Warps");      value: qsTr("%1 of 32").arg(32 - brg.map.warpRoomLeft()) }
         MapDetailRow { label: qsTr("Signs");      value: qsTr("%1 of 16").arg(16 - brg.map.signRoomLeft()) }
 
-        // ── The post-battle wild-encounter cooldown (wStatusFlags2 bit 0) ─────────────────────
-        //
-        // The one encounter flag briefed for this page (2026-07-15). It is DURABLE -- the console
-        // keeps it across a Continue (verified: scripts/emu/probe_wild_encounter_cooldown.py), so it
-        // wears no yellow "!": an edit sticks, and the game acts on it the moment the save loads.
-        // See notes/reference/wild-encounter-cooldown.md.
-        ColumnLayout {
-          Layout.fillWidth: true
-          Layout.topMargin: 8
-          spacing: 4
-
-          RowLayout {
-            Layout.fillWidth: true
-            spacing: 8
-
-            Label {
-              Layout.fillWidth: true
-              text: qsTr("3-step wild encounter cooldown")
-              font.pixelSize: 12
-              wrapMode: Text.Wrap
-            }
-
-            MapSwitch {
-              checked: brg.map.wildEncounterCooldown
-              onToggled: brg.map.wildEncounterCooldown = !brg.map.wildEncounterCooldown
-            }
-          }
-
-          Label {
-            Layout.fillWidth: true
-            text: qsTr("Gives 3 encounter-free steps when the save loads — the game's post-battle "
-                       + "cooldown. Normally set automatically right after a battle, and it clears "
-                       + "itself once you've walked those steps off.")
-            wrapMode: Text.Wrap
-            font.pixelSize: 10
-            opacity: 0.55
-          }
-        }
+        // ⚠️ THE 3-STEP WILD-ENCOUNTER COOLDOWN HAS MOVED to the top of the Wild Pokémon panel
+        // (project leadership, 2026-08-18: *"Wild pokemon, the 3 step option needs to be there
+        // instead of details"*). It is an ENCOUNTER control, and it belongs with the encounter
+        // tables — it only sat here because this page was where the briefed odds and ends landed.
+        // @see WildPokemonPanel.qml · notes/reference/wild-encounter-cooldown.md
 
         // ══ MAP STATE — v1's "Map" page (the AreaMap leftover bytes) ═══════════════════════════
         //

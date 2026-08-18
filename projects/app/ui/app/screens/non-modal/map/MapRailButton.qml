@@ -85,8 +85,19 @@ Rectangle {
   Behavior on color { ColorAnimation { duration: 90 } }
 
   /// The one ink for whatever this button draws — icon and glyph agree by construction.
+  ///
+  /// ⚠️ AN ICON IS NOT A GLYPH'S WEIGHT. First cut drew Font Awesome **solid** at `textColorDark`,
+  /// the same ink the old dingbats used, and project leadership's reaction was immediate: *"the icons
+  /// are ugly black and extremely huge."* Both halves are the same root cause — a text glyph is mostly
+  /// whitespace (a 16 px "☻" has ~11 px of cap height and thin strokes), while an FA solid icon is a
+  /// filled shape that runs edge to edge of its box. Matching the *number* made the icon ~40% bigger
+  /// and several times heavier on the page.
+  ///
+  /// So at rest the icon takes the MID ink, not the dark one — it is chrome, not content — and it
+  /// only goes full-strength when the button is active or under the cursor.
   readonly property color markColor: btn.active ? brg.settings.textColorLight
-                                                : brg.settings.textColorDark
+                                                : ma.containsMouse ? brg.settings.textColorDark
+                                                                   : brg.settings.textColorMid
 
   Text {
     anchors.centerIn: parent
@@ -97,15 +108,19 @@ Rectangle {
   }
 
   // The SVG is black on transparent, so it is RECOLOURED rather than tinted — a MultiEffect
-  // colourization, the same treatment the rest of the app's Font Awesome buttons use. Sized to
-  // ~46% of the button so it optically matches the old glyph's weight rather than filling the square.
+  // colourization, the same treatment the rest of the app's Font Awesome buttons use.
+  //
+  // ⚠️ 34% OF THE BUTTON, NOT 46%. An FA icon fills its box; a glyph does not. Sizing the icon to
+  // the old glyph's *font size* made it visibly huge (leadership: *"extremely huge"*). 34% of a 32 px
+  // button is ~11 px — which is the old dingbat's actual drawn height, not its font size. @see
+  // markColor for the other half of the same mistake.
   Image {
     id: iconImg
     anchors.centerIn: parent
     visible: false                      // the effect draws it; @see reference/qt-patterns.md
     source: btn.icon
-    sourceSize.width: Math.round(btn.size * 0.46)
-    sourceSize.height: Math.round(btn.size * 0.46)
+    sourceSize.width: Math.round(btn.size * 0.34)
+    sourceSize.height: Math.round(btn.size * 0.34)
     fillMode: Image.PreserveAspectFit
     mipmap: true
   }
