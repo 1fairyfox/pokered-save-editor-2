@@ -26,8 +26,27 @@
   more in here", and flies the members out to the right when you click it. Pick one and it collapses.
 
   The face is reactive -- exactly the preference from the top-bar pass: it shows what is ACTIVE, not a
-  generic group glyph. So the tools button shows ↖ or ✥ or ⌕ depending on which tool is in hand, and
-  the panels button shows the icon of whatever panel is open.
+  generic group glyph. So the tools button shows the select / pan / zoom icon depending on which tool
+  is in hand, and the panels button shows the icon of whatever panel is open.
+
+  ## ⭐ CLICKING THE FACE PICKS THE TOOL. It does NOT open the flyout. (2026-08-18)
+
+  Project leadership: *"clicking the buttons with a dropout to pick others -- the 2 on the left bar at
+  the top -- it needs to click whats there by default not open the menu to select. There needs to be a
+  seperate thing that allows the user to open the dropout menu to select others. Research how photoshop
+  does it."*
+
+  **How Photoshop does it**, and what we take: the tool button is the tool. A single click selects the
+  tool shown on the face -- one click, no menu, no second decision. A small triangle in the corner says
+  "there are relatives in here", and the flyout is a *separate, deliberate* gesture:
+
+    * **click the ◢ corner** -- our primary affordance, because it is visible and discoverable;
+    * **press and hold** anywhere on the face (Photoshop's own gesture, ~400 ms);
+    * **right-click** the face (Photoshop supports this too).
+
+  So the common case -- "I want the tool I can see" -- costs one click, and the rare case -- "I want its
+  sibling" -- costs a deliberate one. Before this, EVERY tool selection cost two clicks and a menu,
+  including re-picking the tool already on the face.
 */
 import QtQuick
 import QtQuick.Controls
@@ -36,7 +55,8 @@ import QtQuick.Layouts
 Item {
   id: grp
 
-  /// The members, in flyout order: `[{ id, glyph, tip, shortcut? }]`.
+  /// The members, in flyout order: `[{ id, icon | glyph, tip, shortcut? }]`. `icon` is a qrc path to a
+  /// monochrome SVG and wins over `glyph`. @see MapRailButton
   property var members: []
 
   /// The id of the member that is currently ACTIVE — the tool in hand, the panel that is open — or ""
@@ -66,36 +86,102 @@ Item {
   implicitWidth: 32
   implicitHeight: 32
 
-  function glyphOf(id) {
+  function memberOf(id) {
     for (let i = 0; i < grp.members.length; i++)
       if (grp.members[i].id === id)
-        return grp.members[i].glyph;
-    return grp.members.length > 0 ? grp.members[0].glyph : "";
+        return grp.members[i];
+    return grp.members.length > 0 ? grp.members[0] : undefined;
+  }
+
+  function glyphOf(id) {
+    const m = grp.memberOf(id);
+    return (m !== undefined && m.glyph !== undefined) ? m.glyph : "";
+  }
+
+  function iconOf(id) {
+    const m = grp.memberOf(id);
+    return (m !== undefined && m.icon !== undefined) ? m.icon : "";
   }
 
   // ── The collapsed face ─────────────────────────────────────────────────────────────────────
+  //
+  // ⚠️ A CLICK HERE PICKS THE TOOL, it does not open the flyout. @see the Photoshop note in the
+  // header. The flyout has its own affordances below.
   MapRailButton {
     id: face
     anchors.fill: parent
 
+    icon: grp.iconOf(grp.shownId)
     glyph: grp.glyphOf(grp.shownId)
     active: grp.activeId !== "" || grp.expanded
     tip: grp.tip
 
+    onClicked: {
+      grp.expanded = false;
+      grp.lastPicked = grp.shownId;
+      grp.chosen(grp.shownId);
+    }
+  }
+
+  // PRESS-AND-HOLD and RIGHT-CLICK open the flyout — Photoshop's own two gestures, riding above the
+  // face's MouseArea. `acceptedButtons` includes Left so the hold can be timed; the left press is NOT
+  // accepted (`propagateComposedEvents` + no `onClicked`), so the face still gets its ordinary click.
+  MouseArea {
+    id: holdArea
+    anchors.fill: parent
+    acceptedButtons: Qt.RightButton
     onClicked: grp.expanded = !grp.expanded
   }
 
-  // The "there's a flyout here" mark — a small filled corner, the convention every tool group uses.
-  Text {
+  Timer {
+    id: holdTimer
+    interval: 400
+    onTriggered: grp.expanded = true
+  }
+
+  // The hold is timed off the FACE's own press state, so it costs no extra grab and cannot swallow
+  // the click: hold past 400 ms and the flyout opens; release before that and the click lands.
+  Connections {
+    target: face
+    function onPressedChanged() {
+      if (face.pressed)
+        holdTimer.restart();
+      else
+        holdTimer.stop();
+    }
+  }
+
+  // ── The flyout's own affordance: the ◢ corner, and it is CLICKABLE ─────────────────────────
+  //
+  // The mark was always here saying "there is more in this group"; now it is the thing you press to
+  // see it. Kept small and quiet (it is the rare path), but given a real 12px hit area so it is not a
+  // pixel hunt, and a pointing cursor so it reads as a control rather than a decoration.
+  Item {
     anchors.right: parent.right
     anchors.bottom: parent.bottom
-    anchors.rightMargin: 2
-    anchors.bottomMargin: 1
+    width: 12
+    height: 12
 
-    text: "◢"
-    font.pixelSize: 7
-    color: face.active ? brg.settings.textColorLight : brg.settings.textColorMid
-    opacity: 0.8
+    Text {
+      anchors.right: parent.right
+      anchors.bottom: parent.bottom
+      anchors.rightMargin: 1
+      anchors.bottomMargin: 0
+
+      text: "◢"
+      font.pixelSize: cornerHover.hovered ? 9 : 7
+      color: face.active ? brg.settings.textColorLight : brg.settings.textColorMid
+      opacity: cornerHover.hovered ? 1.0 : 0.8
+      Behavior on font.pixelSize { NumberAnimation { duration: 60 } }
+    }
+
+    HoverHandler { id: cornerHover; cursorShape: Qt.PointingHandCursor }
+    TapHandler { onTapped: grp.expanded = !grp.expanded }
+
+    MapToolTip {
+      shown: cornerHover.hovered
+      text: qsTr("More in this group — or press and hold the button")
+    }
   }
 
   // ── The flyout ─────────────────────────────────────────────────────────────────────────────
@@ -132,7 +218,8 @@ Item {
 
           objectName: "toolBtn_" + modelData.id   // the DEBUG harness still finds tools by name
           size: 30
-          glyph: modelData.glyph
+          icon: modelData.icon !== undefined ? modelData.icon : ""
+          glyph: modelData.glyph !== undefined ? modelData.glyph : ""
           tip: modelData.tip
           shortcut: modelData.shortcut !== undefined ? modelData.shortcut : ""
           active: grp.activeId === modelData.id

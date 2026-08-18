@@ -206,13 +206,13 @@ Page {
         // Details FIRST (leadership, 2026-07-18: "Details needs to be moved above layers") — it is
         // the panel a click opens, so it owns the top slot.
         panels: [
-          { id: "details", glyph: "✎", title: qsTr("Details"),
+          { id: "details", icon: "qrc:/assets/icons/fontawesome/pen.svg", title: qsTr("Details"),
             tip: qsTr("Details — edit whatever is selected. Nothing selected? The map itself.") },
-          { id: "layers", glyph: "◈", title: qsTr("Layers"),
+          { id: "layers", icon: "qrc:/assets/icons/fontawesome/layer-group.svg", title: qsTr("Layers"),
             tip: qsTr("Layers — everything drawn over the map, in groups") },
-          { id: "characters", glyph: "☻", title: qsTr("Characters"),
+          { id: "characters", icon: "qrc:/assets/icons/fontawesome/users.svg", title: qsTr("Characters"),
             tip: qsTr("Characters — the people and objects you can put on the map. Drag one out.") },
-          { id: "wild", glyph: "✿", title: qsTr("Wild Pokémon"),
+          { id: "wild", icon: "qrc:/assets/icons/fontawesome/paw.svg", title: qsTr("Wild Pokémon"),
             tip: qsTr("Wild Pokémon — the grass and water encounters on this map") }
         ]
         sources: ({ "layers": "LayersPanel.qml",
@@ -241,11 +241,11 @@ Page {
               anchors.horizontalCenter: parent.horizontalCenter
 
               members: [
-                { id: "select", glyph: "↖", shortcut: "V",
+                { id: "select", icon: "qrc:/assets/icons/fontawesome/arrow-pointer.svg", shortcut: "V",
                   tip: qsTr("Select & Move — click to select, drag to move") },
-                { id: "pan", glyph: "✥", shortcut: "H",
+                { id: "pan", icon: "qrc:/assets/icons/fontawesome/up-down-left-right.svg", shortcut: "H",
                   tip: qsTr("Pan — drag the map (or hold Space with any tool)") },
-                { id: "zoom", glyph: "⌕", shortcut: "Z",
+                { id: "zoom", icon: "qrc:/assets/icons/fontawesome/magnifying-glass.svg", shortcut: "Z",
                   tip: qsTr("Zoom — click to zoom in, Alt-click to zoom out") }
               ]
 
@@ -277,12 +277,12 @@ Page {
               anchors.horizontalCenter: parent.horizontalCenter
 
               members: [
-                { id: "placeWarp", glyph: "⇄", shortcut: "W",
-                  tip: qsTr("Place a warp — click a tile. It starts as a way back outside, which is what a warp usually is. (Up to 32.)") },
-                { id: "placeSprite", glyph: "☻", shortcut: "N",
-                  tip: qsTr("Place a character — click a tile. A random one, but only ever a picture THIS map has loaded, so it can never be one the console would draw as garbage. (Up to 15.)") },
-                { id: "placeSign", glyph: "▤", shortcut: "S",
-                  tip: qsTr("Place a sign — click a tile. It starts reading this map's first sign text; choose what it says in the panel. (Up to 16.)") }
+                { id: "placeWarp", icon: "qrc:/assets/icons/fontawesome/door-open.svg", shortcut: "W",
+                  tip: qsTr("Place a warp — click a tile. It picks a real destination from this map's own doors, so it is a working warp the moment you drop it. (Up to 32.)") },
+                { id: "placeSprite", icon: "qrc:/assets/icons/fontawesome/user-plus.svg", shortcut: "N",
+                  tip: qsTr("Place a character — click a tile. A random one, but only ever a picture THIS map can draw, so it can never be one the console would draw as garbage. (Up to 15.)") },
+                { id: "placeSign", icon: "qrc:/assets/icons/fontawesome/sign-hanging.svg", shortcut: "S",
+                  tip: qsTr("Place a sign — click a tile. It picks a real line from this map's own text, so it says something the moment you drop it. (Up to 16.)") }
               ]
 
               activeId: (mapScreen.tool === "placeWarp"
@@ -403,22 +403,36 @@ Page {
         // "Blocks & Tiles", not "Tiles" (project leadership, 2026-07-13: "Tiles is not very good or accurate --
         // it has to do with the block and tile config on the map"). It is exactly that: the BLOCK
         // that fills the edge of the world, and the TILES that mean grass, counter, and boulder.
-        panels: [
-          { id: "tiles", glyph: "▦", title: qsTr("Blocks & Tiles"),
-            tip: qsTr("Blocks & Tiles — the edge of the world, the grass, the counters, the boulder") },
-          { id: "sprites", glyph: "▧", title: qsTr("Sprite set"),
-            tip: qsTr("Sprite set — the eleven sprite pictures the game had loaded for this map") },
+        // ⚠️ SPRITE SET IS NOT ALWAYS HERE. Project leadership, 2026-08-18: *"Dont have sprite set
+        // there at all in the menu bar if not enabled properly its a useless value."* The whole panel
+        // is a no-effect edit — the game throws that cache away and rebuilds it on every load — and
+        // the standing rule from the same pass is that a gated thing takes its furniture with it (the
+        // Town section, again). A rail button that opens a panel which then says "none of this does
+        // anything" is the furniture. So the button only exists while the "!" reveals no-effect edits.
+        panels: {
+          const out = [
+            { id: "tiles", icon: "qrc:/assets/icons/fontawesome/table-cells.svg", title: qsTr("Blocks & Tiles"),
+              tip: qsTr("Blocks & Tiles — the edge of the world, the grass, the counters, the boulder") }
+          ];
+          if (brg.map.showScratch)
+            out.push({ id: "sprites", icon: "qrc:/assets/icons/fontawesome/images.svg", title: qsTr("Sprite set"),
+                       tip: qsTr("Sprite set — the eleven sprite pictures the game had loaded for this map") });
+          return out.concat(rightDock.alwaysPanels);
+        }
+
+        /// The rail buttons that are always present, after the conditional ones above.
+        readonly property var alwaysPanels: [
           // ⇄ The twelve bytes AROUND the doors -- fly, hole, Dig, scripted. They belong to the MAP,
           // which is why they are here with the other things you edit about it, and not in the
           // Details panel (which is for whatever is SELECTED). Project leadership asked for exactly this:
           // "I will place them in the right panel as warp state" (2026-07-14).
-          { id: "warps", glyph: "⇄", title: qsTr("Warp state"),
+          { id: "warps", icon: "qrc:/assets/icons/fontawesome/right-left.svg", title: qsTr("Warp state"),
             tip: qsTr("Warp state — where FLY goes, where falling drops you, where DIG puts you") },
           // ☺ The nine map-global character flags (v1's "NPC" page): whether NPCs face you, whether a
           // scripted cutscene has the controls, whether a trainer battle is queued. They belong to the
           // MAP, so they live here with the other things you edit about it -- not in the Details panel
           // (that is for whatever is SELECTED). Briefed + researched 2026-07-15; reference/npc-character-state.md.
-          { id: "charstate", glyph: "⚙", title: qsTr("Character state"),
+          { id: "charstate", icon: "qrc:/assets/icons/fontawesome/user-gear.svg", title: qsTr("Character state"),
             tip: qsTr("Character state — how the characters on this map behave: facing, scripted control, trainer battle") },
           // ▣ MAP STORAGE — global save bytes that each belong to one map (Vermilion Gym trash-can
           // switches, Cinnabar Gym quiz opponent, Safari Zone run counters). `primary: true` gives its
@@ -426,7 +440,7 @@ Page {
           // for (2026-07-15). Briefed + researched this session; reference/gym-safari-state.md.
           // ⭐ "WORLD" is its name (leadership, 2026-07-18: "Map Storage should still be called
           // World") — the world's persistent storage, viewed one map at a time.
-          { id: "storage", glyph: "▣", primary: true, title: qsTr("World"),
+          { id: "storage", icon: "qrc:/assets/icons/fontawesome/earth-americas.svg", primary: true, title: qsTr("World"),
             tip: qsTr("World — the save's persistent storage, one map at a time: story flags, who's on the map, minigame state") }
         ]
         // ⚠️ MUSIC IS NOT HERE ANY MORE. It is a chip in the toolbar (MusicPicker.qml) -- a whole

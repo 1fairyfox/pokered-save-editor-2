@@ -22,14 +22,27 @@
   height and width that fights any small control (ui-patterns.md -> "Material controls fight small
   heights"), and a rail of them would be a row of 40px pills.
 
-  A glyph, not an icon file: this app's chrome is flat marks and chips, not a tray of tiny system
-  icons. The tooltip is where the words go.
+  ⚠️ **`icon` FIRST, `glyph` as the fallback** (project leadership, 2026-08-18: *"the icon for placing
+  people is very non-intuitive please make it much better remember you can use fontawesome free"* …
+  *"characters wild pokemon all of that needs way better icons"*).
+
+  This file used to say "a glyph, not an icon file", and for the rail that turned out to be wrong: a
+  typographic dingbat is only legible when it happens to *be* the thing (⇄ reads as a swap), and most
+  of this screen's subjects have no dingbat at all. `☻` for "place a person" was the worst of them --
+  it reads as a mood, not as an action. Font Awesome is the app's existing house set (it is already in
+  `credits.json`, and 61 of its icons were already bundled), so the rail now draws a real icon and
+  keeps `glyph` only for marks that genuinely are typographic. The flat language is unchanged: the
+  icon is monochrome and recoloured by state, exactly as the glyph was.
 */
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Effects
 
 Rectangle {
   id: btn
+
+  /// A qrc path to a monochrome SVG. When set it wins over `glyph`.
+  property string icon: ""
 
   property string glyph: ""
   property string tip: ""
@@ -47,6 +60,10 @@ Rectangle {
   property string shortcut: ""
 
   signal clicked()
+
+  /// True while the pointer is held down on this button. MapRailGroup times its press-and-hold off
+  /// this rather than adding a second grabbing MouseArea (which would swallow the click).
+  readonly property bool pressed: ma.containsPress
 
   implicitWidth: size
   implicitHeight: size
@@ -67,11 +84,38 @@ Rectangle {
 
   Behavior on color { ColorAnimation { duration: 90 } }
 
+  /// The one ink for whatever this button draws — icon and glyph agree by construction.
+  readonly property color markColor: btn.active ? brg.settings.textColorLight
+                                                : brg.settings.textColorDark
+
   Text {
     anchors.centerIn: parent
+    visible: btn.icon === ""
     text: btn.glyph
     font.pixelSize: Math.round(btn.size * 0.5)
-    color: btn.active ? brg.settings.textColorLight : brg.settings.textColorDark
+    color: btn.markColor
+  }
+
+  // The SVG is black on transparent, so it is RECOLOURED rather than tinted — a MultiEffect
+  // colourization, the same treatment the rest of the app's Font Awesome buttons use. Sized to
+  // ~46% of the button so it optically matches the old glyph's weight rather than filling the square.
+  Image {
+    id: iconImg
+    anchors.centerIn: parent
+    visible: false                      // the effect draws it; @see reference/qt-patterns.md
+    source: btn.icon
+    sourceSize.width: Math.round(btn.size * 0.46)
+    sourceSize.height: Math.round(btn.size * 0.46)
+    fillMode: Image.PreserveAspectFit
+    mipmap: true
+  }
+
+  MultiEffect {
+    anchors.fill: iconImg
+    visible: btn.icon !== ""
+    source: iconImg
+    colorization: 1.0
+    colorizationColor: btn.markColor
   }
 
   MouseArea {

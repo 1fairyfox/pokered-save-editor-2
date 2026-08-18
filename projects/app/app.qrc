@@ -675,5 +675,19 @@
         <file>assets/icons/fontawesome/gamepad.svg</file>
         <file>assets/icons/fontawesome/trash-restore.svg</file>
         <file>assets/icons/fontawesome/kiwi-bird.svg</file>
+        <!-- The map screen's icon set (Font Awesome Free 6.7.2, solid) -->
+        <file>assets/icons/fontawesome/arrow-pointer.svg</file>
+        <file>assets/icons/fontawesome/up-down-left-right.svg</file>
+        <file>assets/icons/fontawesome/magnifying-glass.svg</file>
+        <file>assets/icons/fontawesome/door-open.svg</file>
+        <file>assets/icons/fontawesome/user-plus.svg</file>
+        <file>assets/icons/fontawesome/sign-hanging.svg</file>
+        <file>assets/icons/fontawesome/layer-group.svg</file>
+        <file>assets/icons/fontawesome/paw.svg</file>
+        <file>assets/icons/fontawesome/images.svg</file>
+        <file>assets/icons/fontawesome/right-left.svg</file>
+        <file>assets/icons/fontawesome/user-gear.svg</file>
+        <file>assets/icons/fontawesome/earth-americas.svg</file>
+        <file>assets/icons/fontawesome/table-cells.svg</file>
     </qresource>
 </RCC>

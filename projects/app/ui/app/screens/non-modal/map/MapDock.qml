@@ -49,12 +49,28 @@ Item {
   property string side: "right"
   readonly property bool isLeft: side === "left"
 
-  /// The panels this dock offers, in rail order: `{ id, glyph, title, tip }`. Glyphs, not SVGs --
-  /// this app's chrome is flat marks, not a tray of tiny system icons.
+  /// The panels this dock offers, in rail order: `{ id, icon | glyph, title, tip, primary? }`.
+  /// `icon` is a qrc path to a monochrome SVG (the Font Awesome house set) and wins over `glyph`.
+  /// @see MapRailButton — and its note on why the old "glyphs, never SVGs" rule was dropped.
+  ///
+  /// ⚠️ The list may CHANGE AT RUNTIME (the Sprite set button only exists while the "!" reveals
+  /// no-effect edits), which is why @ref open self-heals below.
   property var panels: []
 
   /// The open panel's id, or "" for none. ONE at a time, by design.
   property string open: ""
+
+  // ⚠️ A PANEL WHOSE BUTTON HAS GONE MUST NOT STAY OPEN. `panels` is now conditional, so the rail can
+  // lose a button while its panel is on screen -- leaving a panel with no way to close it and no
+  // button lit. Closing it is the only coherent answer.
+  onPanelsChanged: {
+    if (dock.open === "")
+      return;
+    for (let i = 0; i < dock.panels.length; i++)
+      if (dock.panels[i].id === dock.open)
+        return;
+    dock.open = "";
+  }
 
   /// Which QML file each panel id loads. Supplied by the screen.
   property var sources: ({})
@@ -392,7 +408,8 @@ Item {
           required property var modelData
 
           objectName: "dockBtn_" + modelData.id   // the DEBUG harness drives the dock through these
-          glyph: modelData.glyph
+          icon: modelData.icon !== undefined ? modelData.icon : ""
+          glyph: modelData.glyph !== undefined ? modelData.glyph : ""
           tip: modelData.tip
           // A panel may ask its rail icon to read as PRIMARY (filled at rest) -- Map Storage does.
           primary: modelData.primary === true
