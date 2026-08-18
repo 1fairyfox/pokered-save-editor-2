@@ -549,7 +549,17 @@ Item {
           }
           // This page's own town (0 or 1 of them) leads; "view all" reveals the whole group.
           readonly property var mine: list.length > 0 ? list[0] : undefined
-          visible: mine !== undefined
+
+          // ⚠️ GATED AS A WHOLE, not row-by-row (project leadership, 2026-08-18: *"if something is
+          // useless or whatever hide it completely behind the correct/associated useless option"*,
+          // and, on this section specifically, *"hide the whole section instead"*).
+          //
+          // The town you are STANDING IN re-marks itself visited on every Continue, so its switch is
+          // a no-effect edit and lives behind the "!". It used to be the only thing hidden — which
+          // left the heading, the "?" and the whole check-all toolbar sitting above a hole, reading
+          // as *"Pallet Town doesn't get a visited flag"*. It does; you just can't usefully change
+          // it from here. A gated thing takes its furniture with it.
+          visible: mine !== undefined && (!mine.isCurrentMap || panel.showUseless)
 
           property bool showAll: false
 
