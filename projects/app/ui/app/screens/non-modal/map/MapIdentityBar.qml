@@ -216,8 +216,9 @@ Rectangle {
       property bool openState: false
       onOpenStateChanged: openState ? optionsPop.open() : optionsPop.close()
 
-      readonly property bool t1: brg.map.showUnused    // unused / unstable (dangerous)
-      readonly property bool t2: brg.map.showScratch   // no-effect (harmless)
+      readonly property bool t1: brg.map.showUnused        // unused / unstable (dangerous)
+      readonly property bool t2: brg.map.showScratch       // no-effect (harmless)
+      readonly property bool t3: brg.map.showTrulyUnused   // truly unused (never read/written)
 
       Rectangle {
         id: optionsFace
@@ -229,6 +230,7 @@ Rectangle {
         border.width: 1
         border.color: optionsButton.t1 ? "#b3261e"
                     : optionsButton.t2 ? "#3a6ea5"
+                    : optionsButton.t3 ? "#6a6a6a"
                     : brg.settings.dividerColor
         Behavior on color { ColorAnimation { duration: 90 } }
 
@@ -239,8 +241,9 @@ Rectangle {
           font.bold: true
           color: optionsButton.t1 ? "#b3261e"
                : optionsButton.t2 ? "#3a6ea5"
+               : optionsButton.t3 ? "#6a6a6a"
                : brg.settings.textColorMid
-          opacity: (optionsButton.t1 || optionsButton.t2) ? 1.0 : 0.55
+          opacity: (optionsButton.t1 || optionsButton.t2 || optionsButton.t3) ? 1.0 : 0.55
         }
 
         // The "level" light — a small dot, top-right, coloured by the highest tier currently shown.
@@ -249,8 +252,8 @@ Rectangle {
           anchors.right: parent.right
           anchors.top: parent.top
           anchors.margins: 2
-          visible: optionsButton.t1 || optionsButton.t2
-          color: optionsButton.t1 ? "#e53935" : "#42a5f5"
+          visible: optionsButton.t1 || optionsButton.t2 || optionsButton.t3
+          color: optionsButton.t1 ? "#e53935" : optionsButton.t2 ? "#42a5f5" : "#9e9e9e"
           border.width: 1
           border.color: "#ffffff"
         }
@@ -265,8 +268,8 @@ Rectangle {
       MapToolTip {
         shown: optHover.hovered && !optionsButton.openState
         text: qsTr("Uncommon options — reveal abnormal values the app normally hides: unused/unstable "
-                   + "ones the game acts on with unintended effects, and no-effect ones it overwrites "
-                   + "or never reads.")
+                   + "ones the game acts on with unintended effects, no-effect ones it overwrites or "
+                   + "writes-but-never-reads, and truly-unused ones it never touches at all.")
       }
 
       Popup {
@@ -314,16 +317,30 @@ Rectangle {
 
           Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: brg.settings.dividerColor }
 
-          // ── Tier 2: No-effect — overwritten on load, read-only, or never read ──────────────────
+          // ── Tier 2: No-effect — overwritten on load, or write-only ─────────────────────────────
           OptionTierRow {
             Layout.fillWidth: true
             dotColor: "#42a5f5"
             title: qsTr("No-effect edits")
-            blurb: qsTr("Values the game overwrites when it loads your save, or never reads at all — "
-                        + "reset scratch, the sprite cache, placeholder and dead flags. Real bytes, "
-                        + "all editable — they just have no effect you can keep.")
+            blurb: qsTr("Values the game overwrites when it loads your save, or writes but never reads "
+                        + "back — reset scratch, the sprite cache, write-only flags. Real bytes, all "
+                        + "editable — they just have no effect you can keep.")
             checked: brg.map.showScratch
             onToggled: brg.map.showScratch = !brg.map.showScratch
+          }
+
+          Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: brg.settings.dividerColor }
+
+          // ── Tier 3: Truly unused — the game never reads AND never writes them ──────────────────
+          OptionTierRow {
+            Layout.fillWidth: true
+            dotColor: "#9e9e9e"
+            title: qsTr("Truly unused")
+            blurb: qsTr("Flags the game never reads and never writes — literally never used in any "
+                        + "way: placeholder padding, and vestigial or defined-but-unused bits. Not the "
+                        + "rewritten-on-load or write-only ones (those are No-effect above).")
+            checked: brg.map.showTrulyUnused
+            onToggled: brg.map.showTrulyUnused = !brg.map.showTrulyUnused
           }
         }
       }

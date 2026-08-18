@@ -59,56 +59,13 @@ Item {
       Layout.fillWidth: true
       spacing: 6
 
-      ComboBox {
-      id: dmrCombo
-      Layout.fillWidth: true
-      Layout.preferredHeight: 30
-      font.pixelSize: 12
-      model: brg.map.mapList()
-      textRole: "name"
-      valueRole: "ind"
-      currentIndex: {
-        const l = model;
-        for (let i = 0; i < l.length; i++)
-          if (l[i].ind === dmr.value) return i;
-        return -1;
-      }
-      onActivated: dmr.picked(currentValue)
-
-      delegate: ItemDelegate {
-        required property var modelData
-        required property int index
-        width: dmrCombo.width
-        height: (modelData.group !== "" ? 20 : 0) + 26
-        highlighted: dmrCombo.highlightedIndex === index
-        contentItem: ColumnLayout {
-          spacing: 0
-          Text {
-            visible: modelData.group !== ""
-            Layout.fillWidth: true
-            text: modelData.group
-            font.pixelSize: 10; font.bold: true
-            color: brg.settings.textColorMid
-          }
-          RowLayout {
-            Layout.fillWidth: true
-            spacing: 6
-            Text {
-              text: modelData.ind
-              font.pixelSize: 10; font.family: "monospace"
-              color: brg.settings.textColorMid
-              Layout.minimumWidth: 22
-            }
-            Text {
-              Layout.fillWidth: true
-              text: modelData.name
-              font.pixelSize: 12
-              color: brg.settings.textColorDark
-              elide: Text.ElideRight
-            }
-          }
-        }
-      }
+      // The ONE shared map selector (sort · search · list), dropped from a compact field — the same
+      // control the map-name panel uses, so every "which map?" reads and behaves alike (project
+      // leadership, 2026-08-04). Replaced the plain grouped combo.
+      MapField {
+        Layout.fillWidth: true
+        value: dmr.value
+        onPicked: (ind) => dmr.picked(ind)
       }
 
       FieldButtons {

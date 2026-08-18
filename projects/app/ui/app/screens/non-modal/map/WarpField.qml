@@ -238,87 +238,22 @@ ColumnLayout {
     font.pixelSize: 11
   }
 
-  // ── map: a real map picker — all 248, grouped, glitch ids labelled ────────────────────────
+  // ── map: THE shared map selector (sort · search · list), from a compact field ─────────────────
   //
-  // Plus the one value that is not a map at all: `back outside` ($FF). It goes at the TOP, because on
-  // a door it is not an exotic option — it is the ordinary case.
-  ComboBox {
-    id: mapCombo
+  // Every "which map?" uses the same control now (project leadership, 2026-08-04). The one value that
+  // is not a map at all — `back outside` ($FF) — rides in as a leading entry on the `destMap` field,
+  // at the top, because on a door it is the ordinary case, not an exotic one.
+  MapField {
     Layout.fillWidth: true
     Layout.bottomMargin: 6
-    Layout.preferredHeight: 30
     visible: field.kind === "map"
-    font.pixelSize: 11
-
-    readonly property var maps: {
-      const base = brg.map.mapList();
-      if (field.fieldData.key !== "destMap")
-        return base;
-
-      // "Back outside" is the sane default and the commonest destination in the game. It leads the
-      // list, and it says what it MEANS — resolved through "Outside is…", live.
-      const out = [{ ind: 255,
-                     name: qsTr("← Back outside (%1)").arg(brg.map.lastMapName),
-                     group: qsTr("The usual"), isCopy: false, copyOf: "" }];
-      return out.concat(base);
-    }
-
-    model: mapCombo.maps
-    textRole: "name"
-    valueRole: "ind"
-
-    currentIndex: {
-      const list = mapCombo.maps;
-      for (let i = 0; i < list.length; i++)
-        if (list[i].ind === field.value)
-          return i;
-      return -1;
-    }
-
-    onActivated: field.commit(currentValue)
-
-    delegate: ItemDelegate {
-      required property var modelData
-      required property int index
-
-      width: mapCombo.width
-      height: (modelData.group !== "" ? 20 : 0) + 24
-      highlighted: mapCombo.highlightedIndex === index
-
-      contentItem: ColumnLayout {
-        spacing: 0
-
-        Text {
-          visible: modelData.group !== ""
-          Layout.fillWidth: true
-          text: modelData.group
-          font.pixelSize: 10
-          font.bold: true
-          color: brg.settings.textColorMid
-        }
-
-        RowLayout {
-          Layout.fillWidth: true
-          spacing: 6
-
-          Text {
-            text: modelData.ind
-            font.pixelSize: 10
-            font.family: "monospace"
-            color: brg.settings.textColorMid
-            Layout.minimumWidth: 22
-          }
-
-          Text {
-            Layout.fillWidth: true
-            text: modelData.name
-            font.pixelSize: 11
-            color: brg.settings.textColorDark
-            elide: Text.ElideRight
-          }
-        }
-      }
-    }
+    value: field.value
+    leadingEntries: field.fieldData.key === "destMap"
+      ? [{ ind: 255,
+           name: qsTr("← Back outside (%1)").arg(brg.map.lastMapName),
+           group: qsTr("The usual"), isCopy: false, copyOf: "", size: "" }]
+      : []
+    onPicked: (ind) => field.commit(ind)
   }
 
   // ── 🔫 flyMap / dungeonMap / dungeonHole: the LEGAL values, with the full range one click away ──

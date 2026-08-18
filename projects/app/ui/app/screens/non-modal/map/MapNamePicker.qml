@@ -52,6 +52,77 @@ Item {
   property bool blocksSeparated: false
   readonly property bool blocksSplitShown: blocksSeparated || !brg.map.blocksetIsTileset
 
+  /// Tile-animation explanation, as organised bullet points (project leadership, 2026-08-04). The save
+  /// byte (tileset 0x3522) is tri-state 0/1/2 = Indoor/Cave/Outdoor; a hack value >2 is read by the
+  /// console on bit 0 alone, so it collapses onto water-only (odd) or water+flower (even). @see
+  /// notes/reference/map-animation.md. `animEff` is that collapsed 0/1/2; `animBullets` is the list.
+  /// New in a structure meant to GROW — add a fact by pushing another line.
+  readonly property int animEff: {
+    const v = brg.map.tileAnim;
+    if (v === 0) return 0;
+    return (v % 2 === 1) ? 1 : 2;   // odd → water-only, even → water+flower
+  }
+  /// Does THIS tileset's tile $14 really hold water, and tile $03 really hold a flower? `hasWater`
+  /// is a real tile trait; `hasFlower` is exact too — the flower is native only to the tileset whose
+  /// canonical animation includes it (default == Outdoor/2, i.e. OVERWORLD). @see map-animation.md.
+  readonly property bool tsHasWater: brg.map.tilesetHasWater
+  readonly property bool tsHasFlower: brg.map.tileAnimDefault === 2
+
+  /// Each entry is { text, pos, warn } — pos true → a green "+" (working), false → a red "−" (not);
+  /// { text, note: true } → an amber "⚠" for a glitch value; and a non-empty `warn` adds a hoverable
+  /// yellow "!" at the end whose tooltip explains a real gotcha (project leadership, 2026-08-04). The
+  /// warnings: Indoor breaks Surf on a WATER map · wave distortion running on a non-water $14 · the
+  /// flower REPLACING a non-flower $03. `animHasWarning` rolls them up onto the active segment.
+  readonly property var animBullets: {
+    const eff = root.animEff;
+    const raw = brg.map.tileAnim;
+    const water = root.tsHasWater;
+    const flower = root.tsHasFlower;
+    const b = [];
+
+    // (No "what animates" summary line — the three facts below already say it.)
+
+    // Surf. On a water map, Indoor (no animation) disables the tile Surf rides on.
+    b.push(eff === 0
+      ? { text: qsTr("Not Surf-friendly"), pos: false,
+          warn: water ? qsTr("This map has water, so Surf matters here — and Indoor turns off the "
+                             + "water animation Surf depends on. You can't Surf on this map with this "
+                             + "setting.") : "" }
+      : { text: qsTr("Surf-friendly"), pos: true, warn: "" });
+
+    // Tile $14 (the water tile). Wave distortion on a tileset whose $14 isn't water just warps it.
+    b.push(eff === 0
+      ? { text: qsTr("Tile $14 (usually water) won't get wave distortions"), pos: false, warn: "" }
+      : { text: qsTr("Tile $14 (usually water) gets wave distortions"), pos: true,
+          warn: water ? "" : qsTr("This tileset's tile $14 isn't water. The wave distortion still "
+                                  + "runs, but it just warps whatever graphic sits at $14.") });
+
+    // Tile $03 (the flower tile). At Outdoor the flower REPLACES $03 — jarring if $03 isn't a flower.
+    b.push(eff === 2
+      ? { text: qsTr("Tile $03 (usually a flower) will be replaced by flower animation frames"), pos: true,
+          warn: flower ? "" : qsTr("This tileset's tile $03 isn't a flower. It will be replaced "
+                                   + "entirely by the flower animation frames.") }
+      : { text: qsTr("Tile $03 (usually a flower) will not be replaced by flower animation frames"),
+          pos: false, warn: "" });
+
+    // A hack/glitch byte the game still runs — say what the console makes of it.
+    if (raw > 2)
+      b.push({ text: qsTr("Value %1 is a glitch value; the console reads only bit 0, so it behaves as above")
+                     .arg(raw), note: true, warn: "" });
+
+    return b;
+  }
+
+  /// True when the current animation setting raises any yellow "!" — used to badge the active
+  /// Indoor/Cave/Outdoor segment (project leadership, 2026-08-04: "mark the button with a yellow
+  /// exclamation … runs counter to the green default button").
+  readonly property bool animHasWarning: {
+    const list = root.animBullets;
+    for (let i = 0; i < list.length; i++)
+      if (list[i].warn && list[i].warn !== "") return true;
+    return false;
+  }
+
   // ── The face: the bold map name + a ▾ that says "I drop a menu" ────────────────────────────────
   Rectangle {
     id: face
@@ -117,144 +188,58 @@ Item {
       anchors.fill: parent
       spacing: 8
 
-      // ── The map list — the "select box", right at the top so it's usable the instant you open ──
-      //
-      // One top row: the shared SORT selector on the LEFT, the search box filling the rest (project
-      // leadership, 2026-08-03: *"combine search maps with map selection, sort selection next to the
-      // search bar on the left."*). The unused-maps toggle is gone from here — it now lives in the
-      // global "!" options panel (Tier 1: Unused). Sorting is shared across every map list.
-      RowLayout {
+      // ── The map list — the ONE shared map selector (sort · search · list) ──────────────────────
+      // Extracted to MapSelectList so every place that picks a map uses the same control (project
+      // leadership, 2026-08-04). Picking previews on the canvas (doesn't commit) and closes the panel.
+      // @see MapModel::beginMapPreview, the Preview card in MapCanvas.
+      MapSelectList {
         Layout.fillWidth: true
-        spacing: 6
-
-        ComboBox {
-          id: sortCombo
-          Layout.preferredWidth: 116
-          Layout.preferredHeight: 30
-          font.pixelSize: 11
-          model: brg.map.mapSortModes()
-          textRole: "name"
-          valueRole: "value"
-          currentIndex: {
-            const l = model;
-            for (let i = 0; i < l.length; i++)
-              if (l[i].value === brg.map.mapSort) return i;
-            return 0;
-          }
-          onActivated: brg.map.mapSort = currentValue
-        }
-
-        TextField {
-          id: mapSearch
-          Layout.fillWidth: true
-          Layout.preferredHeight: 30
-          font.pixelSize: 12
-          placeholderText: qsTr("Search maps…")
-        }
-      }
-
-      // A fixed-height list that scrolls internally, so the tileset / blockset controls below it stay
-      // put rather than scrolling away with the list.
-      Rectangle {
-        Layout.fillWidth: true
-        Layout.preferredHeight: 114   // ~3 rows + internal scroll — short of the window edges
-        radius: 5
-        border.width: 1
-        border.color: brg.settings.dividerColor
-        clip: true
-
-        ListView {
-          id: mapListView
-          anchors.fill: parent
-          anchors.margins: 1
-          clip: true
-
-          // The shared sort (mapSort) AND the search box both feed the model. Referencing mapSort
-          // makes the binding re-run when the sort changes (mapList() is otherwise a plain call).
-          model: {
-            brg.map.mapSort;
-            brg.map.showUnused;
-            const q = mapSearch.text.trim().toLowerCase();
-            const all = brg.map.mapList();
-            if (q === "")
-              return all;
-            return all.filter(function(m) {
-              return ("" + m.name).toLowerCase().indexOf(q) >= 0 || ("" + m.ind).indexOf(q) >= 0;
-            });
-          }
-
-          ScrollBar.vertical: ScrollBar { }
-
-          delegate: ItemDelegate {
-            required property var modelData
-            required property int index
-            width: mapListView.width
-            // Group headings only when NOT searching (a filtered list's first-of-group headings drift).
-            height: (modelData.group !== "" && mapSearch.text === "" ? 20 : 0) + 26
-            highlighted: modelData.ind === brg.map.mapInd
-
-            // Picking a map opens the PREVIEW on the canvas (it does not commit) and closes the panel.
-            // @see MapModel::beginMapPreview, the Preview card in MapCanvas.
-            onClicked: {
-              brg.map.beginMapPreview(modelData.ind);
-              root.openState = false;
-            }
-
-            contentItem: ColumnLayout {
-              spacing: 0
-              Text {
-                visible: modelData.group !== "" && mapSearch.text === ""
-                Layout.fillWidth: true
-                text: modelData.group
-                font.pixelSize: 10; font.bold: true
-                color: brg.settings.textColorMid
-              }
-              RowLayout {
-                Layout.fillWidth: true
-                spacing: 6
-                Text {
-                  text: modelData.ind
-                  font.pixelSize: 10; font.family: "monospace"
-                  color: brg.settings.textColorMid
-                  Layout.minimumWidth: 22
-                }
-                Text {
-                  Layout.fillWidth: true
-                  text: modelData.name
-                  font.pixelSize: 12
-                  color: brg.settings.textColorDark
-                  elide: Text.ElideRight
-                }
-                Text {
-                  visible: modelData.isCopy
-                  text: qsTr("→ %1").arg(modelData.copyOf)
-                  font.pixelSize: 10; font.italic: true
-                  color: brg.settings.textColorMid
-                }
-                // The map size (WxH blocks), right-aligned — uniform with the app's other lists.
-                Text {
-                  text: modelData.size
-                  font.pixelSize: 10; font.family: "monospace"
-                  color: brg.settings.textColorMid
-                }
-              }
-            }
-          }
-        }
+        listHeight: 114   // ~3 rows + internal scroll — short of the window edges
+        selectedInd: brg.map.mapInd
+        onPicked: (ind) => { brg.map.beginMapPreview(ind); root.openState = false; }
       }
 
       Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: brg.settings.dividerColor }
 
       // ── "Tileset & blocks" — collapsed behind a disclosure so the panel stays a clean map picker ──
       // project leadership, 2026-08-03: hide the graphics/blocks behind a more-settings link.
-      Text {
+      // The Separate/Merge switch lives on the RIGHT of this header (project leadership, 2026-08-04) —
+      // out of the "Tileset" control row, where as a full Button it inflated the row and left a gap.
+      RowLayout {
         Layout.fillWidth: true
-        text: (root.advancedOpen ? "▾  " : "▸  ") + qsTr("Tileset & blocks")
-        font.pixelSize: 11
-        font.bold: true
-        color: moreHover.hovered ? brg.settings.textColorDark : brg.settings.textColorMid
-        HoverHandler { id: moreHover; cursorShape: Qt.PointingHandCursor }
-        TapHandler { onTapped: root.advancedOpen = !root.advancedOpen }
+        spacing: 6
+
+        Text {
+          text: (root.advancedOpen ? "▾  " : "▸  ") + qsTr("Tileset & blocks")
+          font.pixelSize: 11
+          font.bold: true
+          color: moreHover.hovered ? brg.settings.textColorDark : brg.settings.textColorMid
+          HoverHandler { id: moreHover; cursorShape: Qt.PointingHandCursor }
+          TapHandler { onTapped: root.advancedOpen = !root.advancedOpen }
+        }
+
+        Item { Layout.fillWidth: true }
+
+        // One switch, both directions: "Separate" when combined, "Merge" when split. Merge writes
+        // blocks := tileset (the existing behaviour); Separate just reveals the second control.
+        Text {
+          visible: root.advancedOpen
+          text: root.blocksSplitShown ? qsTr("Merge") : qsTr("Separate")
+          font.pixelSize: 10
+          font.bold: true
+          color: mergeHover.hovered ? brg.settings.textColorDark : brg.settings.accentColor
+          HoverHandler { id: mergeHover; cursorShape: Qt.PointingHandCursor }
+          TapHandler {
+            onTapped: {
+              if (root.blocksSplitShown) {
+                brg.map.blocksetInd = brg.map.tilesetInd;
+                root.blocksSeparated = false;
+              } else {
+                root.blocksSeparated = true;
+              }
+            }
+          }
+        }
       }
 
       ColumnLayout {
@@ -296,14 +281,6 @@ Item {
             onRandomize: { brg.map.randomizeTileset(); brg.map.blocksetInd = brg.map.tilesetInd; }
             onRevert: { brg.map.revertTileset(); brg.map.revertBlockset(); }
           }
-
-          // Split them into two independent selectors (no write — just reveals the second control).
-          Button {
-            flat: true
-            font.pixelSize: 10
-            text: qsTr("Separate")
-            onClicked: root.blocksSeparated = true
-          }
         }
 
         // ── Split selectors (two controls) ──
@@ -312,22 +289,11 @@ Item {
           visible: root.blocksSplitShown
           spacing: 6
 
-          RowLayout {
+          Text {
             Layout.fillWidth: true
-            spacing: 6
-            Text {
-              Layout.fillWidth: true
-              text: qsTr("Tileset")
-              font.pixelSize: 10
-              color: brg.settings.textColorMid
-            }
-            // Merge back to one control: blocks follow the tileset, then collapse the split view.
-            Button {
-              flat: true
-              font.pixelSize: 10
-              text: qsTr("Merge")
-              onClicked: { brg.map.blocksetInd = brg.map.tilesetInd; root.blocksSeparated = false; }
-            }
+            text: qsTr("Tileset")
+            font.pixelSize: 10
+            color: brg.settings.textColorMid
           }
           RowLayout {
             Layout.fillWidth: true
@@ -404,8 +370,22 @@ Item {
           }
         }
 
-        // Indoor / Cave / Outdoor — which tiles MOVE (the tileset's 0x3522 byte). Cave is not Indoor:
-        // cave water animates.
+        // ── Tile Animation ──────────────────────────────────────────────────────────────────────
+        // Its own titled group now (project leadership, 2026-08-04). Indoor / Cave / Outdoor picks which
+        // tiles MOVE (the tileset's 0x3522 byte). Cave is not Indoor: cave water animates.
+        // Same label weight as "Tileset" / "Blocks" — it's a peer control, not a bigger heading.
+        // Only shown in the SPLIT view, where those two labels exist for it to sit beside; in the
+        // merged view (one unlabelled combo) it would be an orphaned heading (project leadership,
+        // 2026-08-04).
+        Text {
+          Layout.fillWidth: true
+          Layout.topMargin: 2
+          visible: root.blocksSplitShown
+          text: qsTr("Tile Animation")
+          font.pixelSize: 10
+          color: brg.settings.textColorMid
+        }
+
         RowLayout {
           Layout.fillWidth: true
           spacing: 0
@@ -418,13 +398,16 @@ Item {
             ]
 
             Rectangle {
+              id: seg
               required property var modelData
               required property int index
+              objectName: "animSeg" + index   // the DEBUG harness taps segments by this
 
               Layout.fillWidth: true
               implicitHeight: 26
 
               readonly property bool active: brg.map.tileAnim === modelData.v
+              readonly property bool isDefault: modelData.v === brg.map.tileAnimDefault
 
               color: active ? brg.settings.accentColor
                    : segHover.hovered ? "#f0f0f0" : "transparent"
@@ -440,43 +423,102 @@ Item {
               HoverHandler { id: segHover; cursorShape: Qt.PointingHandCursor }
               TapHandler { onTapped: brg.map.tileAnim = modelData.v }
 
-              Text {
+              // The label, plus the yellow "!" when THIS is the selected setting and it raises a
+              // warning (project leadership, 2026-08-04). MapWarnIcon carries its own hover tooltip.
+              RowLayout {
                 anchors.centerIn: parent
-                text: modelData.name
-                font.pixelSize: 11
-                font.bold: parent.active
-                color: parent.active ? brg.settings.textColorLight : brg.settings.textColorDark
+                spacing: 4
+
+                Text {
+                  Layout.alignment: Qt.AlignVCenter
+                  text: seg.modelData.name
+                  font.pixelSize: 11
+                  font.bold: seg.active
+                  color: seg.active ? brg.settings.textColorLight : brg.settings.textColorDark
+                }
+
+                MapWarnIcon {
+                  Layout.alignment: Qt.AlignVCenter
+                  visible: seg.active && root.animHasWarning
+                  implicitWidth: 13
+                  implicitHeight: 13
+                  radius: 6.5
+                  text: qsTr("This setting raises a warning — see the notes below.")
+                }
+              }
+
+              // A small green dot marks the tileset's DEFAULT animation (project leadership,
+              // 2026-08-04) — "the green default button", shown on whichever segment is native to
+              // this map's tileset, active or not.
+              Rectangle {
+                visible: seg.isDefault
+                width: 6; height: 6; radius: 3
+                color: "#009e73"
+                anchors.top: parent.top
+                anchors.right: parent.right
+                anchors.topMargin: 3
+                anchors.rightMargin: 3
+
+                HoverHandler { id: defHover; cursorShape: Qt.PointingHandCursor }
+                MapToolTip {
+                  shown: defHover.hovered
+                  delay: 300
+                  text: qsTr("This is this map's default animation — what its tileset uses on a real cartridge.")
+                }
               }
             }
           }
         }
 
-        Text {
+        // The plain-English facts, as bullets (project leadership, 2026-08-04) — one line per fact, so it
+        // reads at a glance instead of as a paragraph. Driven by `animBullets` (top of file), which is
+        // built to GROW: add a fact by pushing another line there.
+        ColumnLayout {
           Layout.fillWidth: true
-          text: {
-            switch (brg.map.tileAnim) {
-              case 0: return qsTr("Nothing animates.") + (brg.map.tilesetHasWater
-                        ? qsTr(" ⚠️ Surf needs the water tile, so Indoor breaks Surf here.")
-                        : qsTr(" (This tileset has no water anyway.)"));
-              case 1: return brg.map.tilesetHasWater
-                        ? qsTr("Water animates, flowers don't — Surf-friendly. Tile $14 is this tileset's "
-                               + "water tile, and the wave distortion runs on it.")
-                        : qsTr("Water animates, flowers don't. ⚠️ This tileset has no water — tile $14 is "
-                               + "some other graphic, so the wave distortion just warps it.");
-              case 2: return brg.map.tilesetHasWater
-                        ? qsTr("Water and flowers animate — Surf-friendly. Tile $14 (this tileset's water) "
-                               + "gets the wave distortion, and tile $03 is replaced by the animated flower.")
-                        : qsTr("Water and flowers animate. ⚠️ This tileset has no water — tile $14 is some "
-                               + "other graphic the wave distortion warps, and tile $03 is replaced by the "
-                               + "animated flower.");
+          Layout.topMargin: 2
+          spacing: 3
+
+          Repeater {
+            model: root.animBullets
+
+            RowLayout {
+              id: bulletRow
+              required property var modelData
+              Layout.fillWidth: true
+              spacing: 6
+
+              // A green "+" when the feature works, a red "−" when it doesn't, an amber "⚠" for a
+              // glitch value. Okabe-Ito palette (colourblind-safe) — the app's existing warn colour
+              // for the minus, its green for the plus.
+              Text {
+                text: bulletRow.modelData.note ? "⚠" : (bulletRow.modelData.pos ? "+" : "−")
+                font.pixelSize: 11
+                font.bold: true
+                color: bulletRow.modelData.note ? "#e69f00"
+                     : bulletRow.modelData.pos  ? "#009e73"
+                                                : "#d55e00"
+                Layout.alignment: Qt.AlignTop
+                Layout.preferredWidth: 10
+                horizontalAlignment: Text.AlignHCenter
+              }
+              Text {
+                Layout.fillWidth: true
+                text: bulletRow.modelData.text
+                font.pixelSize: 10
+                color: brg.settings.textColorMid
+                wrapMode: Text.WordWrap
+              }
+
+              // A hoverable yellow "!" for a real gotcha (project leadership, 2026-08-04) — the icon IS
+              // the affordance (no separate "?"), tooltip on hover. Only when this bullet warns.
+              MapWarnIcon {
+                Layout.alignment: Qt.AlignTop
+                visible: bulletRow.modelData.warn !== undefined && bulletRow.modelData.warn !== ""
+                text: bulletRow.modelData.warn !== undefined ? bulletRow.modelData.warn : ""
+                tipWidth: 240
+              }
             }
-            return (brg.map.tileAnim % 2 === 1)
-                   ? qsTr("%1 — the console reads bit 0, so this behaves as water only.").arg(brg.map.tileAnim)
-                   : qsTr("%1 — the console reads bit 0, so this behaves as water and flowers.").arg(brg.map.tileAnim);
           }
-          font.pixelSize: 10
-          color: brg.settings.textColorMid
-          wrapMode: Text.WordWrap
         }
       }
     }

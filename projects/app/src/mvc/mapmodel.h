@@ -684,6 +684,15 @@ public:
   bool showUnused() const { return m_showUnused; }
   void setShowUnused(bool on);
 
+  /// Show TRULY-UNUSED values — a tier of its own (project leadership, 2026-08-04): bytes/bits the game
+  /// **never reads and never writes**, in any way — pure placeholder / vestigial / defined-unused /
+  /// unused flags. Deliberately EXCLUDES anything the load rewrites or writes-once (those are
+  /// "no-effect", @ref showScratch): a rewritten byte is touched, so it is not truly unused. OFF by
+  /// default. @see the event-flag `trulyUnused` field in storageEvents().
+  Q_PROPERTY(bool showTrulyUnused READ showTrulyUnused WRITE setShowTrulyUnused NOTIFY showTrulyUnusedChanged)
+  bool showTrulyUnused() const { return m_showTrulyUnused; }
+  void setShowTrulyUnused(bool on);
+
   /**
    * @brief Where each connected map bleeds into the ring: `{ dir, name, x, y, w, h }`, buffer px.
    *
@@ -1392,6 +1401,8 @@ signals:
   void mapSortChanged();
   /// The glitch/unused-maps visibility toggled — every map list re-reads mapList().
   void showUnusedChanged();
+  /// The truly-unused (never read/written) visibility toggled — the storage panel re-groups.
+  void showTrulyUnusedChanged();
   /// The animation step moved on (a view setting; the save is untouched).
   void frameChanged();
   /// The rendered image's URL changed -- a new frame, or a new map/tileset/palette.
@@ -1454,6 +1465,7 @@ private:
 
   int m_mapSort = SortTileset;   ///< The shared map-list sort mode. @see mapSort
   bool m_showUnused = false;  ///< Tier 1: show unused/glitch (copy) maps + unused values. @see showUnused
+  bool m_showTrulyUnused = false;  ///< Tier 3: show never-read-never-written values. @see showTrulyUnused
 
   /// Rebuild the selection when the map changes under it.
   void revalidateSelection();

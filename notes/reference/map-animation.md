@@ -140,6 +140,24 @@ cartridge frame by frame. The tables above are read from the disassembly and pin
 project's standard is that **the console judges**, and until that dump exists this one organ is
 verified against the source rather than against the silicon.
 
+## The editor's warnings (map-name picker, 2026-08-04)
+
+The Tile Animation control (Indoor/Cave/Outdoor on the map-selection panel) now says, in words, what a
+setting does — and flags the three cases where it does something surprising, each a hoverable yellow "!"
+(a `MapWarnIcon`) on the relevant bullet, plus a roll-up "!" on the active segment:
+
+- **Indoor breaks Surf on a WATER map.** When `tilesetHasWater` (tile $14 really is water on this
+  tileset) and the setting is Indoor (no animation), Surf has no animated tile to ride → warn.
+- **Wave distortion on a non-water $14.** When the setting animates water (Cave/Outdoor) but
+  `tilesetHasWater` is false, the rotation still runs — it just warps whatever graphic sits at $14.
+- **The flower REPLACES a non-flower $03.** At Outdoor, tile $03 is overwritten by the flower frames.
+  On a tileset whose $03 isn't a flower (`tileAnimDefault !== 2`), that's a full replacement, not an
+  animation of the existing tile. (`hasFlower ≡ tileAnimDefault === 2` — only OVERWORLD is
+  `TILEANIM_WATER_FLOWER`, so it's the one tileset whose $03 is natively a flower.)
+
+A **green dot** marks the segment equal to `tileAnimDefault` — the tileset's native animation on a real
+cartridge. All of this is read-only: the control writes only the `type` byte when you pick a segment.
+
 ## Determinism — the rule the tests depend on
 
 Animation and **screenshot/visual-regression tests are natural enemies.** So:

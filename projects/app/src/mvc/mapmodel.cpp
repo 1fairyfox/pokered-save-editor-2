@@ -1503,6 +1503,15 @@ void MapModel::setShowUnused(bool on)
   emit showUnusedChanged();
 }
 
+void MapModel::setShowTrulyUnused(bool on)
+{
+  if (on == m_showTrulyUnused)
+    return;
+  m_showTrulyUnused = on;
+  emit showTrulyUnusedChanged();
+  emit changed();   // the storage panel re-groups the event flags
+}
+
 int MapModel::frame() const
 {
   return animFrame;
@@ -5272,6 +5281,13 @@ QVariantList MapModel::storageEvents(const QVariantList& mapIds) const
         || cls.contains(QStringLiteral("unused"))
         || cls.contains(QStringLiteral("temporary"))    // rewritten on load = nothing you can keep
         || neverRead;
+    // ⭐ TRULY UNUSED (project leadership, 2026-08-04): the subset of "useless" the game NEVER touches
+    // — never read AND never written. Its own options tier. Excludes `temporary` (rewritten on load)
+    // and write-only (`neverRead`): those ARE written, so they are "no-effect", not truly unused.
+    o[QStringLiteral("trulyUnused")] = e->getPlaceholder()
+        || cls.contains(QStringLiteral("vestigial"))
+        || cls.contains(QStringLiteral("defined-unused"))
+        || cls.contains(QStringLiteral("unused"));
     // Where the bit physically lives, so the raw path is never hidden from a power
     // user (this editor shows raw/hack values everywhere else too). wEventFlags is one
     // contiguous field: byte 0x29F3 + ind/8, bit ind%8.
