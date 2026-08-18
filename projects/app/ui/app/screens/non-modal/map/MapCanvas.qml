@@ -273,6 +273,46 @@ Item {
     return false;
   }
 
+  /// Is this global point inside a POPUP floating over us?
+  ///
+  /// ⚠️ THE SAME TRAP AS `overPanel`, one branch further out -- and it is the one that kept coming
+  /// back. Every drop-down on this screen (the map-name picker, ⊞ Designated Maps, the zoom menu,
+  /// the colour picker, the sort menu, the sim menus) is a `Popup`, and a `Popup` does not live
+  /// under us at all -- it lives in the WINDOW'S OVERLAY, a different branch of the scene. Qt still
+  /// walks every pointer handler under the point, so the ground's `TapHandler` fired for a click
+  /// that landed *inside an open menu*. Project leadership, 2026-08-18:
+  ///
+  ///   *"the 2d render surface often gets clicked on when navigating menus ... clicking 'Wake up
+  ///   at' can trigger also clicking the sign underneath causing the menu to appear for wake up at
+  ///   and also the details panel below it to open up for the sign."*
+  ///
+  /// Reproduced with the harness before touching anything: with ⊞ open, a real tap inside its panel
+  /// moved `selectedBlockX` 7 → 4.
+  ///
+  /// ⚠️ AND IT ASKS THE OVERLAY, IT DOES NOT WAIT TO BE TOLD. `popupsOpen` already existed for
+  /// exactly this job and it is **opt-in** -- so of the ten popups on this screen, exactly two ever
+  /// incremented it, and the other eight leaked. An opt-in guard only ever protects the cases
+  /// somebody remembered; this one is a plain containment test against whatever is actually open,
+  /// so a popup written tomorrow is covered the day it is written. (`popupsOpen` stays: it also
+  /// covers the *dismiss*-press, which lands outside the popup by definition.)
+  function overPopup(sx, sy) {
+    const ov = canvasRoot.Overlay.overlay;
+    if (!ov)
+      return false;
+
+    for (let i = 0; i < ov.children.length; i++) {
+      const p = ov.children[i];
+      if (!p || !p.visible || p.width <= 0 || p.height <= 0)
+        continue;
+
+      const tl = p.mapToGlobal(0, 0);
+      if (sx >= tl.x && sx < tl.x + p.width && sy >= tl.y && sy < tl.y + p.height)
+        return true;
+    }
+
+    return false;
+  }
+
   /// The 3-block border ring, in buffer pixels. A sprite at map (0,0) starts here.
   readonly property int mapBorderPx: 3 * 32
 
@@ -1416,6 +1456,12 @@ Item {
           if (canvasRoot.overPanel(g.x, g.y))
             return;
 
+          // ⚠️ THE TAP LANDED INSIDE AN OPEN MENU. Same mechanism as the panel case above, except a
+          // `Popup` is not even a child of this screen -- it is in the window overlay -- so no
+          // amount of parenting or z-order defeats it either. @see overPopup
+          if (canvasRoot.overPopup(g.x, g.y))
+            return;
+
           // ⚠️ THE TAP LANDED ON A TAB, NOT ON THE GROUND -- the same mechanism as the panel case
           // above, one layer in. This handler runs BEFORE the tab's MouseArea ever sees the press
           // (handlers all fire before items), and it takes no grab, so without this line the ground
@@ -1523,7 +1569,20 @@ Item {
           // gives you the thing, and pointing at bare ground gives you the block.
           canvasRoot.selectedBlockX = Math.floor(px / brg.map.blockSize);
           canvasRoot.selectedBlockY = Math.floor(py / brg.map.blockSize);
-          canvasRoot.blockInspectRequested();
+
+          // ⭐ …but the panel only opens when there is something ON the block to open it for.
+          // Project leadership, 2026-08-18: *"if nothing is on a block, when clicked, it shouldnt
+          // open the details panel, only open it for actual things that have details"*.
+          //
+          // The block still SELECTS -- the outline lands, the status bar still names the block and
+          // its tile -- so pointing at bare ground still answers "what is this". What it no longer
+          // does is summon a whole panel to tell you there is nothing here.
+          //
+          // `selectedBlockSpots` is the honest test and it is already the panel's own source: it is
+          // UNFILTERED by the layer toggles, so a block whose only spot sits on a hidden layer still
+          // counts as having details (turning a layer off must not make a thing un-openable).
+          if (canvasRoot.selectedBlockSpots.length > 0)
+            canvasRoot.blockInspectRequested();
         }
       }
 
