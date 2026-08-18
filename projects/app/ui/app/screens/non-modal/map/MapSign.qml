@@ -135,23 +135,52 @@ Item {
   //
   // The one fact about a sign you cannot get by looking at the map. Shown on the selected one and on
   // hover -- not on all of them at once.
+  // ⚠️ OPAQUE, AND IT WRAPS. Project leadership, 2026-08-18: *"fix the sign tooltip, the grid lines
+  // cut through it and it has no multiple line support, can you clean this up and fix it."* Both
+  // faults, and both were in these few lines:
+  //
+  //   * the plate was `#e6212121` — 90% alpha — so the block grid, the tile grid and whatever sprite
+  //     sat behind it all showed straight through the words. A label you read THROUGH is not a label.
+  //     It is opaque now, with a hairline border so it still separates from a dark map;
+  //   * the `Text` had no `width` and no `wrapMode`, so a sign's words were one unbroken line that
+  //     grew as wide as the sentence and ran off the canvas. It now wraps at a real column and gives
+  //     the plate a proper multi-line height — which is the whole point, since sign text is prose.
+  //
+  // Sign text is also two-part in the game ("PALLET TOWN / Shades of your journey await!"), so the
+  // wrap is not a nicety: the second half was simply unreadable before.
   Rectangle {
+    id: plate
     visible: (sign.selected || area.containsMouse) && !sign.dragging
     z: 40
+
+    /// How wide the words may run before they wrap. A placard, not a paragraph.
+    readonly property int maxTextWidth: 190
 
     anchors.bottom: parent.top
     // Clear the ✎/✕ row properly (the buttons are 20px tall on a 3px margin). 32px is a real gap.
     anchors.bottomMargin: sign.selected ? 32 : 4
     anchors.horizontalCenter: parent.horizontalCenter
 
-    width: label.implicitWidth + 12
-    height: label.implicitHeight + 6
+    width: label.width + 14
+    height: label.height + 8
     radius: 3
-    color: "#e6212121"
+
+    // Fully opaque — nothing behind it may read through. @see the note above.
+    color: "#212121"
+    border.width: 1
+    border.color: "#4d000000"
 
     Text {
       id: label
       anchors.centerIn: parent
+
+      // Wrap at the column, but never pad a short label out to it: a one-word sign gets a small
+      // plate, a long one gets a wrapped block.
+      width: Math.min(implicitWidth, plate.maxTextWidth)
+      wrapMode: Text.Wrap
+      horizontalAlignment: Text.AlignHCenter
+      lineHeight: 1.15
+
       text: sign.textValid
             ? (sign.preview !== "" ? sign.preview : qsTr("(no text)"))
             : qsTr("id points past this map's text")

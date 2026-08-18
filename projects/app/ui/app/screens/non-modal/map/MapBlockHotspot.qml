@@ -355,11 +355,23 @@ Item {
       // seeing and a glyph over its face is just in the way; the outline already says "the game
       // remembers this". When the flag hides it there IS no sprite, and the mark is what tells you
       // something belongs here.
+      //
+      // ⚠️ AND IT IS DRAWN AT EVERY ZOOM. Project leadership, 2026-08-18: *"the event flag icon stops
+      // rendering past a certain point of zooming out please fix."* It carried
+      // `&& hot.canvas.zoom >= 1.5`, so the mark simply vanished on a zoomed-out map — which is
+      // exactly the view you use to find things, and the mark is the ONLY sign that a hidden object
+      // belongs in that square.
+      //
+      // The gate was there for a real reason (an 8 px floor on the font meant the glyph outgrew its
+      // own box once the box shrank below it) — but the fix for "too big when small" is to let it get
+      // small, not to delete it. The size now tracks the zoom with a low floor AND is clamped to the
+      // box, so it shrinks with the map and can never spill out of the square it belongs to.
       Text {
         anchors.centerIn: parent
-        visible: spotItem.dashed && hot.canvas.zoom >= 1.5
+        visible: spotItem.dashed
         text: "⚑"
-        font.pixelSize: Math.max(8, Math.round(9 * hot.canvas.zoom))
+        font.pixelSize: Math.max(5, Math.min(Math.round(9 * hot.canvas.zoom),
+                                             Math.floor(Math.min(width, height) * 0.8)))
         color: hot.inkOf(modelData)
       }
     }
