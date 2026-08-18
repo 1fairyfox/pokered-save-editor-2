@@ -149,9 +149,12 @@ Rectangle {
     horizontalAlignment: Text.AlignHCenter
     font.pixelSize: 11
     opacity: 0.55
+    // ⚠️ The FACT stays, the INSTRUCTION goes (leadership, 2026-08-18: *"Dont show small text
+    // telling theres more useless options"*). This one is not an advert for what's hidden — it is
+    // this panel's whole empty state, and a panel that opens blank is worse than one that says why.
+    // What it no longer does is point at the "!" and tell you to go and turn it on.
     text: qsTr("The game rebuilds this whole cache every time it loads your save — nothing here "
-               + "survives a Continue.\n\nTurn on “Useless edits” (the ! button in the toolbar) "
-               + "to edit it anyway.")
+               + "survives a Continue.")
   }
 
   ScrollView {

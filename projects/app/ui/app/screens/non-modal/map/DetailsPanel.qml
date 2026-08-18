@@ -925,16 +925,12 @@ Item {
             Label { Layout.fillWidth: true; text: qsTr("Zeroed on load (Silph Co. door scratch)."); font.pixelSize: 9; opacity: 0.5 }
           }
 
-          Label {
-            Layout.fillWidth: true
-            Layout.topMargin: 2
-            visible: !brg.map.showScratch
-            text: qsTr("Three more bytes here do nothing you can keep — the game resets them on load. "
-                       + "Turn on “Useless edits” (the ! button) in the toolbar to see them.")
-            wrapMode: Text.Wrap
-            font.pixelSize: 10
-            opacity: 0.55
-          }
+          // ⚠️ NO "three more bytes are hidden, turn on the ! to see them" notice here, and none
+          // anywhere else either (project leadership, 2026-08-18: *"Dont show small text telling
+          // theres more useless options — leave that to when the user clicks the useless options and
+          // discovers it themselves."*). Advertising what is hidden is the clutter the gate exists to
+          // remove: it costs a paragraph on every panel to tell you about values that, by definition,
+          // do nothing. The "!" in the toolbar is the discovery path.
         }
 
         // The view pointer the GAME itself computed and left in the save. If an edit has made it
@@ -2202,19 +2198,8 @@ Item {
           }
         }
 
-        // The switch that reveals the rewrite/dead group lives in the TOOLBAR -- the same one the
-        // sprite and warp panels use. Point at it rather than growing a second one.
-        Label {
-          Layout.fillWidth: true
-          Layout.topMargin: 10
-          visible: !brg.map.showScratch
-          text: qsTr("Thirteen more of his bytes do nothing you can keep — the game either rewrites "
-                     + "them when it loads your save, or never reads them. Turn on “Useless edits” (the ! button) "
-                     + "in the toolbar to see them.")
-          wrapMode: Text.Wrap
-          font.pixelSize: 10
-          opacity: 0.55
-        }
+        // ⚠️ NO "thirteen more of his bytes are hidden" notice. @see the note in the Map-state
+        // group above (leadership, 2026-08-18) — the "!" is the discovery path, not a paragraph.
 
         Label {
           Layout.fillWidth: true

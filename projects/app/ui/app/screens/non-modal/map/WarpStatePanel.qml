@@ -250,20 +250,11 @@ Item {
           }
         }
 
-        // The switch that reveals them lives in the TOOLBAR, and it is the same switch the sprite
-        // panel uses. Point at it rather than growing a second one -- two switches doing one job is
-        // exactly the clutter this screen was rebuilt to get rid of.
-        Label {
-          Layout.fillWidth: true
-          Layout.topMargin: 10
-          visible: !brg.map.showScratch
-          text: qsTr("Four more fields here do nothing at all — the game either wipes them when it "
-                     + "loads your save, or never reads them. Turn on “Useless edits” (the ! button) in the "
-                     + "toolbar to see them.")
-          wrapMode: Text.Wrap
-          font.pixelSize: 10
-          opacity: 0.55
-        }
+        // ⚠️ NO "four more fields are hidden, turn on the ! " notice (project leadership,
+        // 2026-08-18: *"Dont show small text telling theres more useless options — leave that to
+        // when the user clicks the useless options and discovers it themselves."*). The toolbar "!"
+        // is the discovery path; a paragraph advertising values that do nothing is the very clutter
+        // the gate exists to remove.
 
         Item { Layout.preferredHeight: 12 }   // breathing room at the bottom of the scroll
       }
