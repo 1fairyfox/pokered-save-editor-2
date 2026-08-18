@@ -281,33 +281,38 @@ Item {
   // can span several). So the whitelist is every id of every page, and picking any one of them
   // selects the page that owns it.
 
-  /// Every map id that has storage, flattened out of the pages. The General page's -1 is NOT here —
-  /// it is not a map, so it rides as a leading entry instead.
+  /// Every map id that has storage, flattened out of the pages.
   readonly property var storageMapIds: {
     panel.revision;
     const out = [];
     for (let i = 0; i < panel.storageMaps.length; i++) {
       const ids = panel.storageMaps[i].ids;
       for (let j = 0; j < ids.length; j++)
-        if (ids[j] >= 0)
-          out.push(ids[j]);
+        out.push(ids[j]);
     }
     return out;
   }
 
-  /// The General page ("save data that belongs to no map") as a leading row, when it exists — the
-  /// same mechanism the warp picker uses for "← Back outside".
-  readonly property var storageLeadingEntries: {
+  /// Is the shown page the placeless **Other** page? A page with NO maps. There is no sentinel id —
+  /// @see MapModel::isOtherPage and project leadership's *"dont ever fake a map id"* (2026-08-18).
+  readonly property bool onOtherPage: {
+    panel.revision;
+    return panel.curPage !== undefined && panel.curPage.ids.length === 0;
+  }
+
+  /// "Other" offered as a NON-MAP row in the picker, when the page exists at all. It carries a key,
+  /// not an id, so nothing anywhere has to pretend it is map -1. @see MapSelectList.extraRows
+  readonly property var storageExtraRows: {
     panel.revision;
     for (let i = 0; i < panel.storageMaps.length; i++)
-      if (panel.storageMaps[i].ids.indexOf(-1) !== -1)
-        return [{ ind: -1, name: panel.storageMaps[i].title, group: "",
-                  isCopy: false, copyOf: -1, size: "" }];
+      if (panel.storageMaps[i].ids.length === 0)
+        return [{ key: "other", name: panel.storageMaps[i].title }];
     return [];
   }
 
   /// Which map id the field shows: the one you're ON when this page covers it (so the face agrees
-  /// with the canvas), otherwise the page's first id.
+  /// with the canvas), otherwise the page's first id. Meaningless on the Other page, which shows its
+  /// own name through `currentExtra` instead.
   readonly property int pickedMapId: {
     panel.revision;
     if (panel.curPage === undefined || panel.curPage.ids.length === 0)
@@ -320,6 +325,14 @@ Item {
   function pageForMapId(ind) {
     for (let i = 0; i < panel.storageMaps.length; i++)
       if (panel.storageMaps[i].ids.indexOf(ind) !== -1)
+        return i;
+    return -1;
+  }
+
+  /// The index of the placeless page, or -1 if there is nothing placeless to show.
+  function otherPageIndex() {
+    for (let i = 0; i < panel.storageMaps.length; i++)
+      if (panel.storageMaps[i].ids.length === 0)
         return i;
     return -1;
   }
@@ -500,19 +513,31 @@ Item {
           Layout.fillWidth: true
 
           value: panel.pickedMapId
+          currentExtra: panel.onOtherPage ? "other" : ""
           allowedIds: panel.storageMapIds
-          leadingEntries: panel.storageLeadingEntries
+          extraRows: panel.storageExtraRows
 
           onPicked: (ind) => {
             const p = panel.pageForMapId(ind);
             if (p >= 0)
               panel.page = p;
           }
+          onPickedExtra: (key) => {
+            const p = panel.otherPageIndex();
+            if (p >= 0)
+              panel.page = p;
+          }
         }
 
         // "You're here" / "you're elsewhere" -- ONE short line each way.
+        //
+        // ⚠️ NOT ON THE "OTHER" PAGE. It is not a map, so "you're on this map" and "not your current
+        // map" are both nonsense there — and printing either is exactly the fake-map behaviour
+        // project leadership struck out (2026-08-18: *"It doesnt need the not map state text because
+        // its not a map it doesnt need to act as a fake map."*).
         Label {
           Layout.fillWidth: true
+          visible: !panel.onOtherPage
           wrapMode: Text.Wrap
           font.pixelSize: 10
           opacity: 0.55

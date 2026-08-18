@@ -1160,10 +1160,13 @@ public:
   /// mismatched pair. The live bytes come from world.other. @see notes/reference/fossil-revival.md
   Q_INVOKABLE QVariantList storageFossil(const QVariantList& mapIds) const;
 
-  /// Whether a Map Storage page is the synthetic **General** page -- the home for save data that
-  /// belongs to no map (the unused CHIKUCHIKU trade, and future placeless storage). Its id marker
-  /// is -1. @see notes/reference/in-game-trades.md §7
-  Q_INVOKABLE bool isGeneralPage(const QVariantList& mapIds) const;
+  /// Whether a World page is the **Other** page -- the home for save data that belongs to no map
+  /// (the unused CHIKUCHIKU trade, and future placeless storage).
+  ///
+  /// ⚠️ It is marked by an **EMPTY id list**, never by a sentinel id. It is not a map, it has no map
+  /// id, and it must not behave like one (project leadership, 2026-08-18: *"dont ever fake a map
+  /// id"*). @see notes/reference/in-game-trades.md §7
+  Q_INVOKABLE bool isOtherPage(const QVariantList& mapIds) const;
 
   /// The FLAG BOXES for the current map -- one per ROM object whose presence the save keeps a flag
   /// for: `{rectX,rectY,rectW,rectH, x,y, name,desc, kind, missable, hidden, defShow}`.

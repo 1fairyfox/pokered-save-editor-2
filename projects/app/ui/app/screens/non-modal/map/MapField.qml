@@ -41,7 +41,16 @@ Item {
   /// Map ids the drop-down may offer. EMPTY = every map. @see MapSelectList.allowedIds
   property var allowedIds: []
 
+  /// Non-map rows `[{ key, name }]`. @see MapSelectList.extraRows — this is how the World panel's
+  /// "Other" page is offered without inventing a map id for it.
+  property var extraRows: []
+
+  /// The extra row that is currently chosen ("" = a real map is chosen). When set, the face shows
+  /// that row's name instead of a map name.
+  property string currentExtra: ""
+
   signal picked(int ind)
+  signal pickedExtra(string key)
 
   implicitHeight: 30
   implicitWidth: 160
@@ -50,6 +59,10 @@ Item {
 
   /// The name to show on the face — from the leading entries first, then the real map list.
   readonly property string currentName: {
+    if (mf.currentExtra !== "") {
+      for (let e = 0; e < mf.extraRows.length; e++)
+        if (mf.extraRows[e].key === mf.currentExtra) return mf.extraRows[e].name;
+    }
     for (let j = 0; j < mf.leadingEntries.length; j++)
       if (mf.leadingEntries[j].ind === mf.value) return mf.leadingEntries[j].name;
     const l = brg.map.mapList();
@@ -112,10 +125,13 @@ Item {
     MapSelectList {
       anchors.fill: parent
       listHeight: 150
-      selectedInd: mf.value
+      selectedInd: mf.currentExtra === "" ? mf.value : -1
+      selectedExtra: mf.currentExtra
       leadingEntries: mf.leadingEntries
       allowedIds: mf.allowedIds
+      extraRows: mf.extraRows
       onPicked: (ind) => { mf.picked(ind); mf.openState = false; }
+      onPickedExtra: (key) => { mf.pickedExtra(key); mf.openState = false; }
     }
   }
 }

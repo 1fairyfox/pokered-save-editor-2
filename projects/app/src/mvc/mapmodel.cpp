@@ -4320,11 +4320,22 @@ QVariantList MapModel::mapScriptList() const
 // storagePages() hardcodes the legacy gym/Safari trio: facts about the ROM, not data the save holds.
 
 namespace {
-// -1 is the General page's marker: save data that belongs to NO map (the unused trade, and future
-// placeless storage). storagePages() emits a page whose ids == [-1]; every storageX() treats
-// "contains -1" as "the General page is asking".
-constexpr int kGeneralPageId = -1;
-
+// ⚠️ THERE IS NO SENTINEL MAP ID HERE, AND THERE MUST NEVER BE ONE.
+//
+// The "Other" page -- save data that belongs to NO map (the unused trade, and future placeless
+// storage) -- used to be marked by a page whose `ids` was `[-1]`, and every `storageX()` asked
+// "does this contain -1?". Project leadership killed that outright (2026-08-18):
+//
+//   *"General -1 feels fake, dont ever do this ... how about Other, it doesnt need a map id,
+//    dont ever fake a map id ... it doesnt need to act as a fake map."*
+//
+// They are right, and it is not only a cosmetic point: -1 was a real map id everywhere else in this
+// class (`mapInd()` returns -1 for "no map"), so the sentinel was ambiguous with the genuine
+// "unknown" answer, and it leaked into the UI as a literal `-1` in the map list.
+//
+// The honest marker for "belongs to no map" is an **empty id list**. It cannot collide with a real
+// id, it needs no constant, and it reads correctly at every call site: a page with no maps returns
+// the storage that has no map. @see MapModel::isOtherPage
 QSet<int> idSet(const QVariantList& mapIds)
 {
   QSet<int> s;
@@ -4441,24 +4452,29 @@ QVariantList MapModel::storagePages() const
                         < b.value(QStringLiteral("title")).toString();
   });
 
-  // The GENERAL page -- the home for save data that belongs to no map (leadership, 2026-07-17:
-  // "there was supposed to be a general page left in for exactly this reason please re-create it").
-  // Its id marker is -1; storageTrades()/etc. answer to it. It leads the combo (sorted first here,
-  // after the map pages are ordered) so placeless storage is always the first thing offered. Only
-  // emitted when there is actually something placeless to show -- today, the one unused trade.
-  const bool hasPlaceless = !storageTrades(QVariantList{ kGeneralPageId }).isEmpty();
+  // The OTHER page -- the home for save data that belongs to no map (leadership, 2026-07-17: "there
+  // was supposed to be a general page left in for exactly this reason please re-create it"; renamed
+  // and de-faked 2026-08-18: *"how about Other ... Keep everything on the maps, use Other only if it
+  // doesnt fit"*).
+  //
+  // ⚠️ Its `ids` is EMPTY, not `[-1]`. It is not a map, it does not get a map id, and it must not
+  // behave like one. @see the note on idSet().
+  //
+  // Only emitted when there is genuinely something placeless to show -- today, the one unused trade.
+  // "Keep everything on the maps" is the rule; this page is the exception, not a dumping ground.
+  const bool hasPlaceless = !storageTrades(QVariantList{}).isEmpty();
 
   QVariantList out;
   if (hasPlaceless) {
     QVariantMap g;
-    g[QStringLiteral("title")] = tr("General");
-    g[QStringLiteral("ids")] = QVariantList{ kGeneralPageId };
+    g[QStringLiteral("title")] = tr("Other");
+    g[QStringLiteral("ids")] = QVariantList{};
     g[QStringLiteral("scriptInd")] = -1;
     g[QStringLiteral("steps")] = 0;
     g[QStringLiteral("desc")] = QString();
     g[QStringLiteral("legacy")] = -1;
     g[QStringLiteral("sort")] = -1;
-    g[QStringLiteral("general")] = true;   // the panel keys its "no map" copy off this
+    g[QStringLiteral("other")] = true;   // the panel keys its "this is not a map" behaviour off this
     out.append(g);
   }
   for (const auto& p : pages)
@@ -5298,25 +5314,26 @@ QVariantList MapModel::storageEvents(const QVariantList& mapIds) const
   return out;
 }
 
-bool MapModel::isGeneralPage(const QVariantList& mapIds) const
+bool MapModel::isOtherPage(const QVariantList& mapIds) const
 {
-  return idSet(mapIds).contains(kGeneralPageId);
+  // No maps == the placeless page. No sentinel, no fake id. @see the note on idSet().
+  return mapIds.isEmpty();
 }
 
 QVariantList MapModel::storageTrades(const QVariantList& mapIds) const
 {
   const QSet<int> ids = idSet(mapIds);
-  const bool general = ids.contains(kGeneralPageId);
+  const bool other = mapIds.isEmpty();
 
   QVariantList out;
   for (auto* t : TradesDB::inst()->getStore()) {
     if (t == nullptr)
       continue;
 
-    // The General page hosts the unused, placeless trade; every other page hosts the trades on its
-    // own maps. A located trade never appears on General, and the unused one never appears on a map.
-    const bool onGeneral = t->mapId < 0;
-    const bool matches = general ? onGeneral : (t->mapId >= 0 && ids.contains(t->mapId));
+    // The Other page hosts the unused, placeless trade; every other page hosts the trades on its own
+    // maps. A located trade never appears on Other, and the unused one never appears on a map.
+    const bool placeless = t->mapId < 0;
+    const bool matches = other ? placeless : (t->mapId >= 0 && ids.contains(t->mapId));
     if (!matches)
       continue;
 
@@ -5352,7 +5369,7 @@ QVariantList MapModel::storageTowns(const QVariantList& mapIds) const
 
   QVariantList out;
   for (int id : ids) {
-    if (id < 0 || id >= 11)   // 0..10 are the towns; -1 (General) and routes/buildings have none
+    if (id < 0 || id >= 11)   // 0..10 are the towns; routes and buildings have none
       continue;
     MapDBEntry* m = MapsDB::inst()->getIndAt(QString::number(id));
     QVariantMap o;

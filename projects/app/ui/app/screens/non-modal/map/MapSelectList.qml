@@ -56,7 +56,21 @@ ColumnLayout {
   /// Map ids this list may show. EMPTY = no restriction (the normal case). @see the header note.
   property var allowedIds: []
 
+  /// Rows that are NOT maps and have NO map id: `[{ key, name }]`. They sit at the very top, above
+  /// even `leadingEntries`, and choosing one emits @ref pickedExtra rather than @ref picked.
+  ///
+  /// ⚠️ THIS EXISTS SO NOTHING HAS TO FAKE A MAP ID (project leadership, 2026-08-18: *"General -1
+  /// feels fake, dont ever do this ... it doesnt need a map id, dont ever fake a map id"*). The
+  /// World panel's "Other" page — storage that belongs to no map — is reached through here. A row
+  /// with no id cannot be mistaken for map -1, which is this class's genuine "no map" answer.
+  property var extraRows: []
+
+  /// Which extra row is currently the selected one ("" = none). Highlights it, the way `selectedInd`
+  /// highlights a map.
+  property string selectedExtra: ""
+
   signal picked(int ind)
+  signal pickedExtra(string key)
 
   spacing: 8
 
@@ -226,11 +240,18 @@ ColumnLayout {
           maps = maps.filter(function(m) { return ok[m.ind] === true; });
         }
 
-        const all = mapSel.leadingEntries.concat(maps);
+        // Extra rows are tagged so the delegate can tell them apart — they have NO ind to show and
+        // they emit a different signal. @see extraRows
+        const extras = mapSel.extraRows.map(function(e) {
+          return { extraKey: e.key, name: e.name, group: "", isCopy: false, copyOf: -1, size: "" };
+        });
+
+        const all = extras.concat(mapSel.leadingEntries).concat(maps);
         if (q === "")
           return all;
         return all.filter(function(m) {
-          return ("" + m.name).toLowerCase().indexOf(q) >= 0 || ("" + m.ind).indexOf(q) >= 0;
+          return ("" + m.name).toLowerCase().indexOf(q) >= 0
+                 || (m.extraKey === undefined && ("" + m.ind).indexOf(q) >= 0);
         });
       }
 
@@ -242,9 +263,16 @@ ColumnLayout {
         width: mapListView.width
         // Group headings only when NOT searching (a filtered list's first-of-group headings drift).
         height: (modelData.group !== "" && mapSearch.text === "" ? 20 : 0) + 26
-        highlighted: modelData.ind === mapSel.selectedInd
+        highlighted: modelData.extraKey !== undefined
+                     ? modelData.extraKey === mapSel.selectedExtra
+                     : modelData.ind === mapSel.selectedInd
 
-        onClicked: mapSel.picked(modelData.ind)
+        onClicked: {
+          if (modelData.extraKey !== undefined)
+            mapSel.pickedExtra(modelData.extraKey);
+          else
+            mapSel.picked(modelData.ind);
+        }
 
         contentItem: ColumnLayout {
           spacing: 0
@@ -258,8 +286,11 @@ ColumnLayout {
           RowLayout {
             Layout.fillWidth: true
             spacing: 6
+            // ⚠️ An extra row shows NO id — it hasn't got one, and printing a placeholder here is
+            // exactly the fake this mechanism exists to avoid. The column still reserves its width so
+            // the names stay aligned with the maps below.
             Text {
-              text: modelData.ind
+              text: modelData.extraKey !== undefined ? "" : modelData.ind
               font.pixelSize: 10; font.family: "monospace"
               color: brg.settings.textColorMid
               Layout.minimumWidth: 22
