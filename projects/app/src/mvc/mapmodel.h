@@ -872,6 +872,10 @@ public:
   /// object invisible no matter how often it was toggled on. @see the long note at the definition.
   Q_INVOKABLE void setMissableShown(int missableInd, bool shown);
 
+  /// @copydoc setMissableShown — but WITHOUT the `changed()` emission, for callers moving many flags
+  /// in one gesture (a map-state apply moves 44 at once in Silph Co). The caller emits once itself.
+  void setMissableShownQuiet(int missableInd, bool shown);
+
   /// Move sprite @p slot to map (@p x, @p y). **Exactly two bytes** (mapX, mapY), the game's +4
   /// bias included. The drag-on-the-canvas path. Out-of-bounds coordinates are clamped to the
   /// map -- a sprite parked in the border ring is one the game will never show you.

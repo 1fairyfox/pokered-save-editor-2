@@ -483,9 +483,22 @@ void MapModel::applyState(const QString& id, int mapIndArg)
       for (const auto& ev : st->cleared)
         worldAll->events->eventsSet(ev.ind, false);
     }
-    if (worldAll->missables != nullptr)
-      for (const auto& mis : st->missables)
-        worldAll->missables->missablesSet(mis.ind, mis.hide);
+    // ⚠️ `setMissableShown`, NOT `missablesSet` — a state apply must move the sprite slots too.
+    //
+    // Hiding an object on the console is TWO writes (the flag bit AND the slot's picture id, which
+    // `HideObject` zeroes); picture id 0 means "unused slot", which the renderer skips. Writing only
+    // the bit here meant applying or rolling a map state changed the flags but left the cast exactly
+    // as it was -- the same class of bug leadership hit through the switches ("the receptionist is
+    // not there despite toggled on, the map wasnt reconstructed well", 2026-08-18), reached by a
+    // second road. @see MapModel::setMissableShown · reference/map-scripts-missables.md
+    //
+    // It is a no-op for a stage on a map we are not standing on -- there are no loaded slots to move,
+    // and the bit is the whole of the stored state until you go there. Exactly right.
+    // The QUIET form: a Silph-liberation stage moves 44 of these at once, and one `changed()` per
+    // flag would have every binding on the screen re-evaluate 44 times for one gesture. `applyState`
+    // emits once at the end, which is what a single apply should look like.
+    for (const auto& mis : st->missables)
+      setMissableShownQuiet(mis.ind, !mis.hide);
     if (basics != nullptr && bp->getBadgeUniverse() != 0) {
       for (int bit = 0; bit < 8; ++bit) {
         if (!(bp->getBadgeUniverse() & (1u << bit)))

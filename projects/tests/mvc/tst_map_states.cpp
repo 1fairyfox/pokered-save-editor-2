@@ -61,6 +61,19 @@ namespace {
 
 // The save regions a state APPLY is allowed to touch -- each is a kind of fact a stage's
 // absolute save block names. One byte outside these and the keystone goes red.
+//
+// ⚠️ WIDENED 2026-08-18, and DELIBERATELY NARROWLY. Applying a stage now also shows and hides the
+// objects its missable flags govern, and on the console that is TWO writes, not one: `HideObject`
+// clears the flag bit AND zeroes the sprite slot's **picture id** (picture id 0 == "unused slot").
+// Writing only the bit left the cast untouched, which is the bug leadership hit -- *"the receptionist
+// is not there despite toggled on, the map wasnt reconstructed well"*. @see
+// MapModel::setMissableShown · reference/map-scripts-missables.md
+//
+// So the two picture-id bytes of each sprite slot are now legal targets -- and NOTHING else in those
+// slots is. That is the point: the guarantee got STRONGER, not looser. A stage may now change who is
+// standing on the map, but it still may not move anyone, turn anyone, retime anyone or edit what they
+// say. If a future change starts rebuilding slots wholesale (the "sprite is reset for no reason"
+// leadership ruled out), this test goes red on the very first coordinate byte.
 bool inAllowedApplyRegion(int off)
 {
   if (off >= 0x289C && off <= 0x2915) return true;   // WorldScripts (the 97 state bytes)
@@ -68,6 +81,15 @@ bool inAllowedApplyRegion(int off)
   if (off >= 0x29F3 && off <= 0x2B32) return true;   // wEventFlags (the 2,560 bits)
   if (off >= 0x2852 && off <= 0x2871) return true;   // wToggleableObjectFlags (missables)
   if (off == 0x2602 || off == 0x29D6) return true;   // the badge byte, and its twin
+
+  // The picture id ONLY, in each of the 16 sprite slots:
+  //   spritestatedata1 base 0x2D2C, 0x10 per slot, field 0  -- the live picture id
+  //   spritestatedata2 base 0x2E2C, 0x10 per slot, field d  -- the game's second copy
+  for (int slot = 0; slot < 16; slot++) {
+    if (off == 0x2D2C + 0x10 * slot)       return true;
+    if (off == 0x2E2C + 0x10 * slot + 0xD) return true;
+  }
+
   return false;
 }
 

@@ -1891,6 +1891,12 @@ QVariantList MapModel::npcList() const
 // checked because a save that was never hidden-then-shown may have either.
 void MapModel::setMissableShown(int missableInd, bool shown)
 {
+  setMissableShownQuiet(missableInd, shown);
+  changed();
+}
+
+void MapModel::setMissableShownQuiet(int missableInd, bool shown)
+{
   if (missableInd < 0 || worldAll == nullptr || worldAll->missables == nullptr)
     return;
 
@@ -1901,10 +1907,8 @@ void MapModel::setMissableShown(int missableInd, bool shown)
   // 2. The picture id -- but only for a slot on the map we are actually looking at. A missable that
   //    belongs to another map has no loaded slot at all, and that is not an error: its bit is the
   //    whole of its stored state until you stand there.
-  if (npcs == nullptr) {
-    changed();
+  if (npcs == nullptr)
     return;
-  }
 
   for (int i = 1; i < npcs->spriteCount(); i++) {
     SpriteData* s = npcs->spriteAt(i);
@@ -1949,7 +1953,6 @@ void MapModel::setMissableShown(int missableInd, bool shown)
   }
 
   castEdited = true;
-  changed();
 }
 
 // ── Editing the cast ──────────────────────────────────────────────────────────
