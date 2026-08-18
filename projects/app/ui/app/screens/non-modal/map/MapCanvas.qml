@@ -1314,6 +1314,7 @@ Item {
           tileX: modelData.x
           tileY: modelData.y
           preview: modelData.preview
+          previewFull: modelData.previewFull
           textValid: modelData.textValid
 
           onEditRequested: canvasRoot.editRequested(-1)   // the panel reads selectedSign
@@ -1567,23 +1568,32 @@ Item {
           // clears any object selection (the exclusivity rule). If the tap ALSO landed on an object,
           // that object's own MouseArea fires next and re-selects it — so pointing at a thing still
           // gives you the thing, and pointing at bare ground gives you the block.
-          canvasRoot.selectedBlockX = Math.floor(px / brg.map.blockSize);
-          canvasRoot.selectedBlockY = Math.floor(py / brg.map.blockSize);
+          const bx = Math.floor(px / brg.map.blockSize);
+          const by = Math.floor(py / brg.map.blockSize);
 
-          // ⭐ SOMETHING HERE OPENS THE PANEL; NOTHING HERE CLOSES IT.
+          // ⭐ SOMETHING HERE SELECTS AND OPENS. NOTHING HERE DESELECTS AND CLOSES.
           //
-          // Project leadership, 2026-08-18: *"if nothing is on a block, when clicked, it shouldnt open
-          // the details panel, only open it for actual things that have details"* and then, plainly:
-          // *"The details panel closes when an empty square is clicked, it doesnt show 'Nothing
-          // there' or something."*
+          // Project leadership, 2026-08-18, in three passes that converge on one rule:
+          //   *"if nothing is on a block, when clicked, it shouldnt open the details panel, only open
+          //    it for actual things that have details"* …
+          //   *"The details panel closes when an empty square is clicked, it doesnt show 'Nothing
+          //    there' or something"* …
+          //   *"clicking empty space/block deselects everything and closes the details pane."*
           //
-          // The block still SELECTS either way -- the outline lands, the status bar still names the
-          // block and its tile -- so pointing at bare ground still answers "what is this". What bare
-          // ground must never do is summon a panel in order to report that it is bare.
+          // So empty ground is a full RESET of the selection, not a quiet selection of the empty
+          // block. It used to select the block regardless, which is why the panel had to have
+          // something to say about nothing.
           //
-          // `selectedBlockSpots` is the honest test and it is already the panel's own source: it is
-          // UNFILTERED by the layer toggles, so a block whose only spot sits on a hidden layer still
-          // counts as having details (turning a layer off must not make a thing un-openable).
+          // ⚠️ Assigning `selectedBlockX` is what CLEARS the object selections (the exclusivity rule
+          // lives in `onSelectedBlockXChanged`), so the two branches differ by more than the signal:
+          // the "something here" branch selects the block (and so clears objects), while the empty
+          // branch clears the block selection too, leaving nothing selected at all.
+          //
+          // `selectedBlockSpots` is the honest test for "is there anything here", and it is already
+          // the panel's own source -- UNFILTERED by the layer toggles, so a block whose only spot
+          // sits on a hidden layer still counts (turning a layer off must not make a thing
+          // un-openable). It reads `selectedBlockX`, so the block has to be selected first and
+          // un-selected again if it turns out to be bare.
           //
           // ⚠️ `groundClicked` HAD NEVER BEEN EMITTED. It was declared here and handled in Map.qml
           // since 2026-07-18 -- *"if a click opens a panel clicking off should close it"* -- and
@@ -1591,10 +1601,23 @@ Item {
           // code that read as implemented. This is its one true firing point: a tap that reached the
           // bare ground, having already returned early for a panel, a popup, a tab, a maker tool and
           // a pan.
-          if (canvasRoot.selectedBlockSpots.length > 0)
+          canvasRoot.selectedBlockX = bx;
+          canvasRoot.selectedBlockY = by;
+
+          if (canvasRoot.selectedBlockSpots.length > 0) {
             canvasRoot.blockInspectRequested();
-          else
-            canvasRoot.groundClicked();
+            return;
+          }
+
+          // Bare ground: nothing stays selected, and the panels close.
+          canvasRoot.selectedBlockX = -1;
+          canvasRoot.selectedBlockY = -1;
+          canvasRoot.selectedNpc = -1;
+          canvasRoot.selectedWarp = -1;
+          canvasRoot.selectedSign = -1;
+          canvasRoot.selectedConnection = -1;
+          canvasRoot.selectedScript = -1;
+          canvasRoot.groundClicked();
         }
       }
 

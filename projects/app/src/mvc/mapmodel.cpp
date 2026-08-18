@@ -2371,6 +2371,19 @@ QString MapModel::signTextPreview(int textId) const
   return signOneLine(e->getText());
 }
 
+QString MapModel::signTextFull(int textId) const
+{
+  const MapDBEntryText* e = textEntryFor(mapInd(), textId);
+  if (e == nullptr)
+    return QString();                            // points past the table -- the caller says so
+
+  if (e->getScripted())
+    return tr("(scripted text)");
+
+  // Verbatim: the game's own line breaks, nothing elided. The canvas plate wraps and has the room.
+  return e->getText();
+}
+
 QVariantList MapModel::signList() const
 {
   QVariantList out;
@@ -2400,8 +2413,19 @@ QVariantList MapModel::signList() const
     m["rectW"] = 16;
     m["rectH"] = 16;
 
-    // What it SAYS, on the chip and in the status bar. Empty when the id points nowhere on this map.
-    m["preview"]   = signTextPreview(s->txtId);
+    // What it SAYS. Two forms, because two places need different things:
+    //
+    //   * `preview`     -- ONE line, newlines flattened to " / ", elided at 48 chars. For the status
+    //                      bar and the combo rows, where there is only ever one line of room.
+    //   * `previewFull` -- the sign's REAL text, with its REAL line breaks and nothing cut off. For
+    //                      the plate on the canvas, which wraps.
+    //
+    // ⚠️ project leadership, 2026-08-18: *"instead of '/' it should show properly newline"*. The
+    // slash was never a fix, it was a one-line *compromise* — and once the plate learned to wrap, the
+    // compromise became the bug. Sign text is written as prose across several lines in the game
+    // ("PALLET TOWN / Shades of your journey await!"); showing it as the game breaks it is the point.
+    m["preview"]     = signTextPreview(s->txtId);
+    m["previewFull"] = signTextFull(s->txtId);
     m["category"]  = (e == nullptr) ? QStringLiteral("") : e->getCategory();
     m["scripted"]  = (e != nullptr) && e->getScripted();
     m["textValid"] = (e != nullptr);

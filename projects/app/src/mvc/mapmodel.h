@@ -474,6 +474,13 @@ public:
   /// script entry, empty when the id points past the table. What the canvas chip shows.
   Q_INVOKABLE QString signTextPreview(int textId) const;
 
+  /// The FULL text of @p textId on this map -- the game's own line breaks kept, nothing elided.
+  /// "(scripted text)" for a script entry, empty when the id points past the table.
+  ///
+  /// ⚠️ This is what the canvas PLATE shows; @ref signTextPreview is the one-line squash for the
+  /// status bar and combo rows. @see the note in signList().
+  Q_INVOKABLE QString signTextFull(int textId) const;
+
   /// Has the user changed this map's signs in this session? @see warpsEdited -- same rule, same
   /// reason, and the same sentence is owed (restored on re-entry).
   Q_INVOKABLE bool signsEdited() const;

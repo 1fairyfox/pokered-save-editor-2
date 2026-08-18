@@ -366,12 +366,20 @@ Item {
       // own box once the box shrank below it) — but the fix for "too big when small" is to let it get
       // small, not to delete it. The size now tracks the zoom with a low floor AND is clamped to the
       // box, so it shrinks with the map and can never spill out of the square it belongs to.
+      //
+      // ⚠️ THE CLAMP MUST READ THE **BOX**, NOT ITSELF. First cut wrote
+      // `Math.min(width, height) * 0.8` inside this Text — and `width`/`height` there are the TEXT's
+      // own, which are derived from `font.pixelSize`. That is a binding eating its own tail: the size
+      // fed the clamp, the clamp fed the size, and it collapsed to a dot that got *smaller* the
+      // further you zoomed IN (leadership: *"the icon now doesnt resize properly it looks off and
+      // gets tinier like a dot the more you zoom in, its done bad"*). `spotItem` is the box; ask it.
       Text {
         anchors.centerIn: parent
         visible: spotItem.dashed
         text: "⚑"
         font.pixelSize: Math.max(5, Math.min(Math.round(9 * hot.canvas.zoom),
-                                             Math.floor(Math.min(width, height) * 0.8)))
+                                             Math.floor(Math.min(spotItem.width,
+                                                                 spotItem.height) * 0.8)))
         color: hot.inkOf(modelData)
       }
     }

@@ -45,6 +45,27 @@ Item {
   /// The sign's real words, one line ("PALLET TOWN / Shades of your…"), or "(scripted text)".
   required property string preview
 
+  /// The sign's real words with the game's own line breaks and nothing elided — what the plate
+  /// shows. @see MapModel::signTextFull
+  required property string previewFull
+
+  /// ⭐ THE GAME'S NAME PLACEHOLDERS, EXPANDED. Project leadership, 2026-08-18: *"Tooltips dont
+  /// render names, <PLAYER>'s house should read as character name's house."*
+  ///
+  /// The text imported from `pret/pokered` keeps the engine's own control codes verbatim — 43
+  /// `<PLAYER>`s and 23 `<RIVAL>`s across `maps.json` — because the DB stores what the ROM stores.
+  /// The console substitutes them from `wPlayerName`/`wRivalName` as it prints, so showing the raw
+  /// token is showing the reader something the game never displays. We do the same substitution the
+  /// engine does, from the same two values in THIS save — so renaming your trainer renames the signs.
+  function withNames(s) {
+    if (s === "")
+      return s;
+    const p = brg.file.data.dataExpanded.player.basics.playerName;
+    const r = brg.file.data.dataExpanded.rival.name;
+    return s.replace(/<PLAYER>/g, p !== "" ? p : qsTr("PLAYER"))
+            .replace(/<RIVAL>/g,  r !== "" ? r : qsTr("RIVAL"));
+  }
+
   /// False when the text id points past this map's text table -- the game would read whatever text
   /// comes next in the cartridge. Shown, never refused.
   required property bool textValid
@@ -78,7 +99,12 @@ Item {
   width: 16 * sign.canvas.zoom
   height: 16 * sign.canvas.zoom
 
-  z: sign.dragging ? 30 : (sign.selected ? 25 : 1)
+  // ⚠️ HOVER LIFTS THE WHOLE SIGN, not just its plate. The hovered-block highlight is drawn at
+  // CANVAS level with `z: 2`, and a child cannot out-stack its parent's siblings — so with the sign
+  // sitting at the baseline `z: 1`, that white 2px outline painted straight over the words
+  // (leadership, 2026-08-18: *"the current block white highlight paints on top of tooltip"*).
+  // Selecting already lifted it to 25, which is why the bug only showed on hover.
+  z: sign.dragging ? 30 : (sign.selected ? 25 : (area.containsMouse ? 20 : 1))
 
   // (Object stacking was removed 2026-07-15; a sign always draws, overlapping or not.)
 
@@ -182,7 +208,7 @@ Item {
       lineHeight: 1.15
 
       text: sign.textValid
-            ? (sign.preview !== "" ? sign.preview : qsTr("(no text)"))
+            ? (sign.previewFull !== "" ? sign.withNames(sign.previewFull) : qsTr("(no text)"))
             : qsTr("id points past this map's text")
       font.pixelSize: 11
       color: sign.textValid ? "white" : "#ffb74d"
