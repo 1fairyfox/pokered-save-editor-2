@@ -1528,21 +1528,13 @@ Item {
             // gets the same 90ms bridge the wheel does.
             const bite = (eventPoint.modifiers & Qt.AltModifier) ? (1 / 1.4) : 1.4;
 
-            // ⚠️ THE ANCHOR MUST BE IN **VIEW** COORDINATES, and this handler's are not.
-            //
-            // `zoomAround(newZoom, centre, …)` reads `centre` as a point in the Flickable's own
-            // coordinates (`view.contentX + centre.x - canvas.x`). This TapHandler lives inside
-            // `canvas`, so its `eventPoint.position` is CANVAS-local — which is exactly why the two
-            // lines above divide it by the zoom to get map pixels, and why the panel test above maps
-            // it to global first. Handing it over raw made the anchor wrong by the whole scroll
-            // offset, so the zoom tool threw the map somewhere else entirely; the further you had
-            // scrolled, the further it jumped. Project leadership: *"Fix the zoom its whacky as heck,
-            // it should zoom where the cursor is."*
-            //
-            // The wheel and pinch handlers are children of `view`, so THEIR positions were already
-            // right — which is why this only ever misbehaved with the zoom tool in hand.
-            const inView = canvas.mapToItem(view, eventPoint.position.x, eventPoint.position.y);
-            view.zoomAround(canvasRoot.zoom * bite, inView, true);
+            // ⚠️ THE ANCHOR MUST BE IN **VIEW** COORDINATES, and this handler's are not — it lives
+            // inside `canvas`, which is why the two lines above divide by the zoom to get map pixels.
+            // Handing the raw point over made the anchor wrong by the whole scroll offset, so the
+            // zoom tool threw the map somewhere else entirely. @see view.pointInView, which every
+            // zoom anchor now goes through so the space can never be guessed at again.
+            view.zoomAround(canvasRoot.zoom * bite,
+                            view.pointInView(eventPoint.scenePosition), true);
             return;
           }
 
@@ -1697,6 +1689,22 @@ Item {
     /// @p bridge is true ONLY for a mouse-wheel detent, where the hardware left a gap that has to be
     /// crossed somehow. Everything else -- the slider, a trackpad, a pinch -- is already continuous
     /// and goes straight through with no interpolation at all. @see canvasRoot's zoom note.
+    /// A SCENE point, in this Flickable's own coordinates — the only space @ref zoomAround accepts.
+    ///
+    /// ⚠️ EVERY ZOOM ANCHOR GOES THROUGH HERE, and it exists because getting this wrong is silent and
+    /// it has now cost two rounds. `zoomAround` reads its `centre` as Flickable-local
+    /// (`view.contentX + centre.x - canvas.x`), but the points handed to it come from three different
+    /// places with three different parents: the ground `TapHandler` lives inside `canvas` (canvas
+    /// coordinates), while the wheel and pinch handlers are declared inside a Flickable — whose
+    /// default property reparents *visual* children into `contentItem` — so what a handler's
+    /// `position` is relative to is genuinely not obvious from reading the file.
+    ///
+    /// Nothing needs to be deduced if the point is taken from the SCENE, which every handler reports
+    /// identically, and mapped once, here.
+    function pointInView(scenePos) {
+      return view.mapFromItem(null, scenePos.x, scenePos.y);
+    }
+
     function zoomAround(newZoom, centre, bridge) {
       newZoom = Math.max(canvasRoot.minZoom, Math.min(canvasRoot.maxZoom, newZoom));
       if (Math.abs(newZoom - canvasRoot.zoom) < 0.0001)
@@ -1733,11 +1741,32 @@ Item {
     // A pinch is CONTINUOUS. Straight through, no interpolation -- it is already smooth, and
     // bridging it would only put lag between your fingers and the map.
     PinchHandler {
+      id: pinch
       target: null
+
+      /// The zoom the gesture STARTED at. @see the runaway note below.
+      property real startZoom: 1
+
+      onActiveChanged: if (active) pinch.startZoom = canvasRoot.zoom
+
+      // ⚠️ THE PINCH WAS COMPOUNDING ON ITSELF, and this is why a touchpad pinch threw the map off
+      // the screen (project leadership, 2026-08-18: *"if i position the mouse cursor over the center
+      // and zoom in or out it moves way off the edge of the map quickly ... pinch on laptop touchpad
+      // and mouse both do this"*).
+      //
+      // `activeScale` is CUMULATIVE from the start of the gesture — 1.0, 1.1, 1.2, … — but the old
+      // line multiplied it into `canvasRoot.zoom`, which had *already been updated by the previous
+      // frame*. So every frame re-applied the whole gesture so far on top of itself: the zoom grew
+      // geometrically, the anchor could not hold against it, and the map shot away. It is the classic
+      // absolute-vs-relative mix-up, and it only looks right on the very first frame.
+      //
+      // A cumulative factor must be applied to the zoom the gesture STARTED at, never to the running
+      // one. (The 0.25 damping is unchanged — a raw touchpad pinch is far too eager.)
       onActiveScaleChanged: {
         if (!active)
           return;
-        view.zoomAround(canvasRoot.zoom * (1 + (activeScale - 1) * 0.25), centroid.position, false);
+        view.zoomAround(pinch.startZoom * (1 + (activeScale - 1) * 0.25),
+                        view.pointInView(centroid.scenePosition), false);
       }
     }
 
@@ -1759,7 +1788,10 @@ Item {
 
         const from = canvasRoot.userZoom > 0 ? canvasRoot.userZoom : canvasRoot.zoom;
 
-        view.zoomAround(from * Math.pow(1.12, notches), point.position, !fine);
+        // ⚠️ `point.position` is in the coordinates of whatever this handler ended up attached to,
+        // and inside a Flickable that is not a thing to be guessed at. @see view.pointInView
+        view.zoomAround(from * Math.pow(1.12, notches),
+                        view.pointInView(point.scenePosition), !fine);
       }
     }
 
