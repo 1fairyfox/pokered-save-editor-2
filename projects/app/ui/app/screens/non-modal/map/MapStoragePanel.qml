@@ -1181,24 +1181,64 @@ Item {
                   wrapMode: Text.Wrap
                 }
 
-                // The group toggle: sets/clears every flag in the group at once.
+                // ⭐ THE GROUP TOGGLE SAYS WHAT IT DOES.
+                //
+                // Project leadership, 2026-08-18: *"the shared event flags are marked as such but
+                // they have a toggle button, its unclear what the group toggle button does ... the
+                // name of the toggle button feels like a generic description. 'Silph Co shared with
+                // the other silph co floors' — but what is it sharing and why is it a toggle
+                // button?"*
+                //
+                // Dead right, and the fault is that the heading and the control were reading as ONE
+                // thing. The heading is a **description of the group** ("these bits also live on the
+                // other Silph Co floors"); the switch beside it is a **bulk action on the rows
+                // below** ("turn them all on / all off"). With nothing between them, the switch
+                // looked like it toggled the sharing.
+                //
+                // So the action now carries its own word — "All" — and its tooltip says plainly what
+                // it will do next, including how many rows it will move and (for a shared group) that
+                // the change shows up on the other maps too, because that is the part a person cannot
+                // see from here.
+                Label {
+                  text: qsTr("All")
+                  font.pixelSize: 9
+                  color: brg.settings.textColorMid
+                  Layout.alignment: Qt.AlignVCenter
+                }
+
                 MapSwitch {
-                  checked: {
+                  id: grpAll
+
+                  /// Every row in the group is already on. (A PARTLY-on group reads as off, and the
+                  /// tooltip says so rather than leaving you to guess from the switch.)
+                  readonly property bool allOn: {
                     panel.revision; panel.editTick;
                     if (!panel.wEvents) return false;
                     for (let i = 0; i < grp.modelData.rows.length; i++)
                       if (!panel.wEvents.eventsAt(grp.modelData.rows[i].ind)) return false;
                     return true;
                   }
+
+                  checked: grpAll.allOn
+
                   onToggled: {
                     if (!panel.wEvents) return;
-                    let all = true;
-                    for (let i = 0; i < grp.modelData.rows.length; i++)
-                      if (!panel.wEvents.eventsAt(grp.modelData.rows[i].ind)) { all = false; break; }
+                    const turnOn = !grpAll.allOn;
                     for (let j = 0; j < grp.modelData.rows.length; j++)
-                      panel.wEvents.eventsSet(grp.modelData.rows[j].ind, !all);
+                      panel.wEvents.eventsSet(grp.modelData.rows[j].ind, turnOn);
                     panel.editTick++;
                   }
+
+                  MapToolTip {
+                    shown: grpAllHover.hovered
+                    text: (grpAll.allOn
+                             ? qsTr("Turn all %n flag(s) in this group OFF.", "", grp.modelData.rows.length)
+                             : qsTr("Turn all %n flag(s) in this group ON.", "", grp.modelData.rows.length))
+                          + (grp.isShared
+                               ? "\n" + qsTr("These bits are shared — the change shows on the other maps too.")
+                               : "")
+                  }
+                  HoverHandler { id: grpAllHover }
                 }
               }
 
