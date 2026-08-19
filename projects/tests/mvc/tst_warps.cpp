@@ -107,6 +107,7 @@ private slots:
   // ── The state bytes ─────────────────────────────────────────────────────────
   void warpStateFields_nameEveryByteInEnglish();
   void deadAndWipedFields_areAbsentUntilYouAskForThem();
+  void tinkererFields_areAbsentUntilThatGateIsOpen();
   void deadAndWiped_areMarkedAsDIFFERENTFacts();
   void setWarpStateField_writesOneByte_andTakesHackValues();
   void escapeWarp_isBitSix_andAreaMapNoLongerOwnsIt();
@@ -446,7 +447,8 @@ void TestWarps::lastMap_writesOneByte()
 void TestWarps::warpStateFields_nameEveryByteInEnglish()
 {
   Rig* r = makeRig();
-  r->map->setShowScratch(true);   // we want the whole set, dead ones included
+  r->map->setShowScratch(true);    // we want the whole set, dead ones included
+  r->map->setShowTinkerer(true);   // …and the four behind the Tinkerer gate
 
   const QVariantList fields = r->map->warpStateFields();
 
@@ -515,6 +517,58 @@ void TestWarps::deadAndWipedFields_areAbsentUntilYouAskForThem()
   for (const QString& key : doNothing)
     QVERIFY2(!fieldNamed(fields, key).isEmpty(),
              qPrintable(QStringLiteral("'%1' did not appear with the switch ON").arg(key)));
+
+  delete r;
+}
+
+/**
+ * @brief The four mid-motion bytes are ABSENT until the 🔧 Tinkerer gate is open — and they are NOT
+ *        reachable through the "!" instead.
+ *
+ * ⭐ ONE GATE PER OPTION (project leadership, 2026-08-18): *"An option is ONLY gated by 1 box. An
+ * option NEVER requires 2 or more gates to be enabled for it to show, just like an option will never
+ * BELONG to any more than 1 gate only."* Both halves of that are load-bearing and both are asserted
+ * here — the negative case (scratch does NOT reveal them) is what stops the two systems bleeding into
+ * each other the next time someone adds a field.
+ *
+ * ⚠️ These are not dead or wiped bytes. The console honours every one of them; they simply describe a
+ * warp, a fall or a fly that is already in flight, which is not a state a save should rest in.
+ */
+void TestWarps::tinkererFields_areAbsentUntilThatGateIsOpen()
+{
+  Rig* r = makeRig();
+
+  const QStringList midMotion = { "specialWarpDestMap", "whichDungeonWarp",
+                                  "warpDest", "flyOrDungeonWarp" };
+
+  QVERIFY(!r->map->showTinkerer());   // shut by default, like every gate
+
+  QVariantList fields = r->map->warpStateFields();
+  for (const QString& key : midMotion)
+    QVERIFY2(fieldNamed(fields, key).isEmpty(),
+             qPrintable(QStringLiteral("'%1' leaked into the panel with the gate SHUT").arg(key)));
+
+  // The harmless neighbours stay in the open — leadership cut them from the gate by name.
+  QVERIFY(!fieldNamed(fields, "dungeonWarpDestMap").isEmpty());
+  QVERIFY(!fieldNamed(fields, "dungeonWarp").isEmpty());
+  QVERIFY(!fieldNamed(fields, "escapeWarp").isEmpty());
+  QVERIFY(!fieldNamed(fields, "forcedWarp").isEmpty());
+
+  // ⚠️ THE NEGATIVE THAT MATTERS: the "!" tiers are a different question and must not answer this one.
+  r->map->setShowScratch(true);
+  r->map->setShowUnused(true);
+  r->map->setShowTrulyUnused(true);
+  fields = r->map->warpStateFields();
+  for (const QString& key : midMotion)
+    QVERIFY2(fieldNamed(fields, key).isEmpty(),
+             qPrintable(QStringLiteral("'%1' is reachable from the '!' tiers as well as its own gate "
+                                       "-- an option must belong to exactly ONE").arg(key)));
+
+  r->map->setShowTinkerer(true);
+  fields = r->map->warpStateFields();
+  for (const QString& key : midMotion)
+    QVERIFY2(!fieldNamed(fields, key).isEmpty(),
+             qPrintable(QStringLiteral("'%1' did not appear with the gate OPEN").arg(key)));
 
   delete r;
 }
@@ -715,6 +769,7 @@ void TestWarps::legalDungeonWarps_arePairs_andHolesAreOneBased()
 void TestWarps::guns_flagTheIllegalValue_butNeverRefuseIt()
 {
   Rig* r = makeRig();
+  r->map->setShowTinkerer(true);   // the Fly destination lives behind that gate
 
   // A legal Fly map.
   r->map->setWarpStateField(QStringLiteral("specialWarpDestMap"), 1);   // Viridian City
@@ -762,6 +817,7 @@ void TestWarps::guns_flagTheIllegalValue_butNeverRefuseIt()
 void TestWarps::guns_dontCryWolfOnAnOrdinarySave()
 {
   Rig* r = makeRig();
+  r->map->setShowTinkerer(true);   // "…through hole #" is behind that gate
   auto* warps = r->sf.dataExpanded->area->warps;
 
   // The fixture really is like this. If it ever isn't, this test is testing nothing.

@@ -1444,61 +1444,82 @@ Item {
         }
 
         // ── The raw nine (read-only while synced; break sync to edit) ────────────────────────
-        RowLayout {
+        //
+        // ⭐ BEHIND THE 🔧 **MANUAL** GATE (project leadership, 2026-08-18): *"It includes the manual
+        // controls like viewbox and connection — it doesn't switch them to manual, it just shows them,
+        // allowing to break auto sync."* Read that carefully, because it is the whole design: the gate
+        // **reveals** this section and changes nothing. Sync is still on, the bytes are still derived,
+        // the spin boxes are still read-only until you throw "Break sync" yourself. Opening a gate must
+        // never be an edit.
+        //
+        // ⚠️ `connSynced === false` is the escape hatch, and it is not a second gate — it is the same
+        // question the contrast strip answers with `contrastIsGlitch`. A connection that is ALREADY
+        // desynced has to show its raw bytes whether or not the gate is open, or the panel would be
+        // hiding the only explanation for what the map is doing.
+        ColumnLayout {
+          id: connRaw
           Layout.fillWidth: true
-          Layout.topMargin: 6
           spacing: 6
+
+          readonly property bool connSynced: details.connEdge.synced !== false
+          visible: brg.map.showManual || !connRaw.connSynced
+
+          RowLayout {
+            Layout.fillWidth: true
+            Layout.topMargin: 6
+            spacing: 6
+            Label {
+              Layout.fillWidth: true
+              text: qsTr("Raw bytes")
+              font.pixelSize: 11
+              font.bold: true
+              opacity: 0.55
+            }
+            Switch {
+              text: qsTr("Break sync")
+              font.pixelSize: 10
+              checked: details.connRawEditable
+              enabled: connRaw.connSynced   // already desynced: always editable, switch moot
+              onToggled: details.connBreakSync = checked
+            }
+          }
+
           Label {
             Layout.fillWidth: true
-            text: qsTr("Raw bytes")
-            font.pixelSize: 11
-            font.bold: true
+            text: details.connRawEditable
+                  ? qsTr("Editing these sets bytes directly — the offset above no longer describes the "
+                         + "connection until you pick a neighbour or offset again.")
+                  : qsTr("These follow the offset above. Turn on “Break sync” to set them by hand.")
+            wrapMode: Text.Wrap
+            font.pixelSize: 10
             opacity: 0.55
           }
-          Switch {
-            text: qsTr("Break sync")
-            font.pixelSize: 10
-            checked: details.connRawEditable
-            enabled: details.connEdge.synced !== false   // already desynced: always editable, switch moot
-            onToggled: details.connBreakSync = checked
-          }
-        }
 
-        Label {
-          Layout.fillWidth: true
-          text: details.connRawEditable
-                ? qsTr("Editing these sets bytes directly — the offset above no longer describes the "
-                       + "connection until you pick a neighbour or offset again.")
-                : qsTr("These follow the offset above. Turn on “Break sync” to set them by hand.")
-          wrapMode: Text.Wrap
-          font.pixelSize: 10
-          opacity: 0.55
-        }
-
-        Repeater {
-          model: details.connFieldsData
-          delegate: RowLayout {
-            required property var modelData
-            Layout.fillWidth: true
-            spacing: 6
-
-            Label {
-              Layout.preferredWidth: 92
-              text: modelData.label
-              font.pixelSize: 10
-              opacity: 0.7
-              elide: Text.ElideRight
-            }
-            SpinBox {
+          Repeater {
+            model: details.connFieldsData
+            delegate: RowLayout {
+              required property var modelData
               Layout.fillWidth: true
-              Layout.preferredHeight: 26
-              font.pixelSize: 10
-              editable: true
-              enabled: details.connRawEditable
-              from: modelData.min
-              to: modelData.max
-              value: modelData.value
-              onValueModified: brg.map.setConnectionField(details.connection, modelData.key, value)
+              spacing: 6
+
+              Label {
+                Layout.preferredWidth: 92
+                text: modelData.label
+                font.pixelSize: 10
+                opacity: 0.7
+                elide: Text.ElideRight
+              }
+              SpinBox {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 26
+                font.pixelSize: 10
+                editable: true
+                enabled: details.connRawEditable
+                from: modelData.min
+                to: modelData.max
+                value: modelData.value
+                onValueModified: brg.map.setConnectionField(details.connection, modelData.key, value)
+              }
             }
           }
         }
@@ -1922,61 +1943,78 @@ Item {
           }
         }
 
-        RowLayout {
-          Layout.fillWidth: true
-          Layout.topMargin: 4
-          spacing: 8
-          Label {
-            Layout.fillWidth: true
-            text: brg.map.viewSynced ? qsTr("Camera — follows the player")
-                                     : qsTr("Camera — set loose")
-            font.pixelSize: 12
-            wrapMode: Text.Wrap
-          }
-          MapSwitch {
-            // On = broken loose. Flipping it toggles sync; re-attaching snaps the box to the player.
-            checked: !brg.map.viewSynced
-            onToggled: brg.map.setViewBreakSync(brg.map.viewSynced)
-          }
-        }
-
-        // The raw pointer, only on the power path.
+        // ── The camera / view box, behind the 🔧 MANUAL gate ─────────────────────────────────
+        //
+        // ⭐ Same rule as the connection bytes (project leadership, 2026-08-18): the gate **shows**
+        // this, it does not set it loose. The camera keeps following the player exactly as before
+        // while the gate is shut; all the gate does is put the switch on screen.
+        //
+        // ⚠️ `!viewSynced` is the escape hatch, not a second gate: a camera that is ALREADY loose must
+        // show its controls whatever the gate says, or there would be no way to see why the screen is
+        // drawn where it is — or to put it back. (You can also break it loose by dragging the box on
+        // the canvas, which is a gesture no gate mediates.)
         ColumnLayout {
+          id: viewBox
           Layout.fillWidth: true
           spacing: 3
-          visible: !brg.map.viewSynced
+          visible: brg.map.showManual || !brg.map.viewSynced
+
           RowLayout {
             Layout.fillWidth: true
-            spacing: 6
-            Label { text: qsTr("Address"); font.pixelSize: 10; opacity: 0.6 }
-            SpinBox {
+            Layout.topMargin: 4
+            spacing: 8
+            Label {
               Layout.fillWidth: true
-              Layout.preferredHeight: 28
-              font.pixelSize: 11
-              editable: true
-              from: 0
-              to: 65535
-              value: brg.map.viewPtr
-              onValueModified: brg.map.setViewPtr(value)
+              text: brg.map.viewSynced ? qsTr("Camera — follows the player")
+                                       : qsTr("Camera — set loose")
+              font.pixelSize: 12
+              wrapMode: Text.Wrap
+            }
+            MapSwitch {
+              // On = broken loose. Flipping it toggles sync; re-attaching snaps the box to the player.
+              checked: !brg.map.viewSynced
+              onToggled: brg.map.setViewBreakSync(brg.map.viewSynced)
+            }
+          }
+
+          // The raw pointer, only on the power path.
+          ColumnLayout {
+            Layout.fillWidth: true
+            spacing: 3
+            visible: !brg.map.viewSynced
+            RowLayout {
+              Layout.fillWidth: true
+              spacing: 6
+              Label { text: qsTr("Address"); font.pixelSize: 10; opacity: 0.6 }
+              SpinBox {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 28
+                font.pixelSize: 11
+                editable: true
+                from: 0
+                to: 65535
+                value: brg.map.viewPtr
+                onValueModified: brg.map.setViewPtr(value)
+              }
+            }
+            Label {
+              Layout.fillWidth: true
+              text: qsTr("The game trusts this pointer and draws the screen from it — an off-map value "
+                         + "shows garbage. You can also drag the view box around on the canvas.")
+              wrapMode: Text.Wrap
+              font.pixelSize: 10
+              opacity: 0.55
             }
           }
           Label {
             Layout.fillWidth: true
-            text: qsTr("The game trusts this pointer and draws the screen from it — an off-map value "
-                       + "shows garbage. You can also drag the view box around on the canvas.")
+            visible: brg.map.viewSynced
+            text: qsTr("The view box tracks the player automatically. Break it loose to place it by "
+                       + "hand.")
             wrapMode: Text.Wrap
             font.pixelSize: 10
             opacity: 0.55
           }
-        }
-        Label {
-          Layout.fillWidth: true
-          visible: brg.map.viewSynced
-          text: qsTr("The view box tracks the player automatically. Break it loose to place it by "
-                     + "hand.")
-          wrapMode: Text.Wrap
-          font.pixelSize: 10
-          opacity: 0.55
         }
 
         // ── Every other byte of his map state, grouped ──────────────────────────────────────

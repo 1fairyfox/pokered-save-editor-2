@@ -388,9 +388,15 @@ Item {
                 horizontalAlignment: Text.AlignHCenter
 
                 HoverHandler { id: bulletHov; cursorShape: Qt.ArrowCursor }
-                ToolTip.visible: bulletHov.hovered
-                ToolTip.delay: 300
-                ToolTip.text: bulletRow.modelData.text
+                // ⚠️ MapToolTip, never `ToolTip.text` — the stock one is dark-on-translucent and is
+                // unreadable over these pale panels. The rule is at the top of MapToolTip.qml.
+                MapToolTip {
+                  shown: bulletHov.hovered
+                  followGlobalSetting: false
+                  delay: 300
+                  text: bulletRow.modelData.text
+                  maxWidth: 240
+                }
               }
               Text {
                 Layout.fillWidth: true

@@ -388,8 +388,13 @@ ColumnLayout {
               color: brg.settings.textColorDark
               elide: Text.ElideRight
             }
+            // ⚠️ `=== true`, not a bare truthiness test. A `leadingEntries` row is hand-built by its
+            // caller and need not carry every optional key — the connection picker's "the map that
+            // connects here" row has no copy status to report — and `visible: undefined` is a QML
+            // warning ("Unable to assign [undefined] to bool"), not a quiet false. `size` below was
+            // already written defensively; this is the same courtesy.
             Text {
-              visible: modelData.isCopy
+              visible: modelData.isCopy === true
               text: qsTr("→ %1").arg(modelData.copyOf)
               font.pixelSize: 10; font.italic: true
               color: brg.settings.textColorMid

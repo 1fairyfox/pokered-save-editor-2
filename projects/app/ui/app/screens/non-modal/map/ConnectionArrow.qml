@@ -27,14 +27,50 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 
+// For `MapModel.SortConnections` — the enum, by name rather than as a bare 3. Registered uncreatable
+// in bootQmlLinkage.cpp; the import is what makes its Q_ENUM reachable here.
+import App.MapModel
+
 Item {
   id: arrow
 
   required property var canvas
   required property int dir            // MapDBEntryConnect::ConnectDir: N 0, S 1, E 2, W 3
 
+  /// The DEBUG harness opens a specific edge's picker through this — "connArrow0".."connArrow3".
+  objectName: "connArrow" + arrow.dir
+
   readonly property var edge: { arrow.canvas.revision; return arrow.canvas.connEdgeFor(arrow.dir); }
   readonly property bool absent: arrow.edge !== null && arrow.edge.exists === false
+
+  /// Every map, with the ROM's own answer for this edge marked. Built once per open (the popup binds
+  /// through `pop.opened`), because it walks the whole map store.
+  /// @see MapModel::connectionMapList — `{ value, name, size, group, isDefault }`.
+  readonly property var connList: { pop.opened; return brg.map.connectionMapList(arrow.dir); }
+
+  /// The map the cartridge really connects to this edge, as ONE `leadingEntries` row for the shared
+  /// map selector — `{ ind, name, group, size }`. Empty when this edge has no ROM default.
+  ///
+  /// ⚠️ This is the part of the old bespoke ComboBox worth keeping. The shared list can sort "by
+  /// connections", which clusters maps by their connection signature — genuinely useful, and what
+  /// this picker now opens on — but no sort can know which single map is *supposed* to be here. That
+  /// is a fact about this map's ROM header, so it rides above the sort as its own row.
+  readonly property var defaultRow: {
+    const l = arrow.connList;
+    for (let i = 0; i < l.length; i++)
+      if (l[i].isDefault === true)
+        return [{ ind: l[i].value, name: l[i].name, group: l[i].group, size: l[i].size }];
+    return [];
+  }
+
+  /// A map's name by id, off the same list — so nothing needs a second lookup path.
+  function nameOf(ind) {
+    const l = arrow.connList;
+    for (let i = 0; i < l.length; i++)
+      if (l[i].value === ind)
+        return l[i].name;
+    return qsTr("map %1").arg(ind);
+  }
 
   visible: absent && brg.mapLayers.showConnections && brg.map.valid
 
@@ -106,8 +142,17 @@ Item {
     Component.onDestruction: if (arrow.canvas) arrow.canvas.hoverConnection = false
   }
 
-  ToolTip {
-    visible: hov.containsMouse && !pop.opened
+  // ⚠️ `MapToolTip`, NOT the stock `ToolTip`. This one shipped as a stock tooltip and read as dark
+  // text on a near-dark background out over the canvas well — project leadership, 2026-08-18: *"the
+  // connection tooltips are dark text on dark background, make it proper how it is elsewhere."*
+  //
+  // The rule is written at the top of MapToolTip.qml and it is absolute: **nothing on this screen may
+  // use the stock ToolTip.** This file was the last holdout. `followGlobalSetting: false` because an
+  // arrow is otherwise a bare chevron in the border ring — without the words it is unexplained, not
+  // merely unannotated.
+  MapToolTip {
+    shown: hov.containsMouse && !pop.opened
+    followGlobalSetting: false
     text: qsTr("Add a connecting route on the %1 edge")
           .arg(arrow.edge ? arrow.edge.dirName : "")
     delay: 400
@@ -119,6 +164,13 @@ Item {
     y: arrow.height + 4
     width: 300
     padding: 10
+
+    // ⚠️ KEEP IT INSIDE THE WINDOW. This popup used to hold a single combo and was short enough that
+    // it never noticed; with the shared selector (heading · sort · search · a scrolling list) it is
+    // tall, and an arrow parked near the bottom edge of the map would have opened it half off-screen.
+    // A non-negative `margins` is what makes Qt reposition a Popup to fit — @see MapNamePicker, which
+    // has carried the same 8 since it grew a list.
+    margins: 8
     modal: false
     focus: true
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
@@ -128,6 +180,18 @@ Item {
     onOpenedChanged: {
       arrow.canvas.popupsOpen += (pop.opened ? 1 : -1);
       if (arrow.canvas.popupsOpen < 0) arrow.canvas.popupsOpen = 0;
+
+      // ⭐ THIS PICKER OPENS ON "BY CONNECTIONS" (project leadership, 2026-08-18: *"it should default
+      // there to connections sorting"*). It is the one map list where that sort is the answer to the
+      // question being asked — you are choosing a neighbour, so grouping the list by which edges a
+      // map already connects on puts the plausible ones together.
+      //
+      // ⚠️ `mapSort` is deliberately GLOBAL and shared, so this is a nudge on OPEN and nothing more —
+      // change the sort while the picker is up and it stays changed, here and everywhere. That is the
+      // point of one shared setting; a picker that silently re-imposed its own on every frame would be
+      // taking the choice back.
+      if (pop.opened)
+        brg.map.mapSort = MapModel.SortConnections;
     }
 
     background: Rectangle {
@@ -146,73 +210,32 @@ Item {
         color: brg.settings.textColorMid
       }
 
-      ComboBox {
-        id: combo
+      // ⭐ THE ONE SHARED MAP SELECTOR — sort · search · grouped rows (project leadership, 2026-08-18:
+      // *"the connection map select doesn't use the new shared map select, it should"*). It was the
+      // last map picker on the screen still running its own bespoke ComboBox, which meant this one
+      // place had no search, no sort, and a different row shape from every other map list in the app.
+      //
+      // What the bespoke list did better is kept, not lost: the map the ROM really connects to on this
+      // edge rides at the top as a `leadingEntries` row under its own heading. @see defaultRow.
+      MapSelectList {
+        id: sel
         Layout.fillWidth: true
-        Layout.preferredHeight: 32
-        font.pixelSize: 12
+        listHeight: 150
+        selectedInd: -1
+        leadingEntries: arrow.defaultRow
 
-        model: brg.map.connectionMapList(arrow.dir)
-        textRole: "name"
-        valueRole: "value"
-        currentIndex: -1
-        displayText: currentIndex < 0 ? qsTr("Pick a neighbouring map…") : currentText
-
-        onActivated: {
-          if (currentValue === undefined || currentValue < 0)
+        onPicked: (ind) => {
+          if (ind < 0)
             return;
-          if (brg.map.addConnection(arrow.dir, currentValue)) {
+          const name = arrow.nameOf(ind);
+          if (brg.map.addConnection(arrow.dir, ind)) {
             if (!brg.mapLayers.showConnections)
               brg.mapLayers.setKeyVisible("connections", true);
             arrow.canvas.selectedConnection = arrow.dir;
             arrow.canvas.status = qsTr("Connected the %1 edge to %2.")
-                                    .arg(arrow.edge ? arrow.edge.dirName : "").arg(currentText);
+                                    .arg(arrow.edge ? arrow.edge.dirName : "").arg(name);
           }
           pop.close();
-        }
-
-        // Grouped: Default first, then the maps that fit this edge, then the rest. Each row shows the
-        // map's SIZE (grey, right), and the default wears a ★.
-        delegate: ItemDelegate {
-          required property var modelData
-          required property int index
-          width: combo.width
-          height: (modelData.group !== "" ? 20 : 0) + 26
-          highlighted: combo.highlightedIndex === index
-
-          contentItem: ColumnLayout {
-            spacing: 0
-            Text {
-              visible: modelData.group !== ""
-              Layout.fillWidth: true
-              text: modelData.group
-              font.pixelSize: 10; font.bold: true
-              color: brg.settings.textColorMid
-            }
-            RowLayout {
-              Layout.fillWidth: true
-              spacing: 6
-              Text {
-                visible: modelData.isDefault === true
-                text: "★"
-                font.pixelSize: 11
-                color: "#e69f00"
-              }
-              Text {
-                Layout.fillWidth: true
-                text: modelData.name
-                font.pixelSize: 12
-                font.bold: modelData.isDefault === true
-                color: brg.settings.textColorDark
-                elide: Text.ElideRight
-              }
-              Text {
-                text: modelData.size
-                font.pixelSize: 10; font.family: "monospace"
-                color: brg.settings.textColorMid
-              }
-            }
-          }
         }
       }
 
