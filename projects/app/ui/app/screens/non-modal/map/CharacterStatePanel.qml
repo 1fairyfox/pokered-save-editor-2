@@ -76,18 +76,39 @@ Item {
   // gate for the whole screen. This SUPERSEDES the earlier "no hidden fields, mark them instead"
   // ruling (2026-07-15): the mark stays, and the row only appears when the gate is on.
   // The per-row blurb moved behind a "?" -- one-line rows, panel-wide standard.
+  // ⭐ ONE GATE PER ROW, AND ONLY ONE (project leadership, 2026-08-18): *"An option is ONLY gated by 1
+  // box. An option NEVER requires 2 or more gates to be enabled for it to show, just like an option will
+  // never BELONG to any more than 1 gate only."* Hence a single `gate` STRING rather than a set of
+  // booleans — the type makes the rule unbreakable, because there is nowhere to put a second one.
+  //
+  //   ""          — always shown
+  //   "scratch"   — no-effect: the game rewrites or never reads it            → the "!" panel
+  //   "tinkerer"  — real, but a finicky mid-motion state to resume into       → the 🔧 panel
+  //   "debug"     — the game's own development leftovers                      → the 🔧 panel
+  //
+  // ⚠️ When a row is BOTH rewritten-on-load and finicky, "scratch" wins. Not a tie-break for its own
+  // sake: "the game will throw this away" is the fact that decides whether editing it is worth anyone's
+  // time, and it must not be reachable from a gate that doesn't say so.
+  readonly property var gateOn: ({
+    "":         true,
+    "scratch":  brg.map.showScratch,
+    "tinkerer": brg.map.showTinkerer,
+    "debug":    brg.map.showDebug
+  })
+
   component FlagRow: RowLayout {
     id: row
     property string title: ""
     property string blurb: ""
     property bool rewritten: false          // the game zeroes/clears this on load
     property string rewrittenWhy: ""
+    property string gate: ""                // "" | "scratch" | "tinkerer" | "debug" — exactly one
     property bool value: false
     signal toggle()
 
     Layout.fillWidth: true
     spacing: 6
-    visible: !row.rewritten || brg.map.showScratch
+    visible: panel.gateOn[row.gate === "" && row.rewritten ? "scratch" : row.gate]
 
     MapWarnIcon {
       visible: row.rewritten
@@ -177,9 +198,19 @@ Item {
         }
 
         // ── Controls — two kept, two cleared ───────────────────────────────────────────────────
-        GroupHeading { text: qsTr("Controls") }
+        // A heading with nothing under it is worse than no heading, so each one carries the OR of its
+        // own rows' gates. @see `gatesAnyRow` for why the panel itself follows the same rule.
+        GroupHeading {
+          text: qsTr("Controls")
+          visible: brg.map.showTinkerer || brg.map.showScratch
+        }
 
+        // Both survive a save (console-verified — reference/npc-character-state.md), so they are NOT
+        // no-effect edits; they are simply a state a save should never be sitting in. That is the
+        // Tinkerer gate exactly (project leadership, 2026-08-18, naming "scripted walk" among its
+        // contents).
         FlagRow {
+          gate: "tinkerer"
           title: qsTr("Scripted walk — starting")
           blurb: qsTr("A scripted walk is about to begin this frame. Cutscene machinery — 0 in any "
                       + "normal save.")
@@ -188,6 +219,7 @@ Item {
         }
 
         FlagRow {
+          gate: "tinkerer"
           title: qsTr("Scripted walk — running")
           blurb: qsTr("A sprite is currently being walked by a script. Cutscene machinery — 0 in any "
                       + "normal save.")
@@ -212,16 +244,25 @@ Item {
         }
 
         // ── Battle — two kept, plus the pointer ────────────────────────────────────────────────
-        GroupHeading { text: qsTr("Battle") }
+        GroupHeading {
+          text: qsTr("Battle")
+          visible: brg.map.showTinkerer || brg.map.showDebug || brg.map.showScratch
+        }
 
         FlagRow {
+          gate: "tinkerer"
           title: qsTr("Trainer battle queued")
           blurb: qsTr("The battle about to start is a trainer's (not a wild encounter).")
           value: panel.npc.trainerBattle
           onToggle: panel.npc.trainerBattle = !panel.npc.trainerBattle
         }
 
+        // ⭐ THE DEBUG GATE'S FOUNDING MEMBER (project leadership, 2026-08-18): *"Unused and unstable
+        // should no longer include debug or developer stuff, that is moved to its own gate out of
+        // unused and unstable."* It was the one row that made "unused & unstable" have to describe
+        // itself as covering "developer leftovers" too — now that tier is a single clean idea again.
         FlagRow {
+          gate: "debug"
           title: qsTr("Test battle (debug)")
           blurb: qsTr("A leftover debug flag the retail game never sets. Included because every byte "
                       + "is yours to edit.")

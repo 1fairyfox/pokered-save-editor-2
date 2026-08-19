@@ -725,6 +725,58 @@ public:
   bool showTrulyUnused() const { return m_showTrulyUnused; }
   void setShowTrulyUnused(bool on);
 
+  // ══ THE GATES ══════════════════════════════════════════════════════════════════════════════════
+  //
+  // ⭐ THE ARCHITECTURE, in project leadership's own words (2026-08-18):
+  //
+  //   *"An option is ONLY gated by 1 box. An option NEVER requires 2 or more gates to be enabled for
+  //    it to show, just like an option will never BELONG to any more than 1 gate only. This keeps
+  //    things simple and clean."*
+  //   *"Remember if a whole panel ends up being hidden the panel itself and its tab need to disappear
+  //    for clean UX."*
+  //
+  // So the gates are **flat and exclusive**. There is no nesting, no gate that reveals another gate,
+  // and no option that needs two switches. A reader can always answer "why can't I see this?" with
+  // exactly one name. The three existing tiers stay as they are; these are the new ones, and they are
+  // for options that are perfectly LEGITIMATE — which is what separates them from the "!" tiers.
+
+  /// **TINKERER** — real options that are finicky, unnatural or outright odd to set from a save file.
+  ///
+  /// Not broken and not useless: a save is simply not meant to resume in the middle of a *moving*
+  /// state, and these are the values that describe one. Project leadership: *"Any values that pertain
+  /// to an actively moving state ... these feel like they pertain to an active moving state that
+  /// would be unnatural — thats important, unnatural — to use from a save file, or maybe even
+  /// downright buggy/glitchy."*
+  ///
+  /// What lives here: the **cutscene state steps** (console-proven to hold the controls —
+  /// `scripts/emu/probe_transient_state_steps.py`), scripted walk, trainer battle queued, "through
+  /// hole", "arriving at warp", a special warp in progress, the fly-destination selection, the
+  /// tileset/blocks pointers, and the glitch palettes.
+  ///
+  /// ⚠️ What does NOT live here: the harmless, fun ones. *"Others can be harmless fun — like you fell
+  /// down a hole or blacked out, or warps fire without walking into them. These feel harmless and fun
+  /// and ok, those are ok to not have gated."* A state you can be dropped into and simply play is not
+  /// a Tinkerer option.
+  Q_PROPERTY(bool showTinkerer READ showTinkerer WRITE setShowTinkerer NOTIFY showTinkererChanged)
+  bool showTinkerer() const { return m_showTinkerer; }
+  void setShowTinkerer(bool on);
+
+  /// **MANUAL** — the hand-controls for values the app normally keeps in sync for you.
+  ///
+  /// ⚠️ It SHOWS them, it does not switch anything to manual: *"it doesnt switch them to manual, it
+  /// just shows, allowing to break auto sync and control manual stuff."* The view box and the
+  /// connection bytes stay auto-derived until you break their sync yourself. This gate only decides
+  /// whether the means to do so is on screen.
+  Q_PROPERTY(bool showManual READ showManual WRITE setShowManual NOTIFY showManualChanged)
+  bool showManual() const { return m_showManual; }
+  void setShowManual(bool on);
+
+  /// **DEBUG** — leftovers from the game's own development, meaningful only to someone poking at the
+  /// engine. The test-battle bit (`BIT_TEST_BATTLE`) is the founding member.
+  Q_PROPERTY(bool showDebug READ showDebug WRITE setShowDebug NOTIFY showDebugChanged)
+  bool showDebug() const { return m_showDebug; }
+  void setShowDebug(bool on);
+
   /**
    * @brief Where each connected map bleeds into the ring: `{ dir, name, x, y, w, h }`, buffer px.
    *
@@ -1451,6 +1503,10 @@ signals:
   void showUnusedChanged();
   /// The truly-unused (never read/written) visibility toggled — the storage panel re-groups.
   void showTrulyUnusedChanged();
+  /// A gate opened or closed — panels re-evaluate, and a panel left with nothing loses its tab.
+  void showTinkererChanged();
+  void showManualChanged();
+  void showDebugChanged();
   /// The animation step moved on (a view setting; the save is untouched).
   void frameChanged();
   /// The rendered image's URL changed -- a new frame, or a new map/tileset/palette.
@@ -1514,6 +1570,12 @@ private:
   int m_mapSort = SortTileset;   ///< The shared map-list sort mode. @see mapSort
   bool m_showUnused = false;  ///< Tier 1: show unused/glitch (copy) maps + unused values. @see showUnused
   bool m_showTrulyUnused = false;  ///< Tier 3: show never-read-never-written values. @see showTrulyUnused
+
+  // The gates. All OFF by default — each reveals legitimate options that are simply not what most
+  // people came for. @see the "THE GATES" block above for what belongs to which.
+  bool m_showTinkerer = false;  ///< @see showTinkerer
+  bool m_showManual = false;    ///< @see showManual
+  bool m_showDebug = false;     ///< @see showDebug
 
   /// Rebuild the selection when the map changes under it.
   void revalidateSelection();

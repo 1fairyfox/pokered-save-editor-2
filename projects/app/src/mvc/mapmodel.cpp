@@ -1523,6 +1523,40 @@ void MapModel::setShowTrulyUnused(bool on)
   emit changed();   // the storage panel re-groups the event flags
 }
 
+// ── The gates ────────────────────────────────────────────────────────────────
+//
+// Each emits `changed()` as well as its own signal, because a gate does not only reveal rows: a panel
+// whose every row is gated must lose its rail TAB too (leadership, 2026-08-18: *"if a whole panel ends
+// up being hidden the panel itself and its tab need to disappear for clean UX"*), and the dock rebuilds
+// its rail off `changed()`.
+
+void MapModel::setShowTinkerer(bool on)
+{
+  if (on == m_showTinkerer)
+    return;
+  m_showTinkerer = on;
+  emit showTinkererChanged();
+  emit changed();
+}
+
+void MapModel::setShowManual(bool on)
+{
+  if (on == m_showManual)
+    return;
+  m_showManual = on;
+  emit showManualChanged();
+  emit changed();
+}
+
+void MapModel::setShowDebug(bool on)
+{
+  if (on == m_showDebug)
+    return;
+  m_showDebug = on;
+  emit showDebugChanged();
+  emit changed();
+}
+
 int MapModel::frame() const
 {
   return animFrame;
@@ -3010,11 +3044,35 @@ QVariantList MapModel::warpStateFields() const
   // load is not hidden because it is unimportant, it is hidden because it is CLUTTER above the
   // fields that do something. On, it appears wearing its mark. Filtered HERE, in the model, so no
   // view can leak one and a test can prove they are gone.
+  //
+  // ⭐ AND IT IS THE ONE FUNNEL FOR EVERY GATE (project leadership, 2026-08-18): *"An option is ONLY
+  // gated by 1 box. An option NEVER requires 2 or more gates to be enabled for it to show, just like an
+  // option will never BELONG to any more than 1 gate only."* A field carries at most ONE `gate` string,
+  // and if it carries none it falls through to the old scratch/dead question — so the rule is not a
+  // convention anyone has to remember, it is the only shape this code can express.
   auto add = [&](QVariantMap f) {
+    const QString gate = f.value("gate").toString();
+    if (!gate.isEmpty()) {
+      if (gate == QLatin1String("tinkerer") && !m_showTinkerer) return;
+      if (gate == QLatin1String("manual")   && !m_showManual)   return;
+      if (gate == QLatin1String("debug")    && !m_showDebug)    return;
+      ret.append(f);
+      return;
+    }
+
     if (!showScratchFields && (f.value("scratch").toBool() || f.value("dead").toBool()))
       return;
 
     ret.append(f);
+  };
+
+  /// Mark a field for the 🔧 **Tinkerer** gate: a real, working, durable value — the game honours it
+  /// perfectly — that describes a state a save has no business resting in. A warp half-executed, a
+  /// fall in mid-air, a fly destination waiting to be consumed. Nothing here is unused and nothing
+  /// here is overwritten, which is exactly why it must NOT sit behind the "!" with the dead bytes.
+  auto tinker = [](QVariantMap f) {
+    f["gate"] = QStringLiteral("tinkerer");
+    return f;
   };
 
   /// Mark a field as ⚠️ REWRITTEN ON LOAD. Console-verified: `wStatusFlags3` shares an address with
@@ -3081,14 +3139,17 @@ QVariantList MapModel::warpStateFields() const
   // one of them looks stale. The toolbar copy wins: it sits with "Outside is…", which is its actual
   // sibling (both are world routing, neither is about the map you happen to be looking at).
 
-  ret.append(gun(field(goes, "specialWarpDestMap", tr("Fly sends you to"),
+  // ⚠️ TINKERER, not "!": this is the fly destination the console is holding, and it is only ever
+  // meaningful while a special warp is mid-flight. Project leadership named "fly-location selection"
+  // in the gate's contents (2026-08-18). It is a perfectly durable byte — hence the gate, not the mark.
+  add(tinker(gun(field(goes, "specialWarpDestMap", tr("Fly sends you to"),
                        tr("Where the last FLY (or other special warp) was headed.\n\n⚠️ Only 13 maps "
                           "are legal here — the game looks this up in a table that has no end marker "
                           "and no bounds check. Any other map and the console reads whatever ROM "
                           "bytes follow the table and drops you somewhere undefined."),
                        warps->specialWarpDestMap, 0, 255, "flyMap"),
                  AreaWarps::isLegalFlyMap(warps->specialWarpDestMap),
-                 specialArmed));
+                 specialArmed)));
 
   // ⚠️ The MAP and the HOLE are judged SEPARATELY, and the first cut got this wrong too: it failed
   // both fields whenever the *pair* was wrong, so a perfectly good map (Victory Road 2F) came up
@@ -3107,7 +3168,11 @@ QVariantList MapModel::warpStateFields() const
     if (p.first == warps->dungeonWarpDestMap)
       mapHasHoles = true;
 
-  ret.append(gun(field(goes, "dungeonWarpDestMap", tr("Falling drops you onto"),
+  // ⚠️ NOT gated. "Which floor does a hole drop me onto" is a plain, interesting property of the
+  // world — project leadership's cut was explicit that the harmless, fun states stay in the open
+  // (2026-08-18, naming "blacked out", "fell down a hole" and "warps firing without walking in" as
+  // things NOT to gate). Only its companion — WHICH hole, mid-fall — is the finicky half.
+  add(gun(field(goes, "dungeonWarpDestMap", tr("Falling drops you onto"),
                        tr("The floor below, when you fall down a hole.\n\nOnly 7 maps in the game "
                           "have holes. ⚠️ Name any other and the console reads whatever cartridge "
                           "bytes follow its table — it never checks."),
@@ -3115,7 +3180,7 @@ QVariantList MapModel::warpStateFields() const
                  mapResting || mapHasHoles,
                  dungeonArmed));
 
-  ret.append(gun(field(goes, "whichDungeonWarp", tr("…through hole #"),
+  add(tinker(gun(field(goes, "whichDungeonWarp", tr("…through hole #"),
                        tr("Which hole on the floor above you fell through.\n\nThe game counts these "
                           "from 1, not 0 — and they have to MATCH the floor: Seafoam B1F has holes 1 "
                           "and 2, but Victory Road 2F has a hole 2 and no hole 1.\n\n0 means “not "
@@ -3124,42 +3189,46 @@ QVariantList MapModel::warpStateFields() const
                  holeResting
                    || AreaWarps::isLegalDungeonWarp(warps->dungeonWarpDestMap,
                                                     warps->whichDungeonWarp),
-                 dungeonArmed));
+                 dungeonArmed)));
 
-  ret.append(field(goes, "warpDest", tr("Arriving at warp #"),
+  add(tinker(field(goes, "warpDest", tr("Arriving at warp #"),
                    tr("Which arrival point of the map you are entering you will land on.\n\n255 "
                       "means \"don't move me\" — every special warp sets that, because it has "
                       "already placed you itself."),
-                   warps->warpDest, 0, 255, "byte"));
+                   warps->warpDest, 0, 255, "byte")));
 
   // ── What kind of warp is happening ─────────────────────────────────────────────────────────
   const QString kind = tr("What kind of warp is happening");
 
-  ret.append(field(kind, "flyOrDungeonWarp", tr("A special warp is in progress"),
+  // ⚠️ THE ONE GATED FLAG IN THIS GROUP. It is the master switch of a warp that is *already
+  // happening* — flip it on a resting save and the console believes it is mid-flight, and its own
+  // blurb says what that costs. Project leadership named "special warp in progress" in the Tinkerer
+  // list (2026-08-18); the other four in this group are theirs to keep in the open.
+  add(tinker(field(kind, "flyOrDungeonWarp", tr("A special warp is in progress"),
                    tr("The switch the whole fly/hole/Dig path hangs off. With it off, the game "
                       "thinks you are starting a new game and warps you to Red's bedroom."),
-                   warps->flyOrDungeonWarp ? 1 : 0, 0, 1, "flag"));
+                   warps->flyOrDungeonWarp ? 1 : 0, 0, 1, "flag")));
 
-  ret.append(field(kind, "flyWarp", tr("Arrive with the drop-in animation"),
-                   tr("How you land off a warp pad or a FLY — you drop in from above rather than "
-                      "just appearing."),
-                   warps->flyWarp ? 1 : 0, 0, 1, "flag"));
+  add(field(kind, "flyWarp", tr("Arrive with the drop-in animation"),
+            tr("How you land off a warp pad or a FLY — you drop in from above rather than "
+               "just appearing."),
+            warps->flyWarp ? 1 : 0, 0, 1, "flag"));
 
-  ret.append(field(kind, "dungeonWarp", tr("You fell down a hole"),
-                   tr("Sends the destination lookup to the hole table instead of the fly table."),
-                   warps->dungeonWarp ? 1 : 0, 0, 1, "flag"));
+  add(field(kind, "dungeonWarp", tr("You fell down a hole"),
+            tr("Sends the destination lookup to the hole table instead of the fly table."),
+            warps->dungeonWarp ? 1 : 0, 0, 1, "flag"));
 
-  ret.append(field(kind, "escapeWarp", tr("Dig / Escape Rope / blacked out"),
-                   tr("Sends you to \"Wake up at\", above.\n\n(The editor used to call this "
-                      "\"blackout destination\" and treat it as a mystery flag. It is neither a "
-                      "destination nor a mystery.)"),
-                   warps->escapeWarp ? 1 : 0, 0, 1, "flag"));
+  add(field(kind, "escapeWarp", tr("Dig / Escape Rope / blacked out"),
+            tr("Sends you to \"Wake up at\", above.\n\n(The editor used to call this "
+               "\"blackout destination\" and treat it as a mystery flag. It is neither a "
+               "destination nor a mystery.)"),
+            warps->escapeWarp ? 1 : 0, 0, 1, "flag"));
 
-  ret.append(field(kind, "forcedWarp", tr("Warps fire without walking into them"),
+  add(field(kind, "forcedWarp", tr("Warps fire without walking into them"),
                    tr("Normally, stepping onto a warp does nothing unless you are actually holding "
                       "a direction — you have to walk INTO it. This removes that check, so touching "
-                      "the tile is enough.\n\nIt is how the Seafoam Islands current sweeps you along."),
-                   warps->forcedWarp ? 1 : 0, 0, 1, "flag"));
+               "the tile is enough.\n\nIt is how the Seafoam Islands current sweeps you along."),
+            warps->forcedWarp ? 1 : 0, 0, 1, "flag"));
 
   // ── ⚠️💀 The ones that do nothing — behind the switch ────────────────────────────────────────
   //

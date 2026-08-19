@@ -32,6 +32,7 @@
 */
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Effects   // MultiEffect — recolours the gates button's Font Awesome wrench
 import QtQuick.Layouts
 
 Rectangle {
@@ -308,8 +309,12 @@ Rectangle {
             Layout.fillWidth: true
             dotColor: "#e53935"
             title: qsTr("Unused & unstable")
-            blurb: qsTr("Values the game does read and act on, but that are unused, unfinished, or "
-                        + "developer leftovers — editing them has real, often unintended effects "
+            // ⚠️ No longer says "developer leftovers" (project leadership, 2026-08-18: *"Unused and
+            // unstable should no longer include debug or developer stuff, that is moved to its own
+            // gate out of unused and unstable"*). Development leftovers are the **Debug** gate now.
+            // This tier is strictly: the game reads it, acts on it, and the result is unintended.
+            blurb: qsTr("Values the game does read and act on, but that were never finished or never "
+                        + "meant to be reached — editing them has real, often unintended effects "
                         + "(glitches, even crashes). Also shows the unused/glitch maps in the list.")
             checked: brg.map.showUnused
             onToggled: brg.map.showUnused = !brg.map.showUnused
@@ -341,6 +346,190 @@ Rectangle {
                         + "rewritten-on-load or write-only ones (those are No-effect above).")
             checked: brg.map.showTrulyUnused
             onToggled: brg.map.showTrulyUnused = !brg.map.showTrulyUnused
+          }
+        }
+      }
+    }
+
+    // ── The GATES panel (🔧) — its own button, beside the "!" ─────────────────────────────────────
+    //
+    // ⭐ A SECOND BUTTON, NOT A SECOND HALF (project leadership, 2026-08-18): *"Tinkerer, Debug and
+    // Manual should be their own icon next to the exclamation point icon, which should still contain
+    // the 3 it has."* They were briefly stacked into the "!" popup and that was wrong — the "!" answers
+    // *"is this value real?"* (unused / no-effect / truly unused: things the game does not honour), and
+    // these three answer *"do I want to work at this level?"* (things the game honours perfectly well).
+    // Two different questions, so two different buttons.
+    //
+    // ⭐ ONE GATE PER OPTION, FLAT: *"An option is ONLY gated by 1 box. An option NEVER requires 2 or
+    // more gates to be enabled for it to show, just like an option will never BELONG to any more than
+    // 1 gate only."* No nesting, no gate that opens another gate — so "why can't I see this?" always
+    // has exactly one answer, and turning a gate off can never strand a row behind a second one.
+    //
+    // And when a gate hides every row a panel has, the panel's DOCK TAB goes with it (*"if a whole
+    // panel ends up being hidden the panel itself and its tab need to disappear for clean UX"*) — see
+    // MapDock, which rebuilds its rail off MapModel::changed().
+    Item {
+      id: gatesButton
+      objectName: "mapGatesButton"     // the DEBUG harness drives the panel through this
+      implicitWidth: 30
+      implicitHeight: 26
+
+      /// Open/shut by name for the harness / screenshot review.
+      property bool openState: false
+      onOpenStateChanged: openState ? gatesPop.open() : gatesPop.close()
+
+      readonly property bool gTink: brg.map.showTinkerer
+      readonly property bool gMan:  brg.map.showManual
+      readonly property bool gDbg:  brg.map.showDebug
+      readonly property bool anyOn: gTink || gMan || gDbg
+
+      /// The face's ink + light take the colour of the highest gate open, in the panel's own order.
+      readonly property color gateColor: gTink ? "#8e6bbf" : gMan ? "#3f8f6f" : "#7a7a7a"
+
+      Rectangle {
+        id: gatesFace
+        anchors.fill: parent
+        radius: 13
+
+        color: (gateHover.hovered || gatesButton.openState) ? Qt.rgba(0, 0, 0, 0.10)
+             : Qt.rgba(0, 0, 0, 0.05)
+        border.width: 1
+        border.color: gatesButton.anyOn ? gatesButton.gateColor : brg.settings.dividerColor
+        Behavior on color { ColorAnimation { duration: 90 } }
+
+        // Font Awesome's wrench, drawn exactly the way the rail draws its icons: scaled on HEIGHT with
+        // the width left free (FA's own model), and recoloured through MultiEffect rather than shipping
+        // a second tinted copy. @see MapRailButton for the long version of why height-only.
+        Image {
+          id: gatesIcon
+          anchors.centerIn: parent
+          visible: false
+          source: "qrc:/assets/icons/fontawesome/wrench.svg"
+          sourceSize.height: 12
+          fillMode: Image.PreserveAspectFit
+          mipmap: true
+        }
+        MultiEffect {
+          anchors.fill: gatesIcon
+          source: gatesIcon
+          colorization: 1.0
+          colorizationColor: gatesButton.anyOn ? gatesButton.gateColor : brg.settings.textColorMid
+          opacity: gatesButton.anyOn ? 1.0 : 0.55
+        }
+
+        // The "a gate is open" light — same shape and place as the "!" button's, so the pair reads as
+        // one instrument with two dials.
+        Rectangle {
+          width: 7; height: 7; radius: 3.5
+          anchors.right: parent.right
+          anchors.top: parent.top
+          anchors.margins: 2
+          visible: gatesButton.anyOn
+          color: gatesButton.gateColor
+          border.width: 1
+          border.color: "#ffffff"
+        }
+      }
+
+      HoverHandler { id: gateHover; cursorShape: Qt.PointingHandCursor }
+      TapHandler {
+        gesturePolicy: TapHandler.ReleaseWithinBounds
+        onTapped: gatesButton.openState = !gatesButton.openState
+      }
+
+      MapToolTip {
+        shown: gateHover.hovered && !gatesButton.openState
+        text: qsTr("More to work with — reveal real, working options the app keeps out of the way: "
+                   + "finicky mid-scene states, the hand-controls for values kept in sync for you, "
+                   + "and the game's own development leftovers.")
+      }
+
+      Popup {
+        id: gatesPop
+        y: gatesButton.height + 6
+        x: gatesButton.width - width   // right-aligned under the chip, stays inside the window
+        width: 288
+        padding: 10
+        margins: 8
+        modal: false
+        focus: true
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
+        onClosed: gatesButton.openState = false
+
+        background: Rectangle {
+          color: "#ffffff"
+          radius: 6
+          border.width: 1
+          border.color: brg.settings.dividerColor
+        }
+
+        ColumnLayout {
+          anchors.fill: parent
+          spacing: 8
+
+          Text {
+            Layout.fillWidth: true
+            text: qsTr("More to work with")
+            font.pixelSize: 11
+            font.bold: true
+            color: brg.settings.textColorMid
+          }
+
+          // ── Tinkerer: real, but unnatural to set from a save ───────────────────────────────────
+          //
+          // The blurb is a LIST and stops there. It used to close with "a save isn't meant to resume in
+          // the middle of a moving state, so these can behave oddly" — cut on leadership's word
+          // (2026-08-18): *"Don't include 'a save isn't meant to resume', it's confusing to the long
+          // list you named and it's already intuitive."* Right on both counts: after naming six
+          // mid-motion states the reader has already drawn the conclusion, and a sentence of theory
+          // trailing a concrete list reads as a hedge.
+          OptionTierRow {
+            objectName: "gateTinkerer"   // the DEBUG harness flips the gates by name
+            Layout.fillWidth: true
+            dotColor: "#8e6bbf"
+            title: qsTr("Tinkerer")
+            blurb: qsTr("Real options that are finicky to set from a save file — mid-cutscene steps, "
+                        + "a warp or a fall already in progress, scripted walking, a queued battle, "
+                        + "fly-destination selection, the tileset and blocks, and the glitch palettes.")
+            checked: brg.map.showTinkerer
+            onToggled: brg.map.showTinkerer = !brg.map.showTinkerer
+          }
+
+          Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: brg.settings.dividerColor }
+
+          // ── Manual: the hand-controls for auto-derived values ──────────────────────────────────
+          //
+          // ⭐ IT SHOWS, IT DOES NOT SWITCH (project leadership, 2026-08-18): *"It includes the manual
+          // controls like viewbox and connection — it doesn't switch them to manual, it just shows
+          // them, allowing to break auto sync."* So this gate never desyncs anything on its own; it
+          // only puts the control on screen. @see the derived-value doctrine in CLAUDE.md.
+          OptionTierRow {
+            objectName: "gateManual"
+            Layout.fillWidth: true
+            dotColor: "#3f8f6f"
+            title: qsTr("Manual")
+            blurb: qsTr("The hand-controls for values the app keeps correct for you — the camera's "
+                        + "view box and the connection bytes. This only shows them; nothing switches "
+                        + "to manual until you break a sync yourself.")
+            checked: brg.map.showManual
+            onToggled: brg.map.showManual = !brg.map.showManual
+          }
+
+          Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: brg.settings.dividerColor }
+
+          // ── Debug: the game's own development leftovers ────────────────────────────────────────
+          //
+          // Everything the "unused & unstable" tier used to sweep up as "developer leftovers" lives
+          // here now — the test-battle switch first among them.
+          OptionTierRow {
+            objectName: "gateDebug"
+            Layout.fillWidth: true
+            dotColor: "#7a7a7a"
+            title: qsTr("Debug")
+            blurb: qsTr("Leftovers from the game's own development, meaningful only if you're poking "
+                        + "at the engine — the test-battle switch and its kind.")
+            checked: brg.map.showDebug
+            onToggled: brg.map.showDebug = !brg.map.showDebug
           }
         }
       }

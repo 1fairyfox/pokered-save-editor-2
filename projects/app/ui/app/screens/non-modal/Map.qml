@@ -420,6 +420,14 @@ Page {
         // the standing rule from the same pass is that a gated thing takes its furniture with it (the
         // Town section, again). A rail button that opens a panel which then says "none of this does
         // anything" is the furniture. So the button only exists while the "!" reveals no-effect edits.
+        // ⭐ A GATED-EMPTY PANEL TAKES ITS TAB WITH IT (project leadership, 2026-08-18): *"If a whole
+        // panel ends up being hidden, the panel itself and its tab need to disappear for clean UX."*
+        // A rail button that opens a panel with nothing in it is a promise the app then breaks, so the
+        // rule is enforced HERE, at the rail — the one place that decides what exists.
+        //
+        // Each conditional entry's condition is the OR of the gates its own rows sit behind. Only two
+        // panels are conditional today; every other one has ungated content of its own and so is
+        // always real.
         panels: {
           const out = [
             { id: "tiles", icon: "qrc:/assets/icons/fontawesome/table-cells.svg", title: qsTr("Blocks & Tiles"),
@@ -428,23 +436,27 @@ Page {
           if (brg.map.showScratch)
             out.push({ id: "sprites", icon: "qrc:/assets/icons/fontawesome/images.svg", title: qsTr("Sprite set"),
                        tip: qsTr("Sprite set — the eleven sprite pictures the game had loaded for this map") });
+
+          out.push({ id: "warps", icon: "qrc:/assets/icons/fontawesome/right-left.svg", title: qsTr("Warp state"),
+                     tip: qsTr("Warp state — where FLY goes, where falling drops you, where DIG puts you") });
+
+          // ☺ The nine map-global character flags (v1's "NPC" page): whether NPCs face you, whether a
+          // scripted cutscene has the controls, whether a trainer battle is queued. They belong to the
+          // MAP, so they live here with the other things you edit about it -- not in the Details panel
+          // (that is for whatever is SELECTED). Briefed + researched 2026-07-15; reference/npc-character-state.md.
+          //
+          // ⚠️ EVERY row it has is gated — four no-effect, three Tinkerer, one Debug (the research
+          // found not one of them is an ordinary edit). So with all gates shut the panel is an empty
+          // page, and by the rule above it must not have a button at all.
+          if (brg.map.showScratch || brg.map.showTinkerer || brg.map.showDebug)
+            out.push({ id: "charstate", icon: "qrc:/assets/icons/fontawesome/user-gear.svg", title: qsTr("Character state"),
+                       tip: qsTr("Character state — how the characters on this map behave: facing, scripted control, trainer battle") });
+
           return out.concat(rightDock.alwaysPanels);
         }
 
         /// The rail buttons that are always present, after the conditional ones above.
         readonly property var alwaysPanels: [
-          // ⇄ The twelve bytes AROUND the doors -- fly, hole, Dig, scripted. They belong to the MAP,
-          // which is why they are here with the other things you edit about it, and not in the
-          // Details panel (which is for whatever is SELECTED). Project leadership asked for exactly this:
-          // "I will place them in the right panel as warp state" (2026-07-14).
-          { id: "warps", icon: "qrc:/assets/icons/fontawesome/right-left.svg", title: qsTr("Warp state"),
-            tip: qsTr("Warp state — where FLY goes, where falling drops you, where DIG puts you") },
-          // ☺ The nine map-global character flags (v1's "NPC" page): whether NPCs face you, whether a
-          // scripted cutscene has the controls, whether a trainer battle is queued. They belong to the
-          // MAP, so they live here with the other things you edit about it -- not in the Details panel
-          // (that is for whatever is SELECTED). Briefed + researched 2026-07-15; reference/npc-character-state.md.
-          { id: "charstate", icon: "qrc:/assets/icons/fontawesome/user-gear.svg", title: qsTr("Character state"),
-            tip: qsTr("Character state — how the characters on this map behave: facing, scripted control, trainer battle") },
           // ▣ MAP STORAGE — global save bytes that each belong to one map (Vermilion Gym trash-can
           // switches, Cinnabar Gym quiz opponent, Safari Zone run counters). `primary: true` gives its
           // rail icon the filled, accent-coloured "this holds persistent storage" look project leadership asked

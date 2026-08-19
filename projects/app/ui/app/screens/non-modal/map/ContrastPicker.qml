@@ -51,7 +51,16 @@ Item {
   readonly property color glitchFill: "#f2d35c"
 
   /// Show the six glitch values as their own segments.
-  property bool showGlitch: brg.map.contrastIsGlitch   // a save already holding one has nothing to hide
+  ///
+  /// ⭐ NO LOCAL SWITCH ANY MORE — the 🔧 **Tinkerer** gate decides (project leadership, 2026-08-18:
+  /// *"Perhaps remove the 'Glitch contrast' switch and instead have it placed behind [the gate]."*).
+  /// It was a one-off toggle living inside one dropdown, doing exactly the job the gates now do for
+  /// the whole screen: reveal the real-but-unusual. A per-control switch for that is a second system.
+  ///
+  /// ⚠️ The `contrastIsGlitch` half stays, and it is not a second gate — it is the answer to a
+  /// different question. A save ALREADY sitting on 4 has nothing to hide: refusing to draw the segment
+  /// the save is on would leave the strip unable to show its own value.
+  readonly property bool showGlitch: brg.map.showTinkerer || brg.map.contrastIsGlitch
 
   /// Drive the drop-down open/shut by name (the DEBUG harness). @see MapPicker.
   property bool openState: false
@@ -282,26 +291,9 @@ Item {
         }
       }
 
-      // ── The switch that reveals the glitch values ────────────────────────────────────────────
-      RowLayout {
-        Layout.fillWidth: true
-        spacing: 8
-
-        MapSwitch {
-          checked: root.showGlitch
-          enabled: !brg.map.contrastIsGlitch    // a save already on one cannot hide it
-          onToggled: root.showGlitch = !root.showGlitch
-        }
-
-        // "Glitch contrast", not "glitch palettes" (project leadership, 2026-07-13) -- the control is called
-        // Contrast, so its unusual values are glitch CONTRAST. One word for one thing.
-        Text {
-          Layout.fillWidth: true
-          text: qsTr("Glitch contrast")
-          font.pixelSize: 11
-          color: brg.settings.textColorDark
-        }
-      }
+      // ⚠️ THE "GLITCH CONTRAST" SWITCH USED TO BE HERE. It is gone (project leadership, 2026-08-18)
+      // — the 🔧 Tinkerer gate reveals the six in-between values now, along with everything else of
+      // that character on this screen. @see root.showGlitch.
 
       // (The COLOUR / output-palette section used to sit here. It moved to its own right-dock panel,
       //  ColourPanel.qml — project leadership, 2026-07-19: *"move the color preview out of contrast and to its

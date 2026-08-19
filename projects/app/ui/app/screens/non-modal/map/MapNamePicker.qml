@@ -76,9 +76,15 @@ Item {
   // default" is neither. The segment strip's green dot already says it, in the one place where it is
   // actually useful — on the segment you would click.
 
-  /// Each entry is { text, pos, warn } — pos true → a green "+" (working), false → a red "−" (not);
-  /// { text, note: true } → an amber "⚠" for a glitch value; and a non-empty `warn` adds a hoverable
-  /// yellow "!" at the end whose tooltip explains a real gotcha.
+  /// Each entry is `{ text, pos }` — `pos` true → a green "+" (working), false → a red "−" (not);
+  /// `{ text, note: true }` → an amber "⚠" for a glitch value. **That is the whole vocabulary.**
+  ///
+  /// ⚠️ There used to be a third key, `warn`, which hung a second yellow "!" off a bullet with a longer
+  /// explanation. It is gone (project leadership, 2026-08-18: *"Don't include exclamation point
+  /// tooltips on the pros/cons — they effectively say the same thing. It should just be an icon, the
+  /// tooltip text should instead be the already existing pro/con text you made."*). Every one of them
+  /// was a paraphrase of the sentence it was attached to. If a bullet needs more words, the bullet
+  /// gets more words — it does not get a badge.
   ///
   /// ⚠️ **PLAIN ENGLISH. NO TECHNICAL BREAKDOWN.** Project leadership, 2026-08-18, after a pass that
   /// went the other way: *"I dont want technical info dumps like 21 frames bytes rotated — this isnt
@@ -110,8 +116,8 @@ Item {
     // It stays a plain "+"/"−" with no "!" — the earlier version warned whenever a map merely had
     // water, which is what made it shout about Silph Co's ornamental pond.
     b.push(eff === 0
-      ? { text: qsTr("Surf can't be used on this setting"), pos: false, warn: "" }
-      : { text: qsTr("Surf works on this setting"), pos: true, warn: "" });
+      ? { text: qsTr("Surf can't be used on this setting"), pos: false }
+      : { text: qsTr("Surf works on this setting"), pos: true });
 
     // ── Water, tile $14 ──────────────────────────────────────────────────────────────────────
     //
@@ -121,13 +127,12 @@ Item {
       ? { text: water
                 ? qsTr("This tileset's water tile ($14) won't get wave distortions")
                 : qsTr("Tile $14 won't get wave distortions"),
-          pos: false, warn: "" }
+          pos: false }
       : { text: water
                 ? qsTr("This tileset's water tile ($14) gets wave distortions")
-                : qsTr("Tile $14 gets wave distortions — it isn't water on this tileset"),
-          pos: !!water,
-          warn: water ? "" : qsTr("This tileset's tile $14 isn't water. The wave distortion still "
-                                  + "runs, and it distorts whatever graphic is sitting there.") });
+                : qsTr("Tile $14 gets wave distortions, and it isn't water on this tileset — "
+                       + "whatever graphic sits there gets distorted instead"),
+          pos: !!water });
 
     // ── The flower, tile $03 ─────────────────────────────────────────────────────────────────
     //
@@ -137,16 +142,14 @@ Item {
     b.push(eff === 2
       ? { text: flower
                 ? qsTr("This tileset's flower tile ($03) will be replaced by flower animation frames")
-                : qsTr("This tileset's tile $03 isn't a flower, and will be replaced by flower "
-                       + "animation frames"),
-          pos: !!flower,
-          warn: flower ? "" : qsTr("This tileset's tile $03 isn't a flower. It will be replaced "
-                                   + "entirely by the flower animation frames.") }
+                : qsTr("This tileset's tile $03 isn't a flower, and will be replaced entirely by "
+                       + "flower animation frames"),
+          pos: !!flower }
       : { text: flower
                 ? qsTr("This tileset's flower tile ($03) will not be replaced by flower animation "
                        + "frames")
                 : qsTr("Tile $03 will not be replaced by flower animation frames"),
-          pos: !flower, warn: "" });
+          pos: !flower });
 
     // ── A byte the game itself could never have written ──────────────────────────────────────
     //
@@ -157,23 +160,10 @@ Item {
       b.push({ text: (raw % 2 === 1)
                      ? qsTr("Value %1 is a glitch value — it behaves like Cave").arg(raw)
                      : qsTr("Value %1 is a glitch value — it behaves like Outdoor").arg(raw),
-               note: true, warn: "" });
+               note: true });
 
     return b;
   }
-
-  /// ⚠️ RETIRED — always false. Project leadership, 2026-08-18: *"Forgo the exclamation mark, just
-  /// keep the green dot on the default."*
-  ///
-  /// The segment used to wear a yellow "!" whenever the current setting raised any caution
-  /// (2026-08-04). It was one mark too many: the three bullets underneath already say, in words, what
-  /// is and is not working — the badge repeated them without adding anything, and two competing marks
-  /// on one small control read as noise. The **green default dot stays** (it answers a question the
-  /// bullets cannot: which of these is this tileset's own).
-  ///
-  /// The per-bullet "!" is untouched — that one hangs off the specific sentence it qualifies, which
-  /// is the whole difference.
-  readonly property bool animHasWarning: false
 
   // ── The face: the bold map name + a ▾ that says "I drop a menu" ────────────────────────────────
   Rectangle {
@@ -242,24 +232,199 @@ Item {
 
       // ── The map list — the ONE shared map selector (sort · search · list) ──────────────────────
       // Extracted to MapSelectList so every place that picks a map uses the same control (project
-      // leadership, 2026-08-04). Picking previews on the canvas (doesn't commit) and closes the panel.
+      // leadership, 2026-08-04). Picking previews on the canvas — it does not commit.
       // @see MapModel::beginMapPreview, the Preview card in MapCanvas.
+      //
+      // ⭐ PICKING DOES **NOT** CLOSE THE PANEL (project leadership, 2026-08-18): *"When changing maps
+      // don't close the map screen, it's annoying — sometimes I want to scroll through maps and click
+      // different ones."* Exactly the right read of what this control is for: a pick is a PREVIEW, and
+      // previewing is inherently something you do several times in a row. Closing after each one turned
+      // browsing into reopen-scroll-find-click, over and over, and threw away the scroll position and
+      // the search text every time. It closes the way every other popup does — click off, or Escape.
       MapSelectList {
         Layout.fillWidth: true
         listHeight: 114   // ~3 rows + internal scroll — short of the window edges
         selectedInd: brg.map.mapInd
-        onPicked: (ind) => { brg.map.beginMapPreview(ind); root.openState = false; }
+        onPicked: (ind) => brg.map.beginMapPreview(ind)
       }
 
       Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: brg.settings.dividerColor }
+
+      // ══ TILE ANIMATION — its own section, ABOVE the tileset ═══════════════════════════════════
+      //
+      // ⭐ SEPARATED FROM "TILESET & BLOCKS" (project leadership, 2026-08-18): *"Basically overhaul the
+      // indoor/cave/outdoor section and separate it from tileset and blocks. Actually gate tileset and
+      // blocks behind the Tinkerer gate."* It had been living INSIDE that disclosure, which put a
+      // choice anybody might want to make — does this map's water move? can I Surf here? — behind a
+      // collapsed heading about ROM pointers, and then behind a gate as well. It belongs in the open.
+      Text {
+        Layout.fillWidth: true
+        Layout.topMargin: 2
+        text: qsTr("Indoor, Cave or Outdoor")
+        font.pixelSize: 11
+        font.bold: true
+        color: brg.settings.textColorMid
+      }
+
+      ColumnLayout {
+        id: animSection
+        Layout.fillWidth: true
+        spacing: 8
+
+        RowLayout {
+          Layout.fillWidth: true
+          spacing: 0
+
+          Repeater {
+            model: [
+              { v: 0, name: qsTr("Indoor")  },
+              { v: 1, name: qsTr("Cave")    },
+              { v: 2, name: qsTr("Outdoor") }
+            ]
+
+            Rectangle {
+              id: seg
+              required property var modelData
+              required property int index
+              objectName: "animSeg" + index   // the DEBUG harness taps segments by this
+
+              Layout.fillWidth: true
+              implicitHeight: 26
+
+              readonly property bool active: brg.map.tileAnim === modelData.v
+              readonly property bool isDefault: modelData.v === brg.map.tileAnimDefault
+
+              color: active ? brg.settings.accentColor
+                   : segHover.hovered ? "#f0f0f0" : "transparent"
+
+              border.width: 1
+              border.color: brg.settings.dividerColor
+
+              topLeftRadius: index === 0 ? 4 : 0
+              bottomLeftRadius: index === 0 ? 4 : 0
+              topRightRadius: index === 2 ? 4 : 0
+              bottomRightRadius: index === 2 ? 4 : 0
+
+              HoverHandler { id: segHover; cursorShape: Qt.PointingHandCursor }
+              TapHandler { onTapped: brg.map.tileAnim = modelData.v }
+
+              // ⚠️ NO "!" ON THE SEGMENT. Project leadership, 2026-08-18: *"Forgo the exclamation
+              // mark, just keep the green dot on the default."* The bullets below already say what
+              // each setting does, in full sentences — a mark whose tooltip read "this setting raises
+              // a warning, see the notes below" was a signpost pointing at the thing directly beneath it.
+              Text {
+                anchors.centerIn: parent
+                text: seg.modelData.name
+                font.pixelSize: 11
+                font.bold: seg.active
+                color: seg.active ? brg.settings.textColorLight : brg.settings.textColorDark
+              }
+
+              // A small green dot marks the tileset's DEFAULT animation (project leadership,
+              // 2026-08-04) — "the green default button", shown on whichever segment is native to
+              // this map's tileset, active or not.
+              //
+              // ⚠️ AND IT IS NOT A "PRO" (project leadership, 2026-08-18): *"Don't have tileset's own
+              // setting, it's not a pro or con, it's just a map default option — it's what the green
+              // dot is for."* Which is why "this is the default" is a DOT and never a bullet.
+              Rectangle {
+                visible: seg.isDefault
+                width: 6; height: 6; radius: 3
+                color: "#009e73"
+                anchors.top: parent.top
+                anchors.right: parent.right
+                anchors.topMargin: 3
+                anchors.rightMargin: 3
+
+                HoverHandler { id: defHover; cursorShape: Qt.PointingHandCursor }
+                MapToolTip {
+                  shown: defHover.hovered
+                  delay: 300
+                  text: qsTr("This is this map's default animation — what its tileset uses on a real cartridge.")
+                }
+              }
+            }
+          }
+        }
+
+        // The plain-English facts, as bullets (project leadership, 2026-08-04) — one line per fact, so it
+        // reads at a glance instead of as a paragraph. Driven by `animBullets` (top of file), which is
+        // built to GROW: add a fact by pushing another line there.
+        ColumnLayout {
+          Layout.fillWidth: true
+          Layout.topMargin: 2
+          spacing: 3
+
+          Repeater {
+            model: root.animBullets
+
+            RowLayout {
+              id: bulletRow
+              required property var modelData
+              Layout.fillWidth: true
+              spacing: 6
+
+              // A green "+" when the feature works, a red "−" when it doesn't, an amber "⚠" for a
+              // glitch value. Okabe-Ito palette (colourblind-safe) — the app's existing warn colour
+              // for the minus, its green for the plus.
+              //
+              // ⭐ THE ICON IS THE WHOLE STORY (project leadership, 2026-08-18): *"Don't include
+              // exclamation point tooltips on the pros/cons — they effectively say the same thing. It
+              // should just be an icon, the tooltip text should instead be the already existing
+              // pro/con text you made."* There used to be a second, yellow "!" on the warning bullets
+              // carrying a longer explanation, and it was saying the bullet over again in more words.
+              // So: no "!", and the +/−/⚠ carries the bullet's OWN sentence on hover — which also
+              // rescues the text when a long bullet wraps tight.
+              Text {
+                id: bulletIcon
+                text: bulletRow.modelData.note ? "⚠" : (bulletRow.modelData.pos ? "+" : "−")
+                font.pixelSize: 11
+                font.bold: true
+                color: bulletRow.modelData.note ? "#e69f00"
+                     : bulletRow.modelData.pos  ? "#009e73"
+                                                : "#d55e00"
+                Layout.alignment: Qt.AlignTop
+                Layout.preferredWidth: 10
+                horizontalAlignment: Text.AlignHCenter
+
+                HoverHandler { id: bulletHov; cursorShape: Qt.ArrowCursor }
+                ToolTip.visible: bulletHov.hovered
+                ToolTip.delay: 300
+                ToolTip.text: bulletRow.modelData.text
+              }
+              Text {
+                Layout.fillWidth: true
+                text: bulletRow.modelData.text
+                font.pixelSize: 10
+                color: brg.settings.textColorMid
+                wrapMode: Text.WordWrap
+              }
+            }
+          }
+        }
+      }
+
+      Rectangle {
+        Layout.fillWidth: true
+        implicitHeight: 1
+        color: brg.settings.dividerColor
+        visible: brg.map.showTinkerer
+      }
 
       // ── "Tileset & blocks" — collapsed behind a disclosure so the panel stays a clean map picker ──
       // project leadership, 2026-08-03: hide the graphics/blocks behind a more-settings link.
       // The Separate/Merge switch lives on the RIGHT of this header (project leadership, 2026-08-04) —
       // out of the "Tileset" control row, where as a full Button it inflated the row and left a gap.
+      //
+      // ⭐ AND THE WHOLE THING IS BEHIND THE 🔧 TINKERER GATE (project leadership, 2026-08-18):
+      // *"Actually gate tileset and blocks behind the Tinkerer gate."* These two combos repoint the
+      // map at another set's ROM graphics and block definitions — every tile on screen changes meaning,
+      // and a mismatched pair reads addresses the game never meant to hand it. Real, durable, and
+      // squarely "do I want to work at this level?", which is what that gate asks.
       RowLayout {
         Layout.fillWidth: true
         spacing: 6
+        visible: brg.map.showTinkerer
 
         Text {
           text: (root.advancedOpen ? "▾  " : "▸  ") + qsTr("Tileset & blocks")
@@ -296,7 +461,7 @@ Item {
 
       ColumnLayout {
         Layout.fillWidth: true
-        visible: root.advancedOpen
+        visible: root.advancedOpen && brg.map.showTinkerer
         spacing: 8
 
         // ONE combined selector by default; the "Separate" / "Merge" buttons switch between one control
@@ -419,157 +584,6 @@ Item {
             font.pixelSize: 10
             color: brg.settings.textColorMid
             wrapMode: Text.WordWrap
-          }
-        }
-
-        // ── Tile Animation ──────────────────────────────────────────────────────────────────────
-        // Its own titled group now (project leadership, 2026-08-04). Indoor / Cave / Outdoor picks which
-        // tiles MOVE (the tileset's 0x3522 byte). Cave is not Indoor: cave water animates.
-        // Same label weight as "Tileset" / "Blocks" — it's a peer control, not a bigger heading.
-        // Only shown in the SPLIT view, where those two labels exist for it to sit beside; in the
-        // merged view (one unlabelled combo) it would be an orphaned heading (project leadership,
-        // 2026-08-04).
-        Text {
-          Layout.fillWidth: true
-          Layout.topMargin: 2
-          visible: root.blocksSplitShown
-          text: qsTr("Tile Animation")
-          font.pixelSize: 10
-          color: brg.settings.textColorMid
-        }
-
-        RowLayout {
-          Layout.fillWidth: true
-          spacing: 0
-
-          Repeater {
-            model: [
-              { v: 0, name: qsTr("Indoor")  },
-              { v: 1, name: qsTr("Cave")    },
-              { v: 2, name: qsTr("Outdoor") }
-            ]
-
-            Rectangle {
-              id: seg
-              required property var modelData
-              required property int index
-              objectName: "animSeg" + index   // the DEBUG harness taps segments by this
-
-              Layout.fillWidth: true
-              implicitHeight: 26
-
-              readonly property bool active: brg.map.tileAnim === modelData.v
-              readonly property bool isDefault: modelData.v === brg.map.tileAnimDefault
-
-              color: active ? brg.settings.accentColor
-                   : segHover.hovered ? "#f0f0f0" : "transparent"
-
-              border.width: 1
-              border.color: brg.settings.dividerColor
-
-              topLeftRadius: index === 0 ? 4 : 0
-              bottomLeftRadius: index === 0 ? 4 : 0
-              topRightRadius: index === 2 ? 4 : 0
-              bottomRightRadius: index === 2 ? 4 : 0
-
-              HoverHandler { id: segHover; cursorShape: Qt.PointingHandCursor }
-              TapHandler { onTapped: brg.map.tileAnim = modelData.v }
-
-              // The label, plus the yellow "!" when THIS is the selected setting and it raises a
-              // warning (project leadership, 2026-08-04). MapWarnIcon carries its own hover tooltip.
-              RowLayout {
-                anchors.centerIn: parent
-                spacing: 4
-
-                Text {
-                  Layout.alignment: Qt.AlignVCenter
-                  text: seg.modelData.name
-                  font.pixelSize: 11
-                  font.bold: seg.active
-                  color: seg.active ? brg.settings.textColorLight : brg.settings.textColorDark
-                }
-
-                MapWarnIcon {
-                  Layout.alignment: Qt.AlignVCenter
-                  visible: seg.active && root.animHasWarning
-                  implicitWidth: 13
-                  implicitHeight: 13
-                  radius: 6.5
-                  text: qsTr("This setting raises a warning — see the notes below.")
-                }
-              }
-
-              // A small green dot marks the tileset's DEFAULT animation (project leadership,
-              // 2026-08-04) — "the green default button", shown on whichever segment is native to
-              // this map's tileset, active or not.
-              Rectangle {
-                visible: seg.isDefault
-                width: 6; height: 6; radius: 3
-                color: "#009e73"
-                anchors.top: parent.top
-                anchors.right: parent.right
-                anchors.topMargin: 3
-                anchors.rightMargin: 3
-
-                HoverHandler { id: defHover; cursorShape: Qt.PointingHandCursor }
-                MapToolTip {
-                  shown: defHover.hovered
-                  delay: 300
-                  text: qsTr("This is this map's default animation — what its tileset uses on a real cartridge.")
-                }
-              }
-            }
-          }
-        }
-
-        // The plain-English facts, as bullets (project leadership, 2026-08-04) — one line per fact, so it
-        // reads at a glance instead of as a paragraph. Driven by `animBullets` (top of file), which is
-        // built to GROW: add a fact by pushing another line there.
-        ColumnLayout {
-          Layout.fillWidth: true
-          Layout.topMargin: 2
-          spacing: 3
-
-          Repeater {
-            model: root.animBullets
-
-            RowLayout {
-              id: bulletRow
-              required property var modelData
-              Layout.fillWidth: true
-              spacing: 6
-
-              // A green "+" when the feature works, a red "−" when it doesn't, an amber "⚠" for a
-              // glitch value. Okabe-Ito palette (colourblind-safe) — the app's existing warn colour
-              // for the minus, its green for the plus.
-              Text {
-                text: bulletRow.modelData.note ? "⚠" : (bulletRow.modelData.pos ? "+" : "−")
-                font.pixelSize: 11
-                font.bold: true
-                color: bulletRow.modelData.note ? "#e69f00"
-                     : bulletRow.modelData.pos  ? "#009e73"
-                                                : "#d55e00"
-                Layout.alignment: Qt.AlignTop
-                Layout.preferredWidth: 10
-                horizontalAlignment: Text.AlignHCenter
-              }
-              Text {
-                Layout.fillWidth: true
-                text: bulletRow.modelData.text
-                font.pixelSize: 10
-                color: brg.settings.textColorMid
-                wrapMode: Text.WordWrap
-              }
-
-              // A hoverable yellow "!" for a real gotcha (project leadership, 2026-08-04) — the icon IS
-              // the affordance (no separate "?"), tooltip on hover. Only when this bullet warns.
-              MapWarnIcon {
-                Layout.alignment: Qt.AlignTop
-                visible: bulletRow.modelData.warn !== undefined && bulletRow.modelData.warn !== ""
-                text: bulletRow.modelData.warn !== undefined ? bulletRow.modelData.warn : ""
-                tipWidth: 240
-              }
-            }
           }
         }
       }
