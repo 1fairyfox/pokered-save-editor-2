@@ -68,18 +68,31 @@ Item {
   readonly property bool tsHasWater: brg.map.tilesetHasWater
   readonly property bool tsHasFlower: brg.map.tileAnimDefault === 2
 
-  /// The name of the value this tileset would hold in an unedited game — so a changed setting can say
-  /// what it was changed FROM, which a green dot on a segment cannot.
-  readonly property string animDefaultName: {
-    const d = brg.map.tileAnimDefault;
-    return d === 0 ? qsTr("Indoor") : d === 1 ? qsTr("Cave") : qsTr("Outdoor");
-  }
+  // ⚠️ NO "this is the tileset's own setting" BULLET, and no name for the default here.
+  //
+  // One was added and struck out the same day (leadership, 2026-08-18): *"Dont have tilesets own
+  // setting — its not a pro or con, its just a map default option, its what the green dot is for."*
+  // Right on both counts: the bullets are a list of what WORKS and what DOESN'T, and "this is the
+  // default" is neither. The segment strip's green dot already says it, in the one place where it is
+  // actually useful — on the segment you would click.
 
   /// Each entry is { text, pos, warn } — pos true → a green "+" (working), false → a red "−" (not);
   /// { text, note: true } → an amber "⚠" for a glitch value; and a non-empty `warn` adds a hoverable
-  /// yellow "!" at the end whose tooltip explains a real gotcha (project leadership, 2026-08-04). The
-  /// warnings: Indoor breaks Surf on a WATER map · wave distortion running on a non-water $14 · the
-  /// flower REPLACING a non-flower $03. `animHasWarning` rolls them up onto the active segment.
+  /// yellow "!" at the end whose tooltip explains a real gotcha.
+  ///
+  /// ⚠️ **PLAIN ENGLISH. NO TECHNICAL BREAKDOWN.** Project leadership, 2026-08-18, after a pass that
+  /// went the other way: *"I dont want technical info dumps like 21 frames bytes rotated — this isnt
+  /// plain english, this is technical jargon and its not nesesarily more useful for any group of
+  /// people. Before i worded it better ... just describing it as distorting the wave tile."*
+  ///
+  /// The rule this section is written to: **say what you will SEE, not how the console does it.** The
+  /// frame cadence, the byte rotation and the flower's frame order are all true and all documented in
+  /// `notes/reference/map-animation.md` — which is where they belong. A person choosing between
+  /// Indoor, Cave and Outdoor wants to know what changes on their map.
+  ///
+  /// What each bullet does carry is the ASSERTION, because we can check it: this tileset's $14 either
+  /// is water or is not, and saying which is more useful than hedging "usually". "Usually" is the
+  /// fallback for when we genuinely cannot tell.
   readonly property var animBullets: {
     const eff = root.animEff;
     const raw = brg.map.tileAnim;
@@ -87,126 +100,68 @@ Item {
     const flower = root.tsHasFlower;
     const b = [];
 
-    // ⚠️ REBUILT 2026-08-18 (second pass). Project leadership: *"You've removed important data from
-    // the indoor/cave/outdoor — the wording seems oversimplified in some ways ... theres only 2 bullet
-    // points and we're missing other data that was there. Some of this is good refinement but you
-    // made it way worse and watered down."*
+    // ── Surf ─────────────────────────────────────────────────────────────────────────────────
     //
-    // Correct, and it is worth naming the mistake: the first pass went after ACCURACY (the Surf bullet
-    // was asking the wrong question) and, in tightening it, quietly deleted content — the Surf line
-    // vanished entirely on a save that is not surfing, and the cadence and the mechanism were never
-    // there at all. Fixing a wrong sentence is not a licence to delete the true ones around it.
+    // ⚠️ NOT conditioned on whether they are surfing RIGHT NOW. Project leadership: *"Dont determine
+    // surfing by if the player is actively surfing — most of the time they may not be, just because
+    // there not doesnt mean the map is ok to make non-surfable."* Exactly right: this is a property of
+    // the SETTING, and a save sitting on dry land today is one step away from needing it.
     //
-    // This section now says everything `notes/reference/map-animation.md` established, in the order a
-    // person reads it: what this setting DOES, then each tile it touches, then what it does to the
-    // player, then the byte itself. Facts carry a green "+" / red "−"; only a genuine MISMATCH between
-    // this setting and this tileset earns the hoverable "!".
-
-    // ── 1. What this setting animates, and how fast ──────────────────────────────────────────
-    //
-    // The cadence is real and console-verified: 20 frames water-only, 21 with the flower (the two
-    // counters are coupled, which is why adding the flower adds a frame rather than doubling it).
+    // It stays a plain "+"/"−" with no "!" — the earlier version warned whenever a map merely had
+    // water, which is what made it shout about Silph Co's ornamental pond.
     b.push(eff === 0
-      ? { text: qsTr("Nothing on this map animates"), pos: false, warn: "" }
-      : eff === 1
-        ? { text: qsTr("Water animates — a 20-frame cycle"), pos: true, warn: "" }
-        : { text: qsTr("Water and the flower animate — a 21-frame cycle"), pos: true, warn: "" });
+      ? { text: qsTr("Surf can't be used on this setting"), pos: false, warn: "" }
+      : { text: qsTr("Surf works on this setting"), pos: true, warn: "" });
 
-    // ── 2. Water, tile $14 ───────────────────────────────────────────────────────────────────
+    // ── Water, tile $14 ──────────────────────────────────────────────────────────────────────
     //
-    // ⚠️ A CONFLICT IS A MISMATCH between this setting and what the tileset actually has, and it cuts
-    // BOTH ways (leadership, 2026-08-18):
-    //
-    //   tileset HAS water + setting animates it   -> fine, and say HOW (it is a rotation, not frames)
-    //   tileset HAS water + setting does not      -> its water sits dead still
-    //   tileset has NO water at $14 + animates it -> **something else is being warped** (the surprise)
-    //
-    // The mechanism is worth stating because it is genuinely unusual and it explains why water needs no
-    // extra tile data: the game does not swap frames, it **bit-rotates the tile's own 16 bytes** —
-    // right four times, then left four times.
+    // The conflict cuts both ways: a tileset with no water at $14 still gets the distortion, and it
+    // lands on whatever graphic is sitting there instead.
     b.push(eff === 0
-      ? (water
-          ? { text: qsTr("This tileset's water (tile $14) sits still"), pos: false,
-              warn: qsTr("This tileset really does have water at tile $14, and on this setting it "
-                         + "stops moving. It still looks like water — it just doesn't ripple.") }
-          : { text: qsTr("Tile $14 is left alone"), pos: true, warn: "" })
-      : (water
-          ? { text: qsTr("This tileset's water (tile $14) ripples — its own bytes rotated, not "
-                         + "swapped frames"), pos: true, warn: "" }
-          : { text: qsTr("Tile $14 gets the wave rotation — but it isn't water on this tileset"),
-              pos: false,
-              warn: qsTr("This tileset's tile $14 is not water. The rotation runs anyway and warps "
-                         + "whatever graphic is sitting there, because the game rotates the tile's "
-                         + "bytes without ever checking what they are.") }));
+      ? { text: water
+                ? qsTr("This tileset's water tile ($14) won't get wave distortions")
+                : qsTr("Tile $14 won't get wave distortions"),
+          pos: false, warn: "" }
+      : { text: water
+                ? qsTr("This tileset's water tile ($14) gets wave distortions")
+                : qsTr("Tile $14 gets wave distortions — it isn't water on this tileset"),
+          pos: !!water,
+          warn: water ? "" : qsTr("This tileset's tile $14 isn't water. The wave distortion still "
+                                  + "runs, and it distorts whatever graphic is sitting there.") });
 
-    // ── 3. The flower, tile $03 ──────────────────────────────────────────────────────────────
+    // ── The flower, tile $03 ─────────────────────────────────────────────────────────────────
     //
-    // Same two-way shape, and the same "say what it really does": the flower is NOT a rotation and it
-    // is not an overlay — its four frames (1, 1, 2, 3) are copied OVER tile $03.
+    // Same shape, and "replaced" is the important word — the flower is copied over $03 rather than
+    // animating it, so on a tileset whose $03 is something else, that graphic is gone while this
+    // setting is on.
     b.push(eff === 2
-      ? (flower
-          ? { text: qsTr("This tileset's flower (tile $03) animates — four frames, 1·1·2·3"),
-              pos: true, warn: "" }
-          : { text: qsTr("Tile $03 is overwritten by the flower frames — but it isn't a flower here"),
-              pos: false,
-              warn: qsTr("This tileset's tile $03 is not a flower. It is not animated: the flower's "
-                         + "frames are copied straight over it, so that graphic is replaced for as "
-                         + "long as this setting is on.") })
-      : (flower
-          ? { text: qsTr("This tileset's flower (tile $03) sits still"), pos: false, warn: "" }
-          : { text: qsTr("Tile $03 is left alone"), pos: true, warn: "" }));
+      ? { text: flower
+                ? qsTr("This tileset's flower tile ($03) will be replaced by flower animation frames")
+                : qsTr("This tileset's tile $03 isn't a flower, and will be replaced by flower "
+                       + "animation frames"),
+          pos: !!flower,
+          warn: flower ? "" : qsTr("This tileset's tile $03 isn't a flower. It will be replaced "
+                                   + "entirely by the flower animation frames.") }
+      : { text: flower
+                ? qsTr("This tileset's flower tile ($03) will not be replaced by flower animation "
+                       + "frames")
+                : qsTr("Tile $03 will not be replaced by flower animation frames"),
+          pos: !flower, warn: "" });
 
-    // ── 4. Surf — a fact about the SETTING, escalated when it bites ──────────────────────────
+    // ── A byte the game itself could never have written ──────────────────────────────────────
     //
-    // ⚠️ SHOWN ALWAYS, marked only when it matters. The first pass hid this line on any save that was
-    // not mid-Surf, which threw away a true and useful fact about the setting to avoid a false alarm.
-    // Both can be had: state the rule every time, and raise the "!" only when THIS save is actually
-    // surfing and would be dropped.
-    //
-    // The rule (`LoadPlayerSpriteGraphics`, the byte's only behavioural reader outside the animation
-    // loop): if you are surfing and the byte is 0, the game forces you back to walking. It is about
-    // `wWalkBikeSurfState`, NOT about whether the map has water — *"just because a map has water
-    // doesnt mean its meant for surfing ... Silph Co 1 has water attraction and its indoors"*.
-    const surfing = brg.map.playerIsSurfing;
-    b.push(eff === 0
-      ? { text: surfing
-                ? qsTr("You are surfing, and this setting will put you back on foot")
-                : qsTr("Surf can't be kept up on this setting"),
-          pos: false,
-          warn: surfing
-                ? qsTr("The game only keeps you surfing while tile animation is on. Load this save "
-                       + "with Indoor set and it drops you to walking, wherever you were floating.")
-                : "" }
-      : { text: surfing
-                ? qsTr("You are surfing, and this setting keeps you on the water")
-                : qsTr("Surf can be kept up on this setting"),
-          pos: true, warn: "" });
-
-    // ── 5. Is this the tileset's own value? ──────────────────────────────────────────────────
-    //
-    // The segment strip already marks the default with a green dot, but the dot cannot say what
-    // CHANGING it means. A save sitting on a non-default value is not wrong — it is a deliberate edit,
-    // and worth stating plainly so nobody wonders whether the editor did it.
-    b.push(brg.map.tileAnimIsDefault
-      ? { text: qsTr("This is this tileset's own setting"), pos: true, warn: "" }
-      : { text: qsTr("Changed — this tileset's own setting is %1").arg(root.animDefaultName),
-          pos: false, warn: "" });
-
-    // ── 6. The byte itself, when it is one the game could never have written ─────────────────
-    //
-    // Not garbage, and not a crash: the console tests the byte twice — `and a` (is it zero?) and then
-    // `rrca` (is bit 0 set?) — so anything above 2 collapses onto water-only (odd) or water+flower
-    // (even). Say which, because "glitch value" on its own tells you nothing about what you will see.
+    // Not garbage and not a crash — the console only looks at whether it is zero and then at its
+    // lowest bit, so anything above 2 lands on one of the two real settings. Say WHICH, because
+    // "glitch value" on its own tells you nothing about what you will see.
     if (raw > 2)
       b.push({ text: (raw % 2 === 1)
-                     ? qsTr("Byte %1 is a value no real game holds — the console reads bit 0 only, so "
-                            + "it behaves as Cave (water only)").arg(raw)
-                     : qsTr("Byte %1 is a value no real game holds — the console reads bit 0 only, so "
-                            + "it behaves as Outdoor (water and flower)").arg(raw),
+                     ? qsTr("Value %1 is a glitch value — it behaves like Cave").arg(raw)
+                     : qsTr("Value %1 is a glitch value — it behaves like Outdoor").arg(raw),
                note: true, warn: "" });
 
     return b;
   }
+
   /// ⚠️ RETIRED — always false. Project leadership, 2026-08-18: *"Forgo the exclamation mark, just
   /// keep the green dot on the default."*
   ///
