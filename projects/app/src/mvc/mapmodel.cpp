@@ -1253,6 +1253,13 @@ bool MapModel::tilesetHasWater() const
   return e != nullptr && e->hasWater;
 }
 
+bool MapModel::playerIsSurfing() const
+{
+  // 0 walking / 1 biking / 2 surfing. @see the header note for why this — not "the map has water" —
+  // is what the Surf warning must ask.
+  return player != nullptr && player->walkBikeSurf == 2;
+}
+
 QString MapModel::blocksetName() const
 {
   auto* el = canonAt(blocksetInd());
@@ -2138,7 +2145,7 @@ QVariantList MapModel::spriteCatalog() const
       if (int(e->ind) == SpritePlayerPicture) {
         m["note"] = tr("This is the player's own picture — drop one out and you get a second Red "
                        "standing on the map, drawn properly. The real player is always on the map "
-                       "anyway; he is the one you can't delete.");
+                       "anyway; they are the one you can't delete.");
       }
 
       ret.append(m);
@@ -3281,7 +3288,7 @@ QVariantList MapModel::playerFields() const
 
   ret.append(field(may, "surfingAllowed", tr("Can surf from here"),
                    tr("Set when the tile they face is water they could surf onto. The game works it "
-                      "out again as he walks."),
+                      "out again as they walk."),
                    player->surfingAllowed ? 1 : 0, 0, 1, "flag"));
 
   ret.append(field(may, "arrivedByFly", tr("Arrived by Fly"),
@@ -3320,7 +3327,7 @@ QVariantList MapModel::playerFields() const
                    tr("Which way they are facing."),
                    player->playerCurDir, 0, 255, "enum", dirs),
              tr("The game FORCES this to DOWN every single time it loads your save — it is the first "
-                "thing Continue does. Set it, save, load: he faces down. Verified on a real "
+                "thing Continue does. Set it, save, load: they face down. Verified on a real "
                 "cartridge.")));
 
   add(reload(field(nothing, "strengthOutsideBattle", tr("Using Strength"),
@@ -5595,13 +5602,13 @@ QVariantList MapModel::storageCompleted(const QVariantList& mapIds) const
   };
   static const QVector<Row> table = {
     { "obtainedOldRod",  "Old Rod obtained",  "The Fishing Guru has given you the Old Rod. Clearing "
-      "this re-arms him; it does NOT add a rod to your bag.", "",
+      "this re-arms it; it does NOT add a rod to your bag.", "",
       {163}, "rods", "alike", false },
     { "obtainedGoodRod", "Good Rod obtained", "The Fishing Guru has given you the Good Rod. Clearing "
-      "this re-arms him; it does NOT add a rod to your bag.", "",
+      "this re-arms it; it does NOT add a rod to your bag.", "",
       {164}, "rods", "alike", false },
     { "obtainedSuperRod","Super Rod obtained","The Fishing Guru has given you the Super Rod. Clearing "
-      "this re-arms him; it does NOT add a rod to your bag.", "",
+      "this re-arms it; it does NOT add a rod to your bag.", "",
       {189}, "rods", "alike", false },
     { "obtainedLapras",  "Lapras received",   "The Silph Co. worker has given you Lapras.", "",
       {212}, "", "", false },

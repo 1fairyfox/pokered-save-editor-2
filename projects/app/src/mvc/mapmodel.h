@@ -145,6 +145,30 @@ class MapModel : public QObject
   Q_PROPERTY(bool tilesetHasWater READ tilesetHasWater NOTIFY changed)
   bool tilesetHasWater() const;
 
+  /// ⭐ Is the player **currently surfing**? (`wWalkBikeSurfState` == 2.)
+  ///
+  /// ⚠️ THIS, NOT "does the map have water", IS THE SURF QUESTION. Project leadership, 2026-08-18:
+  /// *"Just because a map has water doesnt mean its meant for surfing — dont use lazy approaches.
+  /// Silph Co 1 has water attraction and its indoors and your not supposed to surf there."*
+  ///
+  /// Quite right, and the disassembly agrees. `hTileAnimations` has exactly **one** behavioural
+  /// reader outside the animation loop — `LoadPlayerSpriteGraphics` (`home/overworld.asm`):
+  ///
+  ///     ld a, [wWalkBikeSurfState]
+  ///     dec a
+  ///     jr z, .ridingBike        ; 1 = biking
+  ///     ldh a, [hTileAnimations]
+  ///     and a
+  ///     jr nz, .determineGraphics
+  ///     jr .startWalking         ; <- byte is 0 while SURFING: forced back to walking
+  ///
+  /// So "0 breaks Surf" is about **the player's own movement state**, not about the map being
+  /// surfable. Setting Indoor on a save that is mid-Surf drops them to walking on load; setting it on
+  /// a map that merely contains decorative water does nothing at all. The old bullet asked the wrong
+  /// question and so warned about Silph Co's ornamental pond.
+  Q_PROPERTY(bool playerIsSurfing READ playerIsSurfing NOTIFY changed)
+  bool playerIsSurfing() const;
+
   /// Which tileset's BLOCKS the map is built from (the save's `blockPtr`). Normally the same
   /// tileset as the graphics -- but they are two separate pointers in the save, and a console
   /// draws exactly what they say. -1 when `blockPtr` matches no tileset in the game at all.

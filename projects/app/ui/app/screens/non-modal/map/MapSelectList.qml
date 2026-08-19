@@ -44,6 +44,7 @@
 */
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Effects
 import QtQuick.Layouts
 
 ColumnLayout {
@@ -199,50 +200,96 @@ ColumnLayout {
       }
     }
 
+    // ── The search field, with Clear and Random INSIDE it ──────────────────────────────────────
+    //
+    // ⚠️ REBUILT 2026-08-18. The first cut put two 30px squares in the row beside the field, and
+    // project leadership rejected it on sight: *"The random and clear buttons at top are not part of
+    // the apps theme/style/chrome we've been building — there too far apart, separate buttons, you
+    // didnt make them right."*
+    //
+    // They were right. This app's language is one chip per job: the sort button is a chip, the field
+    // is a chip, and dropping two more free-standing squares beside them made a row of four
+    // disconnected boxes with the field shrinking to fit. Clear and Random are not separate jobs —
+    // they are things you do TO the search — so they live INSIDE its rounded edge, as flat marks with
+    // no borders of their own, exactly the way a search field carries its own ✕ everywhere else.
     TextField {
       id: mapSearch
       Layout.fillWidth: true
       Layout.preferredHeight: 30
       font.pixelSize: 12
       placeholderText: qsTr("Search maps…")
-    }
 
-    // ── Clear · Random, to the right of the search ────────────────────────────────────────────
-    //
-    // Project leadership, 2026-08-18: *"The map search needs a random button and clear button
-    // perhaps in the other order to the right of the map search text."*
-    //
-    // Clear first, then Random, reading left to right: clear is the one that belongs to the field it
-    // sits beside (it empties that box), and random is the bigger, more decisive action, so it takes
-    // the end of the row. They use the app's own square icon button and the house dice — the same
-    // die every randomise in this app draws — rather than inventing two more shapes.
-    //
-    // ⚠️ Clear is DISABLED when the box is already empty. A control that does nothing but stay lit is
-    // the clutter this screen keeps having to remove.
-    MapRailButton {
-      size: 30
-      icon: "qrc:/assets/icons/fontawesome/times.svg"
-      enabledBtn: mapSearch.text !== ""
-      tip: qsTr("Clear the search")
-      onClicked: mapSearch.text = ""
-    }
+      // Keep the text clear of the marks parked on the right edge.
+      rightPadding: searchMarks.width + 10
 
-    MapRailButton {
-      size: 30
-      icon: "qrc:/assets/icons/fontawesome/dice.svg"
-      tip: qsTr("Jump to a random map")
-      onClicked: {
-        // Pick from what is ON SCREEN, not from all 248 — if the list is filtered by a search or an
-        // `allowedIds` whitelist, "random" has to mean random among the maps you can actually see,
-        // or the button contradicts the list it sits above.
-        const l = mapListView.model;
-        if (!l || l.length === 0)
-          return;
-        const pick = l[Math.floor(Math.random() * l.length)];
-        if (pick.extraKey !== undefined)
-          mapSel.pickedExtra(pick.extraKey);
-        else
-          mapSel.picked(pick.ind);
+      Row {
+        id: searchMarks
+        anchors.right: parent.right
+        anchors.rightMargin: 6
+        anchors.verticalCenter: parent.verticalCenter
+        spacing: 2
+
+        component Mark: Item {
+          id: mk
+          property alias source: mkImg.source
+          property string tip: ""
+          property bool on: true
+          signal act()
+
+          width: 18
+          height: 18
+          opacity: mk.on ? (mkHover.hovered ? 1.0 : 0.55) : 0.2
+
+          Image {
+            id: mkImg
+            anchors.centerIn: parent
+            visible: false
+            sourceSize.height: 10
+            fillMode: Image.PreserveAspectFit
+            mipmap: true
+          }
+          MultiEffect {
+            anchors.fill: mkImg
+            source: mkImg
+            colorization: 1.0
+            colorizationColor: brg.settings.textColorMid
+          }
+
+          HoverHandler {
+            id: mkHover
+            enabled: mk.on
+            cursorShape: Qt.PointingHandCursor
+          }
+          TapHandler { enabled: mk.on; onTapped: mk.act() }
+          MapToolTip { shown: mkHover.hovered && mk.tip !== ""; text: mk.tip }
+        }
+
+        // ⚠️ Clear DIMS rather than vanishing when the box is empty: a mark that appears and
+        // disappears makes the field twitch every time you type the first letter.
+        Mark {
+          source: "qrc:/assets/icons/fontawesome/times.svg"
+          on: mapSearch.text !== ""
+          tip: qsTr("Clear the search")
+          onAct: mapSearch.text = ""
+        }
+
+        Mark {
+          source: "qrc:/assets/icons/fontawesome/dice.svg"
+          tip: qsTr("Go to a random map from this list")
+          onAct: {
+            // ⭐ Random among what is ON SCREEN, not among all 248. The list here may be narrowed by
+            // the search box or by an `allowedIds` whitelist (the World panel shows only maps that
+            // have storage), and a die that ignored that would contradict the list it sits above.
+            const l = mapListView.model;
+            if (!l || l.length === 0)
+              return;
+            const pick = l[Math.floor(Math.random() * l.length)];
+            if (pick.extraKey !== undefined)
+              mapSel.pickedExtra(pick.extraKey);
+            else
+              mapSel.picked(pick.ind);
+          }
+        }
       }
     }
   }

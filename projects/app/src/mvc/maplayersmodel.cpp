@@ -64,7 +64,7 @@ QString groupBlurb(int g)
                        "lives in Game View.)");
   case GameViewGroup:
     return QObject::tr("What the Game Boy is drawing right now: the player, everyone else on the "
-                       "map, the screen he sees, and the patch of map it redraws around him.");
+                       "map, the screen they see, and the patch of map it redraws around them.");
   default:
     break;
   }
@@ -197,10 +197,10 @@ void MapLayersModel::buildAll()
        ViewEventFlags);
   view(GameViewGroup, "screenBox", tr("Screen box"),
        tr("The 20×18 tiles the Game Boy is actually showing — the screen, sliding around inside "
-          "the draw area in half-block steps. Move the player and it follows him."), ViewScreenBox);
+          "the draw area in half-block steps. Move the player and it follows them."), ViewScreenBox);
   view(GameViewGroup, "drawArea", tr("Draw area"),
        tr("The 6×5 blocks the game redraws around the player (LoadCurrentMapView). Always "
-          "block-aligned, and it follows him too."), ViewDrawArea);
+          "block-aligned, and it follows them too."), ViewDrawArea);
 
   // ── Guides ──────────────────────────────────────────────────────────────────
   group(GuidesGroup);

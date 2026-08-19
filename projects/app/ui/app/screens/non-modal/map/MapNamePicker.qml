@@ -80,46 +80,73 @@ Item {
     const flower = root.tsHasFlower;
     const b = [];
 
-    // (No "what animates" summary line — the three facts below already say it.)
-
-    // Surf. On a water map, Indoor (no animation) disables the tile Surf rides on.
+    // ── WATER, tile $14 ──────────────────────────────────────────────────────────────────────
+    //
+    // ⚠️ A CONFLICT IS A MISMATCH BETWEEN THIS SETTING AND WHAT THE TILESET ACTUALLY HAS, and it cuts
+    // BOTH ways (project leadership, 2026-08-18). Saying "gets wave distortions" is only interesting
+    // when it is a surprise:
+    //
+    //   * this tileset HAS water and the setting animates it  -> fine, no mark
+    //   * this tileset HAS water and the setting does NOT     -> its water sits dead still
+    //   * this tileset has NO water at $14 and the setting animates it -> **something else is being
+    //     warped**, which is the surprising one
     b.push(eff === 0
-      ? { text: qsTr("Not Surf-friendly"), pos: false,
-          warn: water ? qsTr("This map has water, so Surf matters here — and Indoor turns off the "
-                             + "water animation Surf depends on. You can't Surf on this map with this "
-                             + "setting.") : "" }
-      : { text: qsTr("Surf-friendly"), pos: true, warn: "" });
+      ? (water
+          ? { text: qsTr("This tileset's water (tile $14) will sit still"), pos: false,
+              warn: qsTr("Nothing animates on this setting, so this tileset's water stops moving. "
+                         + "It still looks like water — it just doesn't ripple.") }
+          : { text: qsTr("Nothing animates"), pos: false, warn: "" })
+      : (water
+          ? { text: qsTr("This tileset's water (tile $14) ripples"), pos: true, warn: "" }
+          : { text: qsTr("Tile $14 gets wave distortion — but it isn't water here"), pos: false,
+              warn: qsTr("This tileset's tile $14 is not water. The wave distortion still runs and "
+                         + "warps whatever graphic is sitting there instead.") }));
 
-    // Tile $14 (the water tile). Wave distortion on a tileset whose $14 isn't water just warps it.
-    b.push(eff === 0
-      ? { text: qsTr("Tile $14 (usually water) won't get wave distortions"), pos: false, warn: "" }
-      : { text: qsTr("Tile $14 (usually water) gets wave distortions"), pos: true,
-          warn: water ? "" : qsTr("This tileset's tile $14 isn't water. The wave distortion still "
-                                  + "runs, but it just warps whatever graphic sits at $14.") });
-
-    // Tile $03 (the flower tile). At Outdoor the flower REPLACES $03 — jarring if $03 isn't a flower.
+    // ── FLOWER, tile $03 ─────────────────────────────────────────────────────────────────────
+    //
+    // Same shape. The flower does not "animate" $03 — it REPLACES it with the flower frames, so on a
+    // tileset whose $03 is something else, that graphic is simply overwritten.
     b.push(eff === 2
-      ? { text: qsTr("Tile $03 (usually a flower) will be replaced by flower animation frames"), pos: true,
-          warn: flower ? "" : qsTr("This tileset's tile $03 isn't a flower. It will be replaced "
-                                   + "entirely by the flower animation frames.") }
-      : { text: qsTr("Tile $03 (usually a flower) will not be replaced by flower animation frames"),
-          pos: false, warn: "" });
+      ? (flower
+          ? { text: qsTr("This tileset's flower (tile $03) animates"), pos: true, warn: "" }
+          : { text: qsTr("Tile $03 gets replaced by flower frames — but it isn't a flower here"),
+              pos: false,
+              warn: qsTr("This tileset's tile $03 is not a flower. It is not animated, it is "
+                         + "overwritten entirely by the flower animation frames.") })
+      : (flower
+          ? { text: qsTr("This tileset's flower (tile $03) will sit still"), pos: false, warn: "" }
+          : { text: qsTr("Tile $03 is left alone"), pos: true, warn: "" }));
 
-    // ⭐ WHO YOU MAY PLACE HERE. Project leadership, 2026-08-18: *"Add to the indoor/cave/outdoor an
-    // extra point, + can place any npc; the other ones cave and outdoor show − can only place map
-    // approved npcs."*
+    // ── SURF — the player's state, not the map's scenery ─────────────────────────────────────
     //
-    // This is the sprite-set rule made visible at the moment you are choosing the setting that
-    // decides it. Outdoors the console holds only the map's eleven loaded pictures, and a sprite
-    // outside that set is drawn as garbage; **indoors there is no sprite set at all — the cast IS the
-    // set**, so anybody can stand here (notes/reference/sprite-sets.md, and `MapModel::vramPictures`
-    // works exactly this way).
+    // ⚠️ ONLY SHOWN WHEN THEY ARE ACTUALLY SURFING. *"Just because a map has water doesnt mean its
+    // meant for surfing — dont use lazy approaches. Silph Co 1 has water attraction and its indoors
+    // and your not supposed to surf there."* Exactly so: the old bullet asked "does this map have
+    // water" and warned about an ornamental pond.
     //
-    // ⚠️ Keyed on the RAW byte's Indoor value, not on `animEff`: the collapsed animation value is
-    // about which tiles move, and "may I place anyone" is a different question about the same byte.
-    b.push(raw === 0
-      ? { text: qsTr("Can place any character"), pos: true, warn: "" }
-      : { text: qsTr("Can only place characters this map has loaded"), pos: false, warn: "" });
+    // `LoadPlayerSpriteGraphics` is the only place outside the animation loop that reads this byte,
+    // and what it does is: if you are SURFING and the byte is 0, force walking. So the real conflict
+    // is between this setting and `wWalkBikeSurfState` — nothing to do with the scenery. On a save
+    // that is not surfing there is no Surf story to tell, so the line does not appear at all.
+    if (brg.map.playerIsSurfing)
+      b.push(eff === 0
+        ? { text: qsTr("You're surfing — this setting will put you back on foot"), pos: false,
+            warn: qsTr("The game only keeps you surfing while tile animation is on. Load this save "
+                       + "with Indoor set and it drops you to walking, wherever you were floating.") }
+        : { text: qsTr("You're surfing — this setting keeps you on the water"), pos: true, warn: "" });
+
+    // ⚠️ THE "WHO MAY I PLACE HERE" BULLET IS GONE, AND IT WAS WRONG.
+    //
+    // It was added on leadership's word (2026-08-18) and removed the same day once the disassembly
+    // was actually asked. They had also flagged the doubt themselves: *"i dont know what will happen
+    // with the sprites when an indoor map is pushed outdoor ... maybe figure that out."*
+    //
+    // **Answer: nothing happens.** `hTileAnimations` has exactly one behavioural reader in the whole
+    // game outside the animation loop — `LoadPlayerSpriteGraphics` — and every other use is a
+    // save/restore around menus and screens. Which characters may stand on a map is decided by the
+    // map's own header (whether it is an outdoor map, and which sprite set it names), never by this
+    // byte. Changing Indoor/Cave/Outdoor cannot make a forbidden character safe or a safe one
+    // forbidden, so a bullet claiming it does would be a confident lie, and no "!" is owed either.
 
     // A hack/glitch byte the game still runs — say what the console makes of it.
     if (raw > 2)

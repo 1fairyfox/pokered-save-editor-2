@@ -416,7 +416,7 @@ Item {
 
   // ⚠️ Must match MapModel::playerFields' group names EXACTLY.
   readonly property var playerGroupOrder: ["Facing & movement", "Fine position",
-                                           "What he can do here", "Battle", "Standing on",
+                                           "What they can do here", "Battle", "Standing on",
                                            "Rewritten on load, or never read"]
 
   ScrollView {
