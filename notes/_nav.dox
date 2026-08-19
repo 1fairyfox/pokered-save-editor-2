@@ -80,9 +80,17 @@ check-for-updates). The hub reads these on request to improve the shared standar
 \brief The day-by-day history — per-day files grouped into month folders, newest first.
 
 \subpage pse_sessions_about <br>
+\subpage pse_sessions_2026_08 <br>
 \subpage pse_sessions_2026_07 <br>
 \subpage pse_sessions_2026_06 <br>
 \subpage md_notes_2sessions_2revival-s13-series
+*/
+
+/**
+\page pse_sessions_2026_08 August 2026
+\brief Daily session logs for August 2026 (`notes/sessions/2026-08/`).
+
+\subpage md_notes_2sessions_22026-08_22026-08-18
 */
 
 /**

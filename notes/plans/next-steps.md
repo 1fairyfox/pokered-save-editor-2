@@ -28,6 +28,13 @@ in a **UI-polish phase**. Authoritative open-issues list: `status.md` → "Open 
 
 ## Now / next
 
+> **⚠️ THE LIVE LIST IS ELSEWHERE (2026-08-18).** The map screen's build-out phases are largely done; the
+> current work is project leadership's **meticulous UI/UX cleanup pass** on that screen, run as a rapid
+> prototype loop. **The running board — done items and 11 open ones in priority order — is
+> [`map-screen.md`](map-screen.md) → §11c "The live cleanup board".** The visibility architecture that
+> came out of it (the **gates**) is §11b. Start there, not with the phase table below, which is kept for
+> the structural history.
+
 **0. THE MAP SCREEN — the complete overhaul (approved 2026-07-12). This is the work.**
 The design of record is [`map-screen.md`](map-screen.md); read it before touching the screen. Thirteen
 phases plus one optional, each a *full* pass (built, screenshot-reviewed, tested, documented) before the

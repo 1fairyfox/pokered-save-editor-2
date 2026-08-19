@@ -5,11 +5,75 @@ _Current state only._ For the chronological history of what changed each session
 [`reference/qt-patterns.md`](reference/qt-patterns.md) and [`decisions/`](decisions/architecture.md). For the
 commit-by-commit changelog see [`version.md`](version.md).
 
-**Version:** `0.43.4-alpha` — on `dev`, **awaiting leadership's in-app review, then "ship"**. (Previous
+**Version:** `0.44.18-alpha` — on `dev`, **awaiting leadership's in-app review, then "ship"**. (Previous
 release: `0.16.6-alpha`, shipped 2026-07-11.) Single source of truth: repo-root `VERSION`; see
 [`reference/versioning.md`](reference/versioning.md). Full `ctest` green (**92/92**);
-`tst_db_integrity` now 15 (two new pins: `everyFlyDestinationSitsAtItsMapId`,
-`everyTradeResolvesAndSitsAtItsBit`).
+`tst_qml_screens` 28/28; `tst_warps` 25/25.
+
+---
+
+## ▶ START HERE — the MAP SCREEN CLEANUP is the live work (2026-08-18, `0.44.18-alpha`)
+
+Project leadership is running a **meticulous, multi-day UI/UX cleanup of the Map screen** in the rapid-
+prototype loop: *"the ui/ux is basically trash, for days now i have been cleaning it up, its
+meticulous"* — they point at what's wrong, it gets fixed, built, screenshot-reviewed and committed to
+`dev`. Their standing mandate, repeated verbatim: *"proceed normally with everything that is required and
+mandated by me in as many phases as needed, ensure this reaches the completion i asked for in full in as
+many phases needed."*
+
+**The board to pick up from:** [`plans/map-screen.md`](plans/map-screen.md) → **§11c "The live cleanup
+board"** (done list + 11 open items in priority order). Today's story:
+[`sessions/2026-08/2026-08-18.md`](sessions/2026-08/2026-08-18.md).
+
+### The day's one piece of architecture: THE GATES
+
+The map toolbar now has **two** reveal buttons, answering **two different questions** — design of record
+in [`plans/map-screen.md`](plans/map-screen.md) → **§11b**, decision in
+[`decisions/architecture.md`](decisions/architecture.md):
+
+- **`!`** — *is this value real?* Unused & unstable · No-effect edits · Truly unused.
+- **🔧** (wrench) — *do I want to work at this level?* **Tinkerer** · **Manual** · **Debug**.
+
+- **ONE gate per option, flat and exclusive** (*"An option is ONLY gated by 1 box… will never BELONG to
+  any more than 1 gate only"*), enforced **by shape**: a model field and a QML row each carry at most one
+  `gate` **string**, so there is nowhere to put a second. Pinned by
+  `tst_warps::tinkererFields_areAbsentUntilThatGateIsOpen`, which asserts **both** halves — hidden until
+  its own gate, and **never** revealed by any `!` tier.
+- **A gated-empty panel takes its rail tab with it** (*"if a whole panel ends up being hidden the panel
+  itself and its tab need to disappear"*), enforced at the dock rail. **Character state** is the live
+  case — every one of its rows is gated, so its button only exists while a gate is open.
+- **Tinkerer** holds scripted walk (×2), trainer battle queued, "…through hole #", "Arriving at warp #",
+  "A special warp is in progress", "Fly sends you to", the whole **Tileset & blocks** disclosure, and the
+  six **glitch contrast** values (its local switch is gone). **Debug** holds the test-battle switch, out
+  of "unused & unstable" — that tier is one clean idea again. **Manual** holds the connection raw bytes
+  and the camera view box.
+- ⭐ **A gate REVEALS, it never SETS.** Manual shows the hand-controls; sync stays on and the fields stay
+  read-only until the person breaks it themselves. Each keeps an escape hatch that is *not* a second gate
+  (already-desynced connection, already-loose camera, a save already on a glitch contrast).
+
+### Also this day
+
+- **Indoor / Cave / Outdoor is its own section**, lifted out of the Tileset & blocks disclosure.
+- **The animation bullets** were corrected three times (over-simplified → over-technicalised → marks
+  removed) and landed on: *say what you will SEE, not how the console does it*. Vocabulary is now only
+  `{ text, pos }` / `{ text, note: true }`; the second yellow `!` is gone — the `+/−/⚠` icon carries the
+  bullet's own sentence.
+- **The map picker no longer closes when you pick a map** — a pick is a preview, and previewing is
+  something you do several times in a row.
+- **The connection picker joined the shared `MapSelectList`**, opening on *By connections*, with the
+  cartridge's own neighbour pinned on top as a `leadingEntries` row.
+- **The connection tooltip was the last stock `ToolTip` on the screen** (dark-on-dark) — fixed; the rule
+  at the top of `MapToolTip.qml` now holds everywhere.
+
+**Owed: project leadership's live pass** on the gates — the two buttons side by side, the panel/tab
+disappearing act, and the Manual reveal.
+
+### ⚠️ Notes hygiene, owed
+
+Every changelog entry from **2026-08-03 onward is filed in `notes/version/2026-07.md`**; there is no
+`notes/version/2026-08.md`. The changelog is supposed to split by month. It needs a mechanical move of
+that file's top ~730 lines into a new August file, a row in `version.md`'s table, and a `\subpage` in
+`_nav.dox`. Recorded rather than done (the shell was unreliable that session).
 
 ### FAIRYFOX STANDARDS ADOPTED — 1.6.0 + chrome 2.3.0, adoption manifest created (2026-07-25)
 

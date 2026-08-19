@@ -169,6 +169,18 @@ of this failure (**not dropping requested scope**), and must never be misread as
     verbatim — the data must keep saying what the game says.
   - Swept 2026-08-18 across `app/` (QML + C++); a grep for `he|him|his` inside `tr(`/`qsTr(` should
     come back empty for player-facing text.
+- **Plain English on screen. No technical info dumps (2026-08-18).** *"I dont want technical info dumps
+  like 21 frames bytes rotated — this isnt plain english, this is technical jargon and its not
+  nesesarily more useful for any group of people."* The rule the map screen's copy is written to: **say
+  what the person will SEE, not how the console does it.** Frame cadences, byte rotations, register
+  names and offsets are true, and they belong in `notes/reference/`, not in a label or a blurb.
+  - ⚠️ **Plain English is not vagueness.** The same brief also rejected an over-simplified pass —
+    *"the wording seems oversimplified in some ways… you de-improved it a lot"*. Keep the **assertion**
+    when it can be checked (this tileset's `$14` either is water or is not — say which, rather than
+    hedging "usually"); drop the mechanism.
+  - **One mark per fact.** A badge whose tooltip paraphrases the sentence beside it is noise:
+    *"dont include exclamation point tooltips on the pros/cons, they effectively say the same thing."*
+    If a line needs more words, give it more words — not a second icon.
 - **`brg.settings.primaryColor` is PINK (`#d81b60`), not red.** For red on screens use
   `brg.settings.errorColor` (a fixed, theme-independent red token added 2026-06-15, left untouched by
   `setColorScheme()`); don't use `primaryColor` as "red" and don't hardcode literal `"red"` (fights the

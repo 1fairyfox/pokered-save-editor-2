@@ -509,6 +509,162 @@ screens/non-modal/map/
 
 ---
 
+## 11b. THE GATES — the visibility architecture  *(briefed + BUILT 2026-08-18, project leadership)*
+
+> **Read this before adding any field, row or panel to the map screen.** It decides where a control is
+> allowed to live, and it is deliberately rigid.
+
+The map screen has **two** reveal buttons at the right of the toolbar, and they answer **two different
+questions**. Keeping them apart is the point:
+
+| Button | The question it answers | Its contents |
+|---|---|---|
+| **`!`** (`mapOptionsButton`) | *Is this value real?* | **Unused & unstable** (the game acts on it, unintended result) · **No-effect edits** (rewritten on load, or write-only) · **Truly unused** (never read AND never written) |
+| **🔧** (`mapGatesButton`, Font Awesome `wrench`) | *Do I want to work at this level?* | **Tinkerer** · **Manual** · **Debug** |
+
+> *"Tinkerer, Debug and Manual should be their own icon next to the exclamation point icon, which should
+> still contain the 3 it has."* — project leadership, 2026-08-18
+
+They were briefly stacked into one popup and that was wrong. Everything under `!` is a value the console
+does **not** honour; everything under 🔧 is a value it honours perfectly well. One button would have made
+*"why can't I see this?"* a two-part answer.
+
+### The rule: ONE gate per option, flat, exclusive
+
+> *"An option is ONLY gated by 1 box. An option NEVER requires 2 or more gates to be enabled for it to
+> show, just like an option will never BELONG to any more than 1 gate only. This keeps things simple and
+> clean."*
+
+No nesting. No gate that opens another gate. No option behind two. It is enforced **by shape**, so it
+cannot drift:
+
+- **Model side** — a field carries at most one `gate` **string** (`""` / `"tinkerer"` / `"manual"` /
+  `"debug"`), and **one funnel** reads it (`MapModel::warpStateFields`'s `add()` lambda). A field with no
+  gate falls through to the older `scratch`/`dead` question. There is nowhere to put a second one.
+- **QML side** — a row carries one `gate` string property resolved through a `gateOn` map
+  (`CharacterStatePanel`). Same reason.
+- ⚠️ **`scratch` beats a gate when both would apply.** Not a coin flip: *"the game will throw this away"*
+  is the fact that decides whether editing it is worth anyone's time, and it must not be reachable from a
+  gate that doesn't say so.
+
+### The rule: a gated-empty panel takes its tab with it
+
+> *"If a whole panel ends up being hidden the panel itself and its tab need to disappear for clean UX."*
+
+Enforced at the **rail** (`Map.qml` → `rightDock.panels`), because that is the single place that decides
+what exists. Each conditional entry's condition is the **OR of the gates its own rows sit behind**.
+Group headings inside a panel follow the same rule at their own scale.
+
+**The live case is Character state** — every one of its rows is gated (four no-effect, three Tinkerer,
+one Debug; the 2026-07-15 research found not one ordinary edit among them), so with all gates shut it
+would be an empty page and its rail button is simply absent. Verified on screen: the right rail goes
+3 → 4 buttons when Tinkerer opens. `SpriteSetPanel` is the older precedent (whole panel is no-effect).
+
+### What lives behind each gate today
+
+**🔧 Tinkerer** — real, durable, console-honoured values that describe a state a save has no business
+*resting* in (a warp half-executed, a fall in mid-air, a fly destination waiting to be consumed):
+
+- `CharacterStatePanel` — Scripted walk (starting) · Scripted walk (running) · Trainer battle queued
+- `WarpStatePanel` (gated in the model) — `specialWarpDestMap` "Fly sends you to" · `whichDungeonWarp`
+  "…through hole #" · `warpDest` "Arriving at warp #" · `flyOrDungeonWarp` "A special warp is in progress"
+- `MapNamePicker` — the whole **Tileset & blocks** disclosure
+- `ContrastPicker` — the six **glitch contrast** values *(its own local switch was removed: "perhaps
+  remove the 'Glitch contrast' switch and instead have it placed behind [the gate]")*
+
+⚠️ **Deliberately NOT gated**, named by leadership as the harmless/fun ones: "Falling drops you onto" ·
+"You fell down a hole" · "Dig / Escape Rope / blacked out" · "Warps fire without walking into them".
+
+**🔧 Debug** — the game's own development leftovers. Founding member: the **test-battle switch**.
+*"Unused and unstable should no longer include debug or developer stuff, that is moved to its own gate
+out of unused and unstable"* — so that tier's blurb no longer has to say "developer leftovers" and is one
+clean idea again.
+
+**🔧 Manual** — the hand-controls for values the app keeps in sync: a connection's **Raw bytes** section
++ its "Break sync" switch, and the **camera / view box** (loose/attached switch + raw address), both in
+`DetailsPanel`.
+
+> *"It includes the manual controls like viewbox and connection — it doesn't switch them to manual, it
+> just shows them, allowing to break auto sync."*
+
+**⭐ THE GATE REVEALS; IT NEVER SETS.** Sync stays on, the bytes stay derived, the fields stay read-only
+until the person throws the switch themselves. **Opening a gate must never be an edit.** This is the
+derived-value doctrine (§9) seen from the visibility side, not an exception to it.
+
+⚠️ Each Manual control keeps an **escape hatch that is not a second gate** — a connection already
+desynced (`synced === false`), a camera already loose (`!viewSynced`), a save already sitting on a glitch
+contrast (`contrastIsGlitch`) shows its controls whatever the gate says. Otherwise the panel would hide
+the only explanation for what the map is doing.
+
+### Pinned
+
+`tst_warps::tinkererFields_areAbsentUntilThatGateIsOpen` asserts **both halves**: the four mid-motion
+bytes are absent with the gate shut, **and** turning on every `!` tier does not reveal them. The negative
+is the half that stops the two systems bleeding into each other.
+
+### Not yet built (owed)
+
+- **Sub-tracks stays a real checkbox, not a gate** — leadership: *"Sub-tracks i think is one of the rare
+  exceptions where i dont think a gate will benefit it, i think an actual checkbox is good."*
+- Nothing else has been assigned to **Debug** yet; it holds one switch.
+- The remaining event/filter-flag tiering (board item **#35**) still has to be walked with these gates in
+  mind — several flags currently sit in the open that belong behind one.
+
+---
+
+## 11c. THE LIVE CLEANUP BOARD  *(the running task list — 2026-08-18)*
+
+> The rapid-prototype loop's working board: leadership points at what's wrong, it lands here, it gets
+> fixed, built, screenshot-reviewed and committed. **This is the list to pick up from.** Standing
+> mandate, in their words: *"proceed normally with everything that is required and mandated by me in as
+> many phases as needed, ensure this reaches the completion i asked for in full in as many phases
+> needed."*
+
+### ✅ Done (2026-08-18, `0.43.25` → `0.44.18-alpha`)
+
+Popup click-through fixed structurally for every popup over the canvas · empty block opens nothing ·
+World panel on the shared map selector (filtered to maps with storage) · **Font Awesome** icons across
+the map rail, normalised on **height** not on a square · the fake `-1` "General" map replaced by an
+id-less **"Other"** row · no duplicate controls, `"Something else…"` everywhere · Sprite set off the rail ·
+3-step wild-encounter cooldown moved to the Wild Pokémon panel · Details panel emptied of what belongs
+elsewhere · no ghosts / no transparent / no hidden sprites · disable removes the object and enable
+re-adds it at its default place · clicking empty ground closes the panels · rail groups behave like
+Photoshop (click selects, a separate affordance opens the flyout) · map tooltip fixed (grid lines, multi-
+line) · event-flag mark renders at every zoom · **zoom anchors on the cursor** (wheel *and* pinch) ·
+toggled-on objects actually appear (Silph receptionist, Daisy) · shared-flag group toggles explain
+themselves · a filter-flagged-off sprite is wholly **absent**, not invisible-but-draggable · sign text
+through the game's own codec **with line breaks** · trainer pointer behind the useless gate · the
+transient "Step N" entries **console-investigated** and gated · **the gates themselves** (§11b) ·
+connection tooltips readable · connection picker on the shared selector.
+
+### 🔜 Open — in rough priority order
+
+| # | Item | What it means | Notes |
+|---|---|---|---|
+| **47** | **Random + revert on every field, group and panel** | A 🎲 and a ↩ at **three scopes** — the single field, the group, and the whole panel. | ⚠️ *"It does not need to look like a cluster-crap of buttons"* and *"The random revert buttons really do not need to litter buttons everywhere, it must be very clean, keeping to the style we already established."* **This is a design problem before it is a code problem** — probably a group/panel header affordance, not a third pair of squares per row. `FieldButtons.qml` is the existing single-field control. |
+| **20** | **Hide empty sections** | A section with nothing on this map (e.g. trades where the map has none) shouldn't render its heading. | Same family as the §11b tab rule; do it with the same shape. |
+| **35** | **More event/filter flags need a gate** | *"I still see event flags that are unused or read-only or write-only or overwritten etc."* | Now that the gates exist, walk the flag tiers against them. One gate each. |
+| **36** | **Connections: first-class raw bytes** | Partly done — the raw section is behind **Manual** now. What's left is the deeper connection-editing pass. | See §12 Phase 7 and the Manual gate. |
+| **11** | **Event + filter flags cohere with map state** | *"the filter flags and event flags need to act as toggle groups when changing map states, or at least have a box that offers to auto-update the filter and event flags to be correct."* | Leadership said they'd start a fresh save to test this naturally. Needs its own design pass. |
+| **25** | **Maker tools place legit randomized values** | *"Placing a warp or sign using the tool needs to also randomize the text id or warp place."* | A placed thing should be plausible, not zeroed. |
+| **26** | **"Characters safe" must account for indoor maps** | The safety read currently ignores indoor/outdoor. | Pairs with the Indoor/Cave/Outdoor rework. |
+| **43** | **Arriving-at warp offers the destination's own warps, named** | Today it's a raw byte. | ⚠️ It is **Tinkerer-gated** now — the picker still wants building. |
+| **42** | **Sprite movement/wander configuration is too thin** | The movement panel needs real options. | Un-briefed depth — ask before expanding. |
+| **32** | **Always-on-bike should render the player on a bike** | The flag exists (Details → Character); the canvas ignores it. | |
+| **27** | **Border ring reads as a dead zone** | *"edge of the world needs a different coloring and it needs to replace whatever colors are normally there — this is a dead zone, id like it to represent that."* | A **replacement** palette, not a tint over the existing one. |
+
+### Standing rules this board runs under
+
+- **Plain English, no technical jargon** in anything user-facing. Save-format detail belongs in
+  `notes/reference/`, not on screen.
+- **The player is they/them, app-wide** (2026-08-18) — see `context/collaboration.md`.
+- **Details vs World** splits on persistence: survives a map change + reload → **World** only;
+  current-map-only → **Details**.
+- **Every value is editable, hack and glitch values included** — flagged in words, never refused, never
+  silently rewritten (§9).
+
+---
+
 ## 12. The programme — the phases, plus one optional  *(Phase 15 "Map Storage" added 2026-07-15)*
 
 > **The bar (project leadership, 2026-07-12, mandatory):** *"You absolutely have to put in the long work for each of

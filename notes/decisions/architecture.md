@@ -4,6 +4,57 @@ Key choices made during the modernization, with rationale.
 
 ---
 
+## Visibility gates: two buttons, one gate per option, flat (2026-08-18)
+
+**Decision (project leadership's brief, built same day).** The map screen reveals its less-common
+controls through **two** toolbar buttons, never one, and every hideable option belongs to **exactly one**
+of the six switches across them.
+
+| Button | Question | Switches |
+|---|---|---|
+| `!` | *Is this value real?* | Unused & unstable · No-effect edits · Truly unused |
+| 🔧 | *Do I want to work at this level?* | Tinkerer · Manual · Debug |
+
+**Why two and not one.** They are different questions. `!` is about the **console**: these bytes are
+dead, wiped on load, or never read, so editing them buys you nothing. 🔧 is about the **person**: these
+bytes work perfectly, they are just fiddly, or derived, or developer leftovers. A single "advanced"
+button would have made *"why can't I see this?"* a two-part answer, and would have implied that a
+mid-cutscene state and a byte the game zeroes are the same kind of thing. They are not.
+
+**Why one gate per option, and flat.** In leadership's words: *"An option is ONLY gated by 1 box. An
+option NEVER requires 2 or more gates to be enabled for it to show, just like an option will never
+BELONG to any more than 1 gate only."* Two consequences worth stating:
+
+- **No option requires two switches.** A row can never be stranded behind a gate the person already
+  opened.
+- **No option is reachable from two.** Turning on a `!` tier must not surface a Tinkerer row, or the two
+  systems merge back into one by accident.
+
+**How it is enforced — by shape, not by discipline.** A model field carries at most one `gate`
+**string**; a QML row carries at most one `gate` **string** property. There is literally nowhere to put a
+second one, so the rule cannot drift as fields are added. `tst_warps::tinkererFields_areAbsentUntilThatGateIsOpen`
+pins both halves (hidden until its own gate; **never** revealed by any `!` tier).
+
+**Tie-break, deliberate:** when a value is both rewritten-on-load and finicky, **`scratch` wins**. "The
+game will throw this away" is the fact that decides whether editing it is worth anyone's time.
+
+**The corollary — a gated-empty panel loses its tab.** Enforced at the dock rail (the one place that
+decides what exists), not inside each panel. A rail button that opens a page saying "nothing here" is
+furniture, and clutter is a bug.
+
+**And the load-bearing constraint on `Manual`: a gate REVEALS, it never SETS.** Opening Manual shows the
+view-box and connection hand-controls; it does not desync anything. This is the derived-value doctrine
+(`CLAUDE.md`) seen from the visibility side — the person still has to break sync themselves.
+
+**Rejected alternative — one "advanced" switch.** Simpler to build, and it is what the screen had
+(`showScratch` doing double duty, with "developer leftovers" wedged into the unused-and-unstable blurb to
+cover the test-battle flag). It made the `!` tier describe two unrelated ideas at once, which is exactly
+the confusion the split removed.
+
+Full design + current contents: [`plans/map-screen.md`](../plans/map-screen.md) → §11b.
+
+---
+
 ## `assets/references/` as the home for reference material (2026-06-14)
 
 **Decision**: Added `assets/references/` as the official spot to keep reference material used while
