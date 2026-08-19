@@ -1446,6 +1446,45 @@ Project leadership's live pass on the map screen produced five rules that are **
   stacked on the first pass and ate two layer rows out of a list that has room for ~8 at the default
   750×480 window. The screenshot review caught it; a `MapRailButton` (⊘) replaced the text button.
 
+## Tool-rail groups behave like Photoshop (2026-08-18)
+
+Project leadership: *"clicking the buttons with a dropout to pick others — the 2 on the left bar at the
+top. It needs to click whats there by default, not open the menu to select. Research how Photoshop does
+it."* Researched and implemented as all three of Photoshop's affordances, because they are three
+different intents:
+
+1. **The face IS the tool.** One click on the button selects the member currently shown. It does *not*
+   open the flyout. (Verified: one tap on the makers face sets `tool = placeWarp` with
+   `expanded = false`.)
+2. **A corner triangle (◢) marks a group** — and it is a **real, 12 px clickable affordance** with its own
+   hover feedback and tooltip, not decoration. Clicking it opens the flyout.
+3. **Press-and-hold (400 ms) and right-click** also open it, for the muscle memory.
+
+**The rule this encodes: a control's primary click does its primary job.** A grouped button whose only
+behaviour is "open a menu" makes the common case (use the tool that is already showing) cost two clicks
+and a decision. `MapRailGroup.qml`.
+
+## Objects on the canvas — visibility, and what "hidden" means (2026-08-18)
+
+⚠️ **A filter-flagged-off sprite is ABSENT, not invisible.** This **supersedes the 2026-07-18 ruling**
+("a sprite is never hidden — filter-flagged = an always-visible ghost"). Leadership reversed it:
+*"Dont show slightly transparent sprites and stuff… Dont show hidden sprites."*
+
+- **The root cause of the half-fix is worth keeping:** `MapModel::npcList()` feeds **both** the drawing
+  *and* the tab strip, so setting `visible: false` on the item left a **working drag handle attached to an
+  invisible sprite** — you could pick up and move a Professor Oak who was not on the map. The fix has to
+  be **upstream**: a flag-hidden sprite is dropped by `npcList()` itself, so nothing downstream can
+  resurrect it.
+- ⚠️ **The picture id alone is not the test.** A real save holds *"picture present AND flag hidden"* —
+  `BaseSAV` does exactly that for Oak. **The flag is authoritative.**
+- The canvas must also **clear a selection whose object has left the map**, or you get the "glitched panel
+  with no sprite loaded" state.
+- **Disable/enable is symmetric and minimal**: disabling writes picture id 0 (the console's own
+  `HideObject`) and enabling restores the picture from *that slot's own* `pictureIDCopy` (ROM list as
+  fallback). Nothing duplicated, nothing reset. `tst_map_states` now **proves** it — a state apply may
+  move picture-id bytes in the sprite slots **and nothing else** — so a future wholesale rebuild turns
+  the suite red.
+
 ## The map screen (2026-07-12 — step 1 of the map emulator)
 
 > ⚠️ **BEING REBUILT.** The whole screen is under a complete UI/UX overhaul — the design of record is
@@ -1496,6 +1535,17 @@ Conventions established here:
   top-left corner. `PinchHandler` (touch + touchpad) and Ctrl+wheel both route through one
   `zoomAround(newZoom, centre)`, which keeps the map point under the cursor fixed across the change.
   Zoom stays integer (pixel art), so the gesture snaps.
+  - ⚠️ **`zoomAround`'s `centre` is in FLICKABLE coordinates, and this cost the same bug twice**
+    (2026-08-18). The wheel and pinch handlers are children of the `Flickable`, so their positions were
+    always right; the **zoom TOOL** passed the ground `TapHandler`'s position, which is **canvas-local** —
+    off by the entire scroll offset, so the further you had scrolled the further the map leapt. Their
+    report named it exactly: *"if i position the mouse cursor over the center and zoom in or out it moves
+    way off the edge of the map quickly."* Fix: `canvas.mapToItem(view, …)` at the call site.
+    **The general rule: a helper that takes a point must say whose coordinate space it is in, and every
+    caller must convert.** Two handlers agreeing by accident is not the same as a correct contract.
+  - ⚠️ **A pinch delta compounds if you apply it to the live zoom.** `PinchHandler.activeScale` is
+    cumulative *for the gesture*, so multiplying it into the current zoom each frame squares it. Capture a
+    `startZoom` on `onActiveChanged` and multiply against that.
 - **Both scroll axes.** `flickableDirection: HorizontalAndVerticalFlick`, a drag anywhere pans, and a
   horizontal wheel/Shift+wheel scrolls X (a plain `Flickable` ignores the X wheel axis unless you hand it
   over). This matters more the bigger the map gets -- Route 17 is 78 blocks tall.

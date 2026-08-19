@@ -622,36 +622,157 @@ is the half that stops the two systems bleeding into each other.
 
 ### ✅ Done (2026-08-18, `0.43.25` → `0.44.18-alpha`)
 
-Popup click-through fixed structurally for every popup over the canvas · empty block opens nothing ·
-World panel on the shared map selector (filtered to maps with storage) · **Font Awesome** icons across
-the map rail, normalised on **height** not on a square · the fake `-1` "General" map replaced by an
-id-less **"Other"** row · no duplicate controls, `"Something else…"` everywhere · Sprite set off the rail ·
-3-step wild-encounter cooldown moved to the Wild Pokémon panel · Details panel emptied of what belongs
-elsewhere · no ghosts / no transparent / no hidden sprites · disable removes the object and enable
-re-adds it at its default place · clicking empty ground closes the panels · rail groups behave like
-Photoshop (click selects, a separate affordance opens the flyout) · map tooltip fixed (grid lines, multi-
-line) · event-flag mark renders at every zoom · **zoom anchors on the cursor** (wheel *and* pinch) ·
-toggled-on objects actually appear (Silph receptionist, Daisy) · shared-flag group toggles explain
-themselves · a filter-flagged-off sprite is wholly **absent**, not invisible-but-draggable · sign text
-through the game's own codec **with line breaks** · trainer pointer behind the useless gate · the
-transient "Step N" entries **console-investigated** and gated · **the gates themselves** (§11b) ·
-connection tooltips readable · connection picker on the shared selector.
+Grouped by what each one taught, with the knowledge's permanent home noted — the list is a receipt, the
+reference files are the record.
+
+**Interaction / hit-testing**
+
+- **Popup click-through fixed structurally** for every popup over the canvas — not per-popup. A popup
+  written tomorrow is covered the day it is written.
+- **Empty ground opens nothing and closes everything** — a bare block still *selects* (outline + status
+  bar), but `blockInspectRequested()` only fires when the block has spots, and that list is **unfiltered
+  by the layer toggles**, so turning a layer off can never make a real thing un-openable.
+- **Rail groups behave like Photoshop** — the face IS the tool; the ◢ corner is a real 12 px affordance;
+  press-and-hold + right-click also open the flyout. → [`ui-patterns.md`](../reference/ui-patterns.md).
+- **Zoom anchors on the cursor**, wheel *and* pinch. Two distinct bugs: a **coordinate-space** mismatch
+  (the zoom tool passed canvas-local coords to a Flickable-coords helper) and a **compounding** pinch
+  delta. → [`ui-patterns.md`](../reference/ui-patterns.md), [`fix-patterns.md`](../reference/fix-patterns.md).
+- Map tooltip fixed (grid lines cutting through it; multi-line); the event-flag mark renders at every zoom.
+
+**What the canvas shows**
+
+- **No ghosts, no transparency, no hidden sprites** — this **supersedes the 2026-07-18 "a sprite is never
+  hidden" ruling**. A filter-flagged-off sprite is **absent**, dropped by `npcList()` itself (the fix has
+  to be upstream, because that one list feeds both the drawing *and* the drag handles).
+- **Disable removes the object; enable re-adds it in its own place** — picture id 0 / restore from the
+  slot's own `pictureIDCopy`, minimal by design and **pinned** by `tst_map_states`.
+- Toggled-on objects actually appear (the Silph receptionist, Daisy sitting); a selection whose object has
+  left the map is cleared. → all of the above: [`ui-patterns.md`](../reference/ui-patterns.md).
+
+**Words on screen**
+
+- **Sign text through the game's own codec, with line breaks** — `FontsDB::expandStr`, plus the two traps
+  (pret's capitalised `<PLAYER>` vs the codec's lowercase; `expandStr` returning glyph *names*, so `<f>`
+  needs the `font.json` `alias` post-pass). One conversion, two presentations. →
+  [`signs.md`](../reference/signs.md) §4b.
+- **`"Something else…"` everywhere** as the disclosure standard; the group toggles say what they do.
+- The **animation bullets** rewritten to plain English (see §11b and the session log for the three-round
+  correction).
+
+**Structure**
+
+- **World panel on the shared map selector**, filtered to maps that actually have storage.
+- **The fake `-1` "General" map is gone** — `kGeneralPageId` deleted, the placeless page marked by an
+  **empty id list**, `isGeneralPage()` → `isOtherPage()`, and `MapSelectList`/`MapField` gained
+  `extraRows` + `pickedExtra(key)` so a non-map row **needs no id at all**. *"Dont ever fake a map id."*
+- **No duplicate controls** — "Wake up at" left Warp state (it lives in the toolbar ⊞ panel), **with a
+  negative test assertion so it cannot come back**.
+- **Details vs World split by persistence** — progression stage → World only; the live `wCurMapScript` →
+  Details only; camera + always-on-bike → the player's section.
+- Sprite set off the rail; the 3-step wild-encounter cooldown moved to the Wild Pokémon panel; the trainer
+  pointer behind the `!` gate.
+- **Font Awesome** across the map rail, normalised on **height** (FA's own model) rather than fitted to a
+  square — which is what made a wide icon read ~20 % smaller than a tall one.
+
+**The gates** (§11b) — plus the transient "Step N" entries **console-investigated** before being gated,
+connection tooltips made readable, and the connection picker moved onto the shared selector.
 
 ### 🔜 Open — in rough priority order
 
-| # | Item | What it means | Notes |
-|---|---|---|---|
-| **47** | **Random + revert on every field, group and panel** | A 🎲 and a ↩ at **three scopes** — the single field, the group, and the whole panel. | ⚠️ *"It does not need to look like a cluster-crap of buttons"* and *"The random revert buttons really do not need to litter buttons everywhere, it must be very clean, keeping to the style we already established."* **This is a design problem before it is a code problem** — probably a group/panel header affordance, not a third pair of squares per row. `FieldButtons.qml` is the existing single-field control. |
-| **20** | **Hide empty sections** | A section with nothing on this map (e.g. trades where the map has none) shouldn't render its heading. | Same family as the §11b tab rule; do it with the same shape. |
-| **35** | **More event/filter flags need a gate** | *"I still see event flags that are unused or read-only or write-only or overwritten etc."* | Now that the gates exist, walk the flag tiers against them. One gate each. |
-| **36** | **Connections: first-class raw bytes** | Partly done — the raw section is behind **Manual** now. What's left is the deeper connection-editing pass. | See §12 Phase 7 and the Manual gate. |
-| **11** | **Event + filter flags cohere with map state** | *"the filter flags and event flags need to act as toggle groups when changing map states, or at least have a box that offers to auto-update the filter and event flags to be correct."* | Leadership said they'd start a fresh save to test this naturally. Needs its own design pass. |
-| **25** | **Maker tools place legit randomized values** | *"Placing a warp or sign using the tool needs to also randomize the text id or warp place."* | A placed thing should be plausible, not zeroed. |
-| **26** | **"Characters safe" must account for indoor maps** | The safety read currently ignores indoor/outdoor. | Pairs with the Indoor/Cave/Outdoor rework. |
-| **43** | **Arriving-at warp offers the destination's own warps, named** | Today it's a raw byte. | ⚠️ It is **Tinkerer-gated** now — the picker still wants building. |
-| **42** | **Sprite movement/wander configuration is too thin** | The movement panel needs real options. | Un-briefed depth — ask before expanding. |
-| **32** | **Always-on-bike should render the player on a bike** | The flag exists (Details → Character); the canvas ignores it. | |
-| **27** | **Border ring reads as a dead zone** | *"edge of the world needs a different coloring and it needs to replace whatever colors are normally there — this is a dead zone, id like it to represent that."* | A **replacement** palette, not a tint over the existing one. |
+Each one carries leadership's own words plus what is already known about it, so none of it has to be
+re-derived from a chat log.
+
+**#47 — Random + revert on every field, group and panel.**
+> *"Literally all the option fields need a random button and a revert button, including one for groups
+> and including one for the whole panel. **It does not need to look like a cluster-crap of buttons.**"*
+> …and later: *"The random revert buttons really do not need to litter buttons everywhere, it must be
+> very clean, done keeping to the style we already established."*
+
+A 🎲 and a ↩ at **three scopes** — field, group, whole panel. `FieldButtons.qml` is the existing
+single-field control and already ships on many rows. ⚠️ **This is a design problem before it is a code
+problem:** three pairs of squares per row is exactly the outcome they pre-emptively rejected. The likely
+shape is a **hover-revealed or single ⋮ affordance on the group/panel header**, not a third pair inline.
+Design it, screenshot it, *then* wire it.
+
+**#20 — Hide empty sections.**
+> *"Dont ever show in-game trades if there is none on the map"* · *"Test battle debug should be in
+> useless options if useless, same as others on the page."*
+
+⚠️ **Believed COMPLETE as of 2026-08-18** — trades were confirmed (not assumed) already to hide when a map
+has none, during the "Other" page work; and the test-battle flag now sits behind the **Debug** gate. Worth
+one live pass to confirm before closing. Same rule as the Town section and the §11b tab rule: **a gated
+thing takes its heading with it.**
+
+**#35 — More event/filter flags need a gate.**
+> *"I still see event flags that are unused or read-only or write-only or overwritten etc… I still see
+> filter and event flags that seem to need to be behind one of those useless options."*
+
+Audit the per-flag classification against the tiers and gate the ones that qualify — **one gate each**
+(§11b). The classification data already exists: see [`reference/event-flags.md`](../reference/event-flags.md)
+and [`reference/filter-flags.md`](../reference/filter-flags.md).
+
+**#36 — Connections: first-class raw bytes + "manual control".**
+**Part 1 is done** (hover no longer highlights the block under a connection icon — `hoverConnection` +
+`hoverOverObject`, and the cell outline now stands down for sprites/doors/signs too, which it never did),
+and the raw-bytes section is behind the **Manual** gate. **What remains:**
+
+- the **neighbour map id** should use the shared `MapSelectList` (the arrow's *add* picker already does;
+  the Details editor does not);
+- **strip src/dst and the view pointer shown as hex pointers**;
+- **"break sync" becomes "manual control"**, with strip src/dst, **length**, **neighbour width**, **x/y
+  alignment** and the **view pointer** all editable — **and rendered on the map** as you change them;
+- use the Pokédex-style friendly string function for any expanded text.
+
+**#11 — Event + filter flags cohere with map state.**
+> *"The filter flags and event flags need to act as toggle groups when changing map states, or at least
+> have a box that offers to auto-update the filter and event flags to be correct."*
+
+Also: *"the current map state must be identified better"* and the presentation is still messy. ⚠️ **Not to
+be built until designed and briefed** — and there are **older abandoned notes on this to reconcile first**.
+Leadership said they would start a **fresh save** to test progression naturally, so their evidence is
+coming.
+
+**#25 — Maker tools place legit randomized values.**
+> *"Placing a warp or sign using the tool needs to also randomize the text id or warp place or something,
+> **all legit values**."*
+
+A placed **sign** gets a real text id from *this map's* table; a placed **warp** gets a real destination.
+Never a placeholder, never a zero.
+
+**#26 — "Characters safe" must account for indoor maps.**
+> *"Characters safe needs to update if the map is indoors, i think all characters are allowed then."*
+
+Indoor maps don't use the outdoor 11-picture sprite-set cache, so the loaded-picture restriction should
+not apply. ⚠️ **Verify against [`reference/sprite-sets.md`](../reference/sprite-sets.md) — and the console
+if it turns out load-bearing — before changing the rule.** Pairs with the Indoor/Cave/Outdoor rework.
+
+**#43 — Arriving-at warp offers the destination map's own warps, named.**
+> *"Arriving at warp needs to offer destination map warps, preferably named well."*
+
+Today it is a raw index. ⚠️ It is **Tinkerer-gated** now (§11b), which changes where it appears but not
+that the picker still wants building.
+
+**#42 — Sprite movement/wander configuration is too thin.**
+> *"Movement needs to have an option for wander length or something. I think the sprites are
+> complicated… theres a lot of different option configurations with sprites, and the current panel doesnt
+> do any other configurations, just dropdown options and stuff."*
+
+**Movement byte 2 is range (WALK) or facing (STAY)** — the panel needs to expose the real configuration
+space, not one dropdown. **Also in this item:** better naming/separation for *"a sign"*, with a **divider
+below the NPCs**. ⚠️ The depth here is un-briefed — ask before expanding beyond what they named.
+
+**#32 — Always-on-bike should render the player on a bike.**
+> *"Always on bike should show the player on a bike on the map, the map should render like the game
+> would."*
+
+Needs the bike sprite through `PlayerProvider` and `BIT_ALWAYS_ON_BIKE` feeding the render. The flag is
+already editable (Details → the player's section).
+
+**#27 — Border ring reads as a dead zone.**
+> *"Edge of the world needs a different coloring and it needs to replace whatever colors are normally
+> there — this is a dead zone, id like it to represent that."*
+
+A **replacement palette** for the 3-block border ring, **not a tint over the top**.
 
 ### Standing rules this board runs under
 

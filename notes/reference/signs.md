@@ -196,6 +196,34 @@ indexed 1..N — so `MapDBEntry` can hand QML a grouped list. Self-validating: r
 
 ---
 
+## 4b. Rendering a sign's words — the codec, and the two traps (2026-08-18)
+
+The extracted strings are **pret's text**, not display text. Getting them on screen means running them
+through **the game's own codec**, and two separate traps sit on that path. Both were paid for.
+
+**Use `FontsDB::expandStr` — the same codec the name editors use.** It is `Q_INVOKABLE` now precisely so
+the sign plate can call it. Anything less (a hand-rolled two-substitution pass for `<PLAYER>`/`<RIVAL>`)
+resolves the two tokens you thought of and leaves every other one, and symbols arrive as mojibake.
+
+⚠️ **TRAP 1 — the capitalisation boundary.** `maps.json` keeps **pret's capitalised** `<PLAYER>` /
+`<RIVAL>` (correct: the file-format rule says we ship their format verbatim), while **`FontsDB` knows
+them lowercase**. The first cut therefore rendered the literal word `RIVAL`. Fix is a **two-substitution
+adapter at the boundary** (`pretTokensToCodec()`), not a change to either side: the data keeps saying
+what the game says, and the codec keeps its own vocabulary.
+
+⚠️ **TRAP 2 — `expandStr` returns glyph NAMES, not glyphs.** Its output is the font's *token* stream, so
+a sign came out reading `JUNE<f>` — leadership: *"The sign still reads as JUNE&lt;f&gt;, meaning you are
+still not using the friendly convert function."* `<f>` is font code **245**, and `font.json` carries its
+display form in the **`alias`** field (`♀`). A **post-pass** (`fontTokensToCharacters()`) maps token →
+alias, restricted to `singleChar`/`multiChar` entries whose alias is ≤4 characters with no space — so it
+substitutes real glyphs and never mangles a multi-word control code.
+
+**And the presentation is separate from the conversion.** One conversion, two presentations: the same
+`friendlyText(raw, keepLines)` serves the one-line plate and the **multi-line tooltip**, because
+leadership wanted both — *"i just want newlines for the tooltip. You keep giving me one or the other."*
+
+---
+
 ## 5. Sources
 
 | What | Where |
