@@ -70,6 +70,7 @@
 #include <pse-savefile/expanded/player/playerbasics.h>
 #include <pse-savefile/expanded/rival.h>
 #include <pse-db/fontsdb.h>
+#include <pse-db/entries/fontdbentry.h>
 #include <pse-db/mapstatesdb.h>
 #include <pse-db/entries/mapdbentrywarpin.h>
 #include <pse-db/entries/mapdbentrywarpout.h>
@@ -2491,6 +2492,51 @@ static QString pretTokensToCodec(QString s)
   return s;
 }
 
+/// ⭐ THE LAST STEP, AND THE ONE THAT WAS MISSING: turn the game's font TOKENS into real characters.
+///
+/// Project leadership, 2026-08-18: *"The sign still reads as JUNE`<f>` ... i just want the stupid
+/// characters to convert which seems impossible for you to do so far."*
+///
+/// It was not impossible, it was **the wrong layer**. `expandStr` is a codec: it converts a string to
+/// the game's font codes and back, and `convertFromCode` returns each glyph's `name` — which for a
+/// non-ASCII glyph IS the angle-bracket token. That is correct for round-tripping and useless for
+/// reading. `<f>` never was a name token that name-substitution could touch; it is font code **245**,
+/// and `font.json` has carried its real character all along, in **`alias`**:
+///
+///     245  <f>     ♀        186  <e>     é        84  <poke>  Poké
+///     239  <m>     ♂        241  <x>     ×       117  <...>   …
+///
+/// ⚠️ SUBSTITUTE ONLY GLYPHS THAT ARE ACTUALLY CHARACTERS. `singleChar`/`multiChar` mark the entries
+/// that output text (as opposed to `control` — `<page>`, `<line>`, `<end>` — which is structure, and
+/// `picture`, which is tilemap graphics, and `variable`, which `expandStr` has already resolved). Even
+/// then some aliases are DESCRIPTIONS rather than glyphs: `<E>` is "Bold E", because Unicode has no
+/// boxed bold letter. Those are excluded by the shape of the alias itself — a real glyph is short and
+/// has no space in it — which is why "Poké" and "……" pass and "Bold E" and "Player Name" do not.
+static QString fontTokensToCharacters(QString s)
+{
+  if (!s.contains(QLatin1Char('<')))
+    return s;                                   // the overwhelmingly common case, for free
+
+  for (auto* g : FontsDB::inst()->getStore()) {
+    if (g == nullptr)
+      continue;
+
+    const QString token = g->getName();
+    const QString alias = g->getAlias();
+
+    if (alias.isEmpty() || token.size() < 3 || !token.startsWith(QLatin1Char('<')))
+      continue;
+    if (!(g->getSingleChar() || g->getMultiChar()))
+      continue;
+    if (alias.size() > 4 || alias.contains(QLatin1Char(' ')))
+      continue;                                 // a description, not a character
+
+    s.replace(token, alias);
+  }
+
+  return s;
+}
+
 /// The map's text-table entry for a 1-based @p textId, or nullptr if the id points past the table
 /// (or the map is unknown). The DB carries the words; the save carries only the id.
 static const MapDBEntryText* textEntryFor(int mapInd, int textId)
@@ -2518,8 +2564,11 @@ QString MapModel::friendlyText(const QString& raw, bool keepLines) const
   QStringList out;
   out.reserve(lines.size());
 
+  // pret's CAPS tokens -> the codec's names -> the game's own expansion -> real characters.
+  // The last step is the one that turns "JUNE<f>" into "JUNE♀". @see fontTokensToCharacters
   for (const QString& line : lines)
-    out.append(FontsDB::inst()->expandStr(pretTokensToCodec(line), 255, rivalName, playerName));
+    out.append(fontTokensToCharacters(
+        FontsDB::inst()->expandStr(pretTokensToCodec(line), 255, rivalName, playerName)));
 
   // The two presentations, one conversion: keep the game's breaks for something that wraps, or
   // flatten them to " / " for a row that has one line to work with.
