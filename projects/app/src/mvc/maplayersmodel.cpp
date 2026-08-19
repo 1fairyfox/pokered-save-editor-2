@@ -146,7 +146,7 @@ void MapLayersModel::buildAll()
   // ── Game View ───────────────────────────────────────────────────────────────
   group(GameViewGroup);
   view(GameViewGroup, "player", tr("Player"),
-       tr("Him, drawn where the console's own OAM puts him — 4 pixels above his tile row, and "
+       tr("Them, drawn where the console's own OAM puts them — 4 pixels above their tile row, and "
           "facing right means facing LEFT, mirrored: the game has no right-facing art."),
        ViewPlayer);
   view(GameViewGroup, "npcs", tr("People & objects"),

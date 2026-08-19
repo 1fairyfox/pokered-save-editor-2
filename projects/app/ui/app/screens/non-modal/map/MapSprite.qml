@@ -123,7 +123,17 @@ Item {
 
   // ⭐ Baseline z is 1, not 0: the storage boxes annotate at z 0 and must sit UNDER the artwork
   // (leadership, 2026-07-18: *"these boxes often render in front of the sprites looking bad"*).
-  z: sprite.dragging ? 30 : (sprite.selected ? 25 : 1)
+  // ⭐ CHARACTERS SIT ABOVE THE OUTLINES. Project leadership, 2026-08-18: *"The characters render
+  // below other outlines like door or sign — like the yellow box outlines over the player character
+  // and their outline."*
+  //
+  // Warps and signs are abstract 16×16 CELLS: a coloured rectangle is their whole appearance, and a
+  // rectangle drawn over a person cuts across their face and their silhouette. A character is
+  // ARTWORK, and it is the thing you are looking at — so people take the higher resting z (2) and the
+  // cell outlines keep 1. Nothing else moves: selection (25) and dragging (30) are unchanged, and the
+  // storage boxes stay at 0 under all of it (leadership, 2026-07-18: *"these boxes often render in
+  // front of the sprites looking bad"* — the same complaint, one layer further down).
+  z: sprite.dragging ? 30 : (sprite.selected ? 25 : 2)
 
   // ⭐ A HIDDEN SPRITE IS NOT HERE AT ALL — it never reaches this component.
   //

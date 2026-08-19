@@ -206,6 +206,45 @@ ColumnLayout {
       font.pixelSize: 12
       placeholderText: qsTr("Search maps…")
     }
+
+    // ── Clear · Random, to the right of the search ────────────────────────────────────────────
+    //
+    // Project leadership, 2026-08-18: *"The map search needs a random button and clear button
+    // perhaps in the other order to the right of the map search text."*
+    //
+    // Clear first, then Random, reading left to right: clear is the one that belongs to the field it
+    // sits beside (it empties that box), and random is the bigger, more decisive action, so it takes
+    // the end of the row. They use the app's own square icon button and the house dice — the same
+    // die every randomise in this app draws — rather than inventing two more shapes.
+    //
+    // ⚠️ Clear is DISABLED when the box is already empty. A control that does nothing but stay lit is
+    // the clutter this screen keeps having to remove.
+    MapRailButton {
+      size: 30
+      icon: "qrc:/assets/icons/fontawesome/times.svg"
+      enabledBtn: mapSearch.text !== ""
+      tip: qsTr("Clear the search")
+      onClicked: mapSearch.text = ""
+    }
+
+    MapRailButton {
+      size: 30
+      icon: "qrc:/assets/icons/fontawesome/dice.svg"
+      tip: qsTr("Jump to a random map")
+      onClicked: {
+        // Pick from what is ON SCREEN, not from all 248 — if the list is filtered by a search or an
+        // `allowedIds` whitelist, "random" has to mean random among the maps you can actually see,
+        // or the button contradicts the list it sits above.
+        const l = mapListView.model;
+        if (!l || l.length === 0)
+          return;
+        const pick = l[Math.floor(Math.random() * l.length)];
+        if (pick.extraKey !== undefined)
+          mapSel.pickedExtra(pick.extraKey);
+        else
+          mapSel.picked(pick.ind);
+      }
+    }
   }
 
   // ── The grouped, scrolling list ─────────────────────────────────────────────────────────────────

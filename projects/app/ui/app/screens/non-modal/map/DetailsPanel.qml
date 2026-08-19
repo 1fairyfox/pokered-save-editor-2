@@ -625,34 +625,19 @@ Item {
               onToggled: brg.map.runScriptOnLoad = !brg.map.runScriptOnLoad
             }
           }
-          // ⭐ ONE LINE AND A BUTTON — not an essay. Project leadership, 2026-08-18: *"no, offer to
-          // open World — and you have 2 paragraphs, text should not be that big or long. Have a
-          // button to auto-open persistent storage."* A pointer to another page is a door, so it
-          // should look like one; explaining the split in prose is the panel talking to itself.
-          RowLayout {
+          // ⚠️ NO "Open World" BUTTON. It was added on 2026-08-18 and struck out the same day —
+          // *"The open world button on the map details panel needs to be removed i dont like it."*
+          //
+          // Worth keeping the reason: a button that only navigates somewhere else is not editing
+          // anything, and this panel is for editing. The rail already has a World button one click
+          // away, permanently, in a fixed place. One short line of context is enough.
+          Label {
             Layout.fillWidth: true
             Layout.topMargin: 2
-            spacing: 8
-
-            Label {
-              Layout.fillWidth: true
-              text: qsTr("The stage that sets this lives in World.")
-              wrapMode: Text.Wrap
-              font.pixelSize: 10
-              opacity: 0.55
-            }
-
-            // ⚠️ `Button`, NOT `MapTextButton` — that pill is an INLINE component declared inside
-            // MapStoragePanel.qml, so it does not exist as a type anywhere else, and using it here
-            // took this whole panel down silently (an unresolved type does not warn, it just fails to
-            // compile and the panel opens BLANK). `tst_qml_screens::everyMapPanelCompiles` caught it
-            // in one run — which is precisely the hole that test was added to close after the same
-            // class of bug shipped in July. This panel already uses a plain Button for "Fix it".
-            Button {
-              text: qsTr("Open World")
-              font.pixelSize: 11
-              onClicked: if (details.canvas) details.canvas.storageRequested("mapState", -1)
-            }
+            text: qsTr("The stage that sets this lives in World.")
+            wrapMode: Text.Wrap
+            font.pixelSize: 10
+            opacity: 0.55
           }
 
           Label {

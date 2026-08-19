@@ -105,6 +105,22 @@ Item {
       : { text: qsTr("Tile $03 (usually a flower) will not be replaced by flower animation frames"),
           pos: false, warn: "" });
 
+    // ⭐ WHO YOU MAY PLACE HERE. Project leadership, 2026-08-18: *"Add to the indoor/cave/outdoor an
+    // extra point, + can place any npc; the other ones cave and outdoor show − can only place map
+    // approved npcs."*
+    //
+    // This is the sprite-set rule made visible at the moment you are choosing the setting that
+    // decides it. Outdoors the console holds only the map's eleven loaded pictures, and a sprite
+    // outside that set is drawn as garbage; **indoors there is no sprite set at all — the cast IS the
+    // set**, so anybody can stand here (notes/reference/sprite-sets.md, and `MapModel::vramPictures`
+    // works exactly this way).
+    //
+    // ⚠️ Keyed on the RAW byte's Indoor value, not on `animEff`: the collapsed animation value is
+    // about which tiles move, and "may I place anyone" is a different question about the same byte.
+    b.push(raw === 0
+      ? { text: qsTr("Can place any character"), pos: true, warn: "" }
+      : { text: qsTr("Can only place characters this map has loaded"), pos: false, warn: "" });
+
     // A hack/glitch byte the game still runs — say what the console makes of it.
     if (raw > 2)
       b.push({ text: qsTr("Value %1 is a glitch value; the console reads only bit 0, so it behaves as above")
@@ -113,15 +129,18 @@ Item {
     return b;
   }
 
-  /// True when the current animation setting raises any yellow "!" — used to badge the active
-  /// Indoor/Cave/Outdoor segment (project leadership, 2026-08-04: "mark the button with a yellow
-  /// exclamation … runs counter to the green default button").
-  readonly property bool animHasWarning: {
-    const list = root.animBullets;
-    for (let i = 0; i < list.length; i++)
-      if (list[i].warn && list[i].warn !== "") return true;
-    return false;
-  }
+  /// ⚠️ RETIRED — always false. Project leadership, 2026-08-18: *"Forgo the exclamation mark, just
+  /// keep the green dot on the default."*
+  ///
+  /// The segment used to wear a yellow "!" whenever the current setting raised any caution
+  /// (2026-08-04). It was one mark too many: the three bullets underneath already say, in words, what
+  /// is and is not working — the badge repeated them without adding anything, and two competing marks
+  /// on one small control read as noise. The **green default dot stays** (it answers a question the
+  /// bullets cannot: which of these is this tileset's own).
+  ///
+  /// The per-bullet "!" is untouched — that one hangs off the specific sentence it qualifies, which
+  /// is the whole difference.
+  readonly property bool animHasWarning: false
 
   // ── The face: the bold map name + a ▾ that says "I drop a menu" ────────────────────────────────
   Rectangle {

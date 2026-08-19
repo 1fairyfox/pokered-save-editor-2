@@ -159,6 +159,16 @@ of this failure (**not dropping requested scope**), and must never be misread as
 - **Targets the US English release of Pokémon Red & Blue (Gen 1)** specifically — not Japanese, not the
   EU localizations. Use US item/move/location names and US mechanics; note Red/Blue version differences
   where relevant. The `pret/pokered` disassembly is the US-version oracle.
+- **The player is "they", app-wide (2026-08-18).** *"Please dont refer to the character as he/him, try
+  to be more they/them or something more inclusive and respectful."* The main character — Red, the
+  trainer, whoever the person playing has decided they are — is **they/them** in every user-visible
+  string: field labels, descriptions, blurbs, tooltips, layer names, status lines. The save lets you
+  name them anything, and the app should not decide who they are on their behalf.
+  - Applies to **the player only**. Named NPCs the game itself genders (the Safari Zone Warden, the
+    S.S. Anne Captain, Mr. Psychic) keep their pronouns, and imported `pret/pokered` text is quoted
+    verbatim — the data must keep saying what the game says.
+  - Swept 2026-08-18 across `app/` (QML + C++); a grep for `he|him|his` inside `tr(`/`qsTr(` should
+    come back empty for player-facing text.
 - **`brg.settings.primaryColor` is PINK (`#d81b60`), not red.** For red on screens use
   `brg.settings.errorColor` (a fixed, theme-independent red token added 2026-06-15, left untouched by
   `setColorScheme()`); don't use `primaryColor` as "red" and don't hardcode literal `"red"` (fights the
