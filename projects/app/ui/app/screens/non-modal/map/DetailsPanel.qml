@@ -1832,7 +1832,7 @@ Item {
             }
 
             Label {
-              text: qsTr("Slot 0 — the game requires him")
+              text: qsTr("Slot 0 — the game requires them")
               font.pixelSize: 10
               opacity: 0.6
             }
@@ -1842,7 +1842,7 @@ Item {
         Label {
           Layout.fillWidth: true
           Layout.topMargin: 2
-          text: qsTr("Where he is standing")
+          text: qsTr("Where they are standing")
           font.pixelSize: 11
           color: brg.settings.textColorMid
         }
@@ -1900,7 +1900,7 @@ Item {
 
             Label {
               Layout.fillWidth: true
-              text: qsTr("The map view pointer the game computed no longer matches where he is.")
+              text: qsTr("The map view pointer the game computed no longer matches where they are.")
               wrapMode: Text.Wrap
               font.pixelSize: 11
             }
@@ -2118,7 +2118,7 @@ Item {
         Label {
           Layout.fillWidth: true
           Layout.topMargin: 8
-          text: qsTr("His name, his badges and everything else about him live on the Trainer Card.")
+          text: qsTr("Their name, their badges and everything else about them live on the Trainer Card.")
           wrapMode: Text.Wrap
           font.pixelSize: 10
           opacity: 0.55

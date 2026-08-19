@@ -46,31 +46,52 @@ would ask.
 The verdict this prints is the evidence for whether these entries get gated behind the "!" -- nothing
 is gated on a hunch, and nothing is left in on one either.
 
-⚠️⚠️ **THIS PROBE IS NOT CALIBRATED YET. DO NOT QUOTE ITS OUTPUT AS EVIDENCE.** ⚠️⚠️
+⚠️ **THE FIRST TWO RUNS WERE BOGUS, AND THE FAULT WAS ONE LINE.** Kept here because the shape of the
+mistake matters more than the fix.
 
-Two runs (2026-08-18) produced a verdict for all seven values, and the verdict is worthless, because
-**both instruments are reading the wrong thing** -- which the CONTROLS proved, exactly as controls are
-meant to:
+Both runs reported `FROZEN (screen never changed)` for **every** value -- including `DEFAULT` and
+`NOOP`, the two resting values a normal save sits on. A save that boots and plays fine cannot be
+frozen, so the controls said "your instrument is broken" on the very first line of output. Worse, the
+same run printed the player WALKING on the line above the verdict: a dead CPU does not walk.
 
-  * every value came back `FROZEN (screen never changed)` -- *including* `DEFAULT` and `NOOP`, the two
-    known-good resting values a normal save sits on. A save that boots and plays fine cannot be
-    frozen, so the liveness test is broken, not the game. Hashing `wTilemap` was the first mistake
-    (the background scrolls through the LCD registers, so the tile ids can sit still while the picture
-    moves); switching to the framebuffer did NOT fix it, so the render path needs looking at too --
-    `window="null"` may not be producing new frames without an explicit render.
-  * every value reported the player walking `(3,6) -> (3,7)` -- the same numbers every time, and the
-    app says this save's player is at **(5,6)**. So `W_X_COORD`/`W_Y_COORD` are not the player's
-    coordinates either; something else is incrementing.
-  * the first cut also read a hardcoded `wCurMapScript` that returned 0 for every case. That address
-    is now not asserted at all rather than published wrong.
+The cause was not the addresses (`wYCoord`/`wXCoord` were right; the movement check worked in all
+seven cases). It was **`pyboy.tick()` without the render argument** -- with `window="null"` PyBoy does
+not draw a frame unless asked, so `screen.image` returned the same stale buffer forever and every case
+looked identical. `tick(1, True)` asks for the frame.
 
-A probe that returns the same answer for a known-good and a suspected-bad input **distinguishes
-nothing** -- the `emu-venv` lesson in a new costume: a check must be able to fail, and it must be able
-to PASS. Calibrate against `DEFAULT` first (it must read PLAYABLE) before trusting a single word this
-prints about a transient value.
+The lesson, and it is the `emu-venv` one again: **a check must be able to FAIL and to PASS.** Anything
+that answers identically for a known-good and a suspected-bad input is measuring nothing -- and the
+controls are what tell you, immediately, for free, if you put them in.
 
-**The question is still open.** Project leadership asked for solid confirmation before these entries
-are gated, and this does not yet supply it.
+⚠️ AND THE REAL FAULT WAS NEITHER OF THOSE. It was that **PyBoy loads the `.ram` sitting next to the
+ROM it was handed.** The save was written to `tmp/emu-transient/rom.gb.ram` and the emulator was
+launched on `assets/references/backup.gb`, so it loaded `backup.gb.ram` -- an untouched save -- seven
+times. Every run was the same run, which is why all seven screenshots were byte-identical and showed
+an indoor room rather than Pallet Town. Nothing needed tuning; a file was in the wrong place.
+
+── THE ANSWER (run 2026-08-18, after the fix) ────────────────────────────────────────────────────
+
+    value  kind        verdict                      walked
+    0      resting     PLAYABLE                     (5,6) -> (5,8)
+    1      transient   CONTROLS HELD, cannot walk   (5,1) -> (5,1)     <- teleported to the cutscene
+    2      transient   CONTROLS HELD, cannot walk   (5,1) -> (5,1)     <- teleported to the cutscene
+    3      transient   CONTROLS HELD, cannot walk   (5,6) -> (5,6)
+    4      transient   PLAYABLE                     (5,6) -> (5,8)
+    5      resting     PLAYABLE                     (5,6) -> (5,8)
+    6      resting     PLAYABLE                     (5,6) -> (5,8)
+
+**All three resting values are playable. Three of the four transients are not.** The console does not
+crash and does not freeze -- it comes up, it animates, and then it *keeps the controls*, because a
+cutscene is running and the game is driving. Two of them also **move the player** to the cutscene's
+staging square (5,1) before you ever touch the pad.
+
+So project leadership's read was right: a Continue cannot sensibly resume into a mid-cutscene step.
+That is the evidence for gating the cutscene entries -- they are not a crash, they are a save you
+cannot play.
+
+⚠️ Do NOT quote the `scripted movement` column: it read 0 in every case including the three that
+demonstrably held the controls, so that flag/bit is not the one being read. The verdict above rests
+entirely on observed behaviour (came up, animated, could/could not walk), which needs no such claim.
 
 Local-only; needs the gitignored ROM. Run:
     tmp\emu-venv\Scripts\python.exe scripts\emu\probe_transient_state_steps.py
@@ -78,6 +99,7 @@ Local-only; needs the gitignored ROM. Run:
 
 from __future__ import annotations
 
+import shutil
 import sys
 from pathlib import Path
 
@@ -182,10 +204,23 @@ def screen_hash(pyboy) -> int:
 def run(value: int, name: str, kind: str, base: bytes) -> dict:
     from pyboy import PyBoy
 
+    # ⚠️ PyBoy LOADS THE `.ram` THAT SITS NEXT TO THE ROM IT WAS GIVEN.
+    #
+    # This is the whole of the bogus result, and it is not subtle once seen: the first cut wrote the
+    # forged save to `tmp/emu-transient/rom.gb.ram` and then launched `PyBoy(assets/.../backup.gb)`,
+    # so the emulator loaded `assets/.../backup.gb.ram` -- an untouched save -- **seven times**. Every
+    # run was the same run. The screenshots proved it: all seven PNGs were byte-identical, and they
+    # showed an indoor room, not Pallet Town, so the byte under test was never even consulted.
+    #
+    # Copy the ROM next to the save, and launch THAT. (The other probes in this folder do exactly
+    # this; dropping the copy is what broke it.)
     OUT.mkdir(parents=True, exist_ok=True)
+    rom_here = OUT / "rom.gb"
+    if not rom_here.exists():
+        shutil.copyfile(ROM, rom_here)
     (OUT / "rom.gb.ram").write_bytes(with_step(base, value))
 
-    pyboy = PyBoy(str(ROM), window="null", sound_emulated=False)
+    pyboy = PyBoy(str(rom_here), window="null", sound_emulated=False)
     r: dict = {"value": value, "name": name, "kind": kind}
 
     if not boot(pyboy):
@@ -201,10 +236,17 @@ def run(value: int, name: str, kind: str, base: bytes) -> dict:
     r["scriptedMovement"] = (mem[W_STATUS_FLAGS_5] >> 7) & 1
 
     # ── is it ALIVE? a crashed CPU stops changing the screen entirely ───────────────
+    #
+    # ⚠️ `tick(1, True)` -- the second argument is RENDER. With `window="null"` PyBoy does not draw a
+    # frame unless asked, so `screen.image` just returns the same stale buffer forever and every
+    # single case looks "frozen". That was the whole of the bogus result, and the controls said so
+    # immediately: DEFAULT and NOOP cannot be frozen, and the very same run reported the player
+    # walking. Ask for the frame and the picture moves.
     hashes = set()
     for _ in range(12):
-        for _ in range(30):
+        for _ in range(29):
             pyboy.tick()
+        pyboy.tick(1, True)
         hashes.add(screen_hash(pyboy))
     r["screenStates"] = len(hashes)
 

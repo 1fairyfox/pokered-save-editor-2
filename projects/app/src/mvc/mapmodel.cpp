@@ -668,10 +668,10 @@ QVariantList MapModel::connectionFields(int dir) const
            QObject::tr("The source row stride: the neighbour's width in blocks (ConnectedMapWidth)."),
            c->width, 0, 255, "byte");
   out << f("yAlign",   QObject::tr("Y alignment"),
-           QObject::tr("The player's Y when he crosses (ConnectedMapYAlignment)."),
+           QObject::tr("The player's Y when they cross (ConnectedMapYAlignment)."),
            c->yAlign, -128, 255, "byte");
   out << f("xAlign",   QObject::tr("X alignment"),
-           QObject::tr("The player's X when he crosses (ConnectedMapXAlignment)."),
+           QObject::tr("The player's X when they cross (ConnectedMapXAlignment)."),
            c->xAlign, -128, 255, "byte");
   out << f("viewPtr",  QObject::tr("View pointer"),
            QObject::tr("The neighbour's upper-left-corner view pointer (ConnectedMapViewPointer)."),
@@ -3250,12 +3250,12 @@ QVariantList MapModel::playerFields() const
   const QString move = tr("Facing & movement");
 
   ret.append(field(move, "moveDir", tr("Moving"),
-                   tr("Which way he is stepping right now. It is 0 on any save you could really "
+                   tr("Which way they are stepping right now. It is 0 on any save you could really "
                       "make — you can only save while standing still."),
                    player->playerMoveDir, 0, 255, "enum", dirs));
 
   ret.append(field(move, "lastStopDir", tr("Last stop"),
-                   tr("The way he was facing before he last stopped walking."),
+                   tr("The way they were facing before they last stopped walking."),
                    player->playerLastStopDir, 0, 255, "enum", dirs));
 
   ret.append(field(move, "walkBikeSurf", tr("Getting around by"),
@@ -3269,23 +3269,23 @@ QVariantList MapModel::playerFields() const
   const QString fine = tr("Fine position");
 
   ret.append(field(fine, "xBlockCoord", tr("Half-block across"),
-                   tr("Which half of the 2×2 block he stands in, left to right. 0 or 1."),
+                   tr("Which half of the 2×2 block they stand in, left to right. 0 or 1."),
                    player->xBlockCoord, 0, 255, "byte"));
 
   ret.append(field(fine, "yBlockCoord", tr("Half-block down"),
-                   tr("Which half of the 2×2 block he stands in, top to bottom. 0 or 1."),
+                   tr("Which half of the 2×2 block they stand in, top to bottom. 0 or 1."),
                    player->yBlockCoord, 0, 255, "byte"));
 
-  // ── What he can do here ─────────────────────────────────────────────────────────────────────
-  const QString may = tr("What he can do here");
+  // ── What they can do here ─────────────────────────────────────────────────────────────────────
+  const QString may = tr("What they can do here");
 
   ret.append(field(may, "surfingAllowed", tr("Can surf from here"),
-                   tr("Set when the tile he faces is water he could surf onto. The game works it "
+                   tr("Set when the tile they face is water they could surf onto. The game works it "
                       "out again as he walks."),
                    player->surfingAllowed ? 1 : 0, 0, 1, "flag"));
 
   ret.append(field(may, "arrivedByFly", tr("Arrived by Fly"),
-                   tr("“He just landed by FLY — play the drop-in animation.”\n\n(v1 called this "
+                   tr("“They just landed by FLY — play the drop-in animation.”\n\n(v1 called this "
                       "“Using Fly”. It isn't that — it does not mean FLY is usable here.)"),
                    player->flyOutofBattle ? 1 : 0, 0, 1, "flag"));
 
@@ -3301,7 +3301,7 @@ QVariantList MapModel::playerFields() const
   const QString standing = tr("Standing on");
 
   ret.append(field(standing, "standingOnWarp", tr("A warp tile"),
-                   tr("He is on a warp tile. The game recomputes this as he moves, so it survives "
+                   tr("They are on a warp tile. The game recomputes this as they move, so it survives "
                       "the load but not the first step."),
                    player->standingOnWarp ? 1 : 0, 0, 1, "flag"));
 
@@ -3317,7 +3317,7 @@ QVariantList MapModel::playerFields() const
   const QString nothing = tr("Rewritten on load, or never read");
 
   add(reload(field(nothing, "curDir", tr("Current direction"),
-                   tr("Which way he is facing."),
+                   tr("Which way they are facing."),
                    player->playerCurDir, 0, 255, "enum", dirs),
              tr("The game FORCES this to DOWN every single time it loads your save — it is the first "
                 "thing Continue does. Set it, save, load: he faces down. Verified on a real "
@@ -3356,12 +3356,12 @@ QVariantList MapModel::playerFields() const
                 "Console-verified.")));
 
   add(reload(field(nothing, "standingOnDoor", tr("Standing on a door"),
-                   tr("He is on a door tile."),
+                   tr("They are on a door tile."),
                    player->standingOnDoor ? 1 : 0, 0, 1, "flag"),
              tr("Cleared on load. Console-verified.")));
 
   add(reload(field(nothing, "movingThroughDoor", tr("Walking through a door"),
-                   tr("He is mid door-transition."),
+                   tr("They are mid door-transition."),
                    player->movingThroughDoor ? 1 : 0, 0, 1, "flag"),
              tr("Cleared on load. Console-verified.")));
 
@@ -3373,7 +3373,7 @@ QVariantList MapModel::playerFields() const
                 "Console-verified.")));
 
   add(reload(field(nothing, "jumpingY", tr("Ledge-hop height"),
-                   tr("How far into a ledge hop his sprite is — an animation index."),
+                   tr("How far into a ledge hop their sprite is — an animation index."),
                    player->playerJumpingYScrnCoords, 0, 255, "byte"),
              tr("Zeroed on load. Console-verified.")));
 
@@ -3385,7 +3385,7 @@ QVariantList MapModel::playerFields() const
               "simply does nothing.")));
 
   add(dead(field(nothing, "xOffsetSpecialWarp", tr("X offset since special warp"),
-                 tr("Meant to track how far he has moved since the last special warp."),
+                 tr("Meant to track how far they have moved since the last special warp."),
                  player->xOffsetSinceLastSpecialWarp, 0, 255, "byte"),
            tr("The disassembly's own comment: “they don't seem to be used for anything.” Written "
               "by the game, read by nothing.")));
