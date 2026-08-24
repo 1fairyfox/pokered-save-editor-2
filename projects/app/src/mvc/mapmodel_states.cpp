@@ -668,6 +668,44 @@ void MapModel::changeMapConstructed(int newMapInd)
   if (last >= 0)
     setLastMap(last);
 
+  // ── FORCE BIKE RIDE — a GLOBAL flag whose correct value is a fact about the MAP ──────────────
+  //
+  // ⭐ project leadership, 2026-08-19: *"force bike ride and other map options need to be set
+  // correctly when re-constructing maps."* Right, and it became urgent the moment the player
+  // started being DRAWN on the bike: construct Pallet Town while `BIT_ALWAYS_ON_BIKE` is set and
+  // you get Red pedalling around outside his own front door — an incoherent save that now says so
+  // out loud. Constructing a map has to leave the save in a state the console could have reached.
+  //
+  // The console's rule, from the disassembly and it is a literal table:
+  //
+  //   * `CheckForceBikeOrSurf` (engine/overworld/player_state.asm) SETS the bit — and it is the
+  //     only thing that does — when the player stands on one of exactly FOUR tiles:
+  //     Route 16 (17,10) and (17,11); Route 18 (33,8) and (33,9). Those are the Cycling Road gate
+  //     exits. (`ForcedBikeOrSurfMaps` has four more rows, but the Seafoam ones force SURFING.)
+  //   * `Route16Gate1F` and `Route18Gate1F` CLEAR it as you step into the gate — so leaving the
+  //     road at either end puts it back. A special warp, a battle and a text script clear it too.
+  //
+  // So the only maps that can legitimately hold it are the Cycling Road stretch: Route 17 always
+  // (you cannot be on that road on foot), and Routes 16/18 only past the gate — which the four
+  // tiles above name exactly. Everywhere else, the gates have already cleared it.
+  //
+  // ⚠️ Source-grounded, not console-probed: this is a data table read verbatim rather than a claim
+  // about how the console treats OUR bytes, and the bit's own persistence was already probed on
+  // 2026-07-15 (kept on load). If it ever earns a probe, it is `scripts/emu/`'s to take.
+  {
+    constexpr int kRoute16 = 0x1B;
+    constexpr int kRoute17 = 0x1C;
+    constexpr int kRoute18 = 0x1D;
+
+    const bool onRoad =
+        (newMapInd == kRoute17)
+        || (newMapInd == kRoute16 && x == 17 && (y == 10 || y == 11))
+        || (newMapInd == kRoute18 && x == 33 && (y == 8 || y == 9));
+
+    if (alwaysOnBike() != onRoad)
+      setAlwaysOnBike(onRoad);
+  }
+
   // Constructed = the game's own defaults for this map — there is nothing here the game
   // would "restore" differently on re-entry, so the edited-this-session warnings reset.
   castEdited = false;

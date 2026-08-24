@@ -38,26 +38,29 @@ CURATED = {
     # The game's own source gives these four no name (it literally marks them "???").
     # Their meaning was recovered by reading what the scripts DO with them; the prose
     # below is written for a person looking at the panel, not for the research log.
+    # ⚠️ NOT CALLED "leftover" ANY MORE (project leadership, 2026-08-19: *"I even see event flags
+    # called leftovers. Please clean these up better."*). "Leftover" is developer-speak for
+    # something left in the source by accident: it names the flag after a fact about the
+    # PROGRAMMERS rather than about the game, and on a row in a panel it reads as an apology.
+    # These three are named for what they DO — Celadon City clears them on entry and nothing
+    # ever looks at them — which is the same information in the player's own vocabulary.
     "EVENT_1B8": {
-        "name": "Celadon leftover flag (1B8)",
-        "description": "Celadon City wipes this clean every time you walk in — but "
-        "nothing in the whole game ever turns it on or looks at it. A leftover the "
-        "developers never removed; switching it on changes nothing.",
+        "name": "Celadon spare switch #1",
+        "description": "Celadon City clears this every time you walk in, and nothing in the "
+        "whole game ever turns it on or looks at it. Turning it on changes nothing.",
         "classification_add": ["vestigial", "temporary"],
     },
     "EVENT_1BF": {
-        "name": "Celadon leftover flag (1BF)",
-        "description": "Wiped clean alongside 1B8 every time you enter Celadon City, "
-        "and — like it — never set or read anywhere else. A leftover; switching it on "
-        "changes nothing.",
+        "name": "Celadon spare switch #2",
+        "description": "Cleared alongside the first one every time you enter Celadon City, and "
+        "— like it — never set or read anywhere else. Turning it on changes nothing.",
         "classification_add": ["vestigial", "temporary"],
     },
     "EVENT_67F": {
-        "name": "Celadon leftover flag (67F)",
-        "description": "The third bit Celadon City wipes on entry, and the oddest: it "
-        "is stored over with the Rocket Hideout's flags, yet Celadon is the only place "
-        "that touches it — and nothing ever reads it. A leftover; switching it on "
-        "changes nothing.",
+        "name": "Celadon spare switch #3",
+        "description": "The third switch Celadon City clears as you walk in, and the oddest: it "
+        "is stored among the Rocket Hideout's switches, yet Celadon is the only place that "
+        "touches it — and nothing ever reads it. Turning it on changes nothing.",
         "classification_add": ["vestigial", "temporary"],
     },
     "EVENT_2A7": {
@@ -236,12 +239,27 @@ def describe(r, fname, mapname, cls, cx):
             if clr_in:
                 parts.append(f", and cleared again in {_join(clr_in)}")
 
+            # ⚠️ NO SCRIPT SITE, BUT A DATA-TABLE REFERENCE = FULLY FUNCTIONAL, and the words have
+            # to say so (project leadership, 2026-08-19: *"if there functional and useable and
+            # stuff then keep them, if text needs updating please do"*). This is the trainer
+            # flags, 287 of them: the map's trainer-header table names the flag and the engine
+            # reads it there. The old sentence — "referenced only in the game's data tables —
+            # nothing in the scripts turns it on or reads it" — was true and read like an
+            # epitaph, describing the plumbing instead of the effect.
             if not parts:
-                return ("Stored and referenced only in the game's data tables — nothing "
-                        "in the scripts turns it on or reads it.")
+                if r.get("n_data"):
+                    return ("Whether you have already beaten this trainer. The game checks it "
+                            "from the map's own trainer list rather than from a script — turn it "
+                            "off and they will want to battle you again.")
+                return ("Nothing in the game turns this on or looks at it.")
             desc = "".join(parts) + "."
             if not chk_in and not r["n_check"]:
-                desc += " Nothing ever reads it back — a leftover."
+                # Only say "nothing reads it" when nothing DOES -- a table reference is a read.
+                if r.get("n_data"):
+                    desc += (" The game reads it from the map's own trainer list rather than "
+                             "from a script.")
+                else:
+                    desc += " Nothing ever reads it back, so turning it on changes nothing."
             if r["temporary"] and clr_in:
                 desc += " It doesn't stick: the game clears it again as you play."
             return desc
@@ -346,7 +364,15 @@ def main() -> int:
             "description": describe(r, fname, mapname, cls, ctx[r["index"]]),
             "evidence": {
                 "used": r["used"], "n_set": r["n_set"], "n_check": r["n_check"],
-                "n_reset": r["n_reset"], "temporary": r["temporary"],
+                "n_reset": r["n_reset"],
+                # ⚠️ n_data WAS MISSING HERE and it is load-bearing (added 2026-08-19). It counts
+                # DATA-TABLE references -- almost all of them `trainer EVENT_BEAT_..._TRAINER_n`
+                # in a map's trainer-header list, which the engine reads generically rather than
+                # from any script. 287 flags have NO script sites and are read only this way, so
+                # a consumer that judges "is it ever read?" from n_check alone concludes those
+                # 287 real, useful flags are write-only and hides them. @see import_events_db.py.
+                "n_data": r.get("n_data", 0),
+                "temporary": r["temporary"],
                 "block_swept": r["block_swept"], "multi_map": r["multi_map"],
                 "files": r["files"],
             },

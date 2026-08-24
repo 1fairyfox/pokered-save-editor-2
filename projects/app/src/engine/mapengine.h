@@ -291,8 +291,19 @@ public:
   ///        pointers**, so a save can legitimately (or mischievously) draw one tileset's blocks with
   ///        another tileset's tiles, and a real console will happily do it. Pass **-1** for "the same
   ///        as @p tilesetInd". (2026-07-13)
+  ///
+  /// @param deadZoneRing paint the 3-block border ring in its own DEAD-ZONE palette instead of the
+  ///        map's. ⚠️ This is a **replacement, not a tint** (project leadership, 2026-08-19: *"Edge
+  ///        of the world needs a different coloring and it needs to replace whatever colors are
+  ///        normally there — this is a dead zone, id like it to represent that."*). The ring used to
+  ///        get a translucent wash laid over the top by @ref overlay, which left it reading as the
+  ///        same world seen through a filter; the point is that it is **not the world**. Its four
+  ///        shades are re-mapped to a cold, flattened ramp, so the shapes stay legible (you can
+  ///        still see a neighbour's edge bleeding in) while the place reads as out of bounds.
+  ///        Driven by the Border guide layer, so it can be turned off to see what a console draws.
   static QImage render(const Buffer& buffer, int tilesetInd, int frame = 0, int contrast = 0,
-                       int tileAnim = -1, int blocksetInd = -1, const QRgb* outputPalette = nullptr);
+                       int tileAnim = -1, int blocksetInd = -1, const QRgb* outputPalette = nullptr,
+                       bool deadZoneRing = false);
 
   // ── The OUTPUT palette — a Game Boy Color / custom colour filter ─────────────────────────────
   //
@@ -415,7 +426,14 @@ public:
 
   /// The player's 16x16 sprite, facing @p facing, through the sprite palette for @p contrast.
   /// Colour 0 comes back **transparent**, as it is on the hardware.
-  static QImage playerSprite(int facing, int contrast = 0, const QRgb* outputPalette = nullptr);
+  ///
+  /// @param onBike draw them on the BIKE — the game's own `red_bike.png`, which is laid out
+  ///        frame-for-frame like the walking sheet because the console swaps the player's graphics
+  ///        wholesale and keeps using the same facing/animation table. Driven by
+  ///        `BIT_ALWAYS_ON_BIKE`, so the map renders what the save would actually produce
+  ///        (project leadership, 2026-08-19: *"the map should render like the game would"*).
+  static QImage playerSprite(int facing, int contrast = 0, const QRgb* outputPalette = nullptr,
+                             bool onBike = false);
 
   /// Where a sprite goes, in buffer pixels -- the 4-pixel lift included. (The player is
   /// slot 0 and uses the same geometry as everyone else.)

@@ -757,7 +757,8 @@ QString MapEngine::contrastName(int contrast)
 }
 
 QImage MapEngine::render(const Buffer& buffer, int tilesetInd, int frame, int contrast,
-                         int tileAnim, int blocksetInd, const QRgb* outputPalette)
+                         int tileAnim, int blocksetInd, const QRgb* outputPalette,
+                         bool deadZoneRing)
 {
   if (!buffer.valid)
     return QImage();
@@ -847,6 +848,54 @@ QImage MapEngine::render(const Buffer& buffer, int tilesetInd, int frame, int co
       QRgb* row = reinterpret_cast<QRgb*>(img.scanLine(y));
       for (int x = 0; x < img.width(); x++)
         row[x] = lut[shadeOf(qRed(row[x]))] | 0xFF000000;
+    }
+  }
+
+  // ── THE DEAD ZONE — the ring gets its OWN palette, not a wash over the map's ─────────────────
+  //
+  // ⭐ A REPLACEMENT (project leadership, 2026-08-19: *"Edge of the world needs a different
+  // coloring and it needs to replace whatever colors are normally there — this is a dead zone, id
+  // like it to represent that."*). The old treatment was a translucent blue-grey laid over the
+  // top by `overlay()`, which is exactly the wrong idea in miniature: a tint says *"the same
+  // world, shaded"*, and the whole point of the ring is that it is **not the world** — you can
+  // never stand there, and what it shows is scenery the game bleeds in from its neighbours.
+  //
+  // So the ring's four shades are re-mapped to a cold, compressed ramp of their own. Compressed
+  // rather than flat: keeping the four steps distinct means a neighbouring map's edge is still
+  // readable out there (which is genuinely useful when checking connections), while nothing in it
+  // can be mistaken for the playable map. And because this runs AFTER the palette pass, it
+  // replaces the result whatever contrast or colour filter is in force — including the glitch
+  // palettes, which a tint would have disappeared into.
+  if (deadZoneRing) {
+    // Cold blue-grey, lightest first — the Border layer's own ink (#546E7A) opened into a ramp.
+    static const QRgb dead[4] = {
+      qRgb(0x8C, 0x99, 0xA3), qRgb(0x6E, 0x7C, 0x88),
+      qRgb(0x51, 0x60, 0x6C), qRgb(0x37, 0x44, 0x4E),
+    };
+
+    const int ringPx = mapBorder * blockPx;
+    const int innerX0 = ringPx;
+    const int innerY0 = ringPx;
+    const int innerX1 = img.width() - ringPx;    // exclusive
+    const int innerY1 = img.height() - ringPx;   // exclusive
+
+    // Map an already-painted colour back to its shade. After the pass above a pixel is one of the
+    // four OUTPUT colours, so match on those; the neutral greys are the fallback (identity path).
+    auto shadeOfOut = [&](QRgb c) {
+      for (int i = 0; i < 4; i++)
+        if ((out[i] | 0xFF000000u) == (c | 0xFF000000u))
+          return i;
+      return shadeOf(qRed(c));   // identity fast-path: the art is still its own greys
+    };
+
+    for (int y = 0; y < img.height(); y++) {
+      const bool rowInRing = (y < innerY0 || y >= innerY1);
+      QRgb* row = reinterpret_cast<QRgb*>(img.scanLine(y));
+      for (int x = 0; x < img.width(); x++) {
+        if (!rowInRing && x >= innerX0 && x < innerX1)
+          continue;   // the playable map, untouched
+        row[x] = dead[shadeOfOut(row[x])] | 0xFF000000;
+      }
     }
   }
 
@@ -1178,16 +1227,11 @@ QImage MapEngine::overlay(const Buffer& buffer, int tilesetInd, quint32 layers,
       // ── The two BLOCK-level layers. Getting these right is the whole reason this file
       // keeps insisting on the difference: a cut tree is a block, and the border ring is
       // made of blocks. Painting them per-tile would be a lie about what they are.
-      if ((layers & LayerBorder) != 0) {
-        const bool inRing = bx < mapBorder || by < mapBorder
-                         || bx >= buffer.stride - mapBorder
-                         || by >= buffer.rows - mapBorder;
-        if (inRing) {
-          QColor c = layerColor(LayerBorder);
-          c.setAlpha(72);
-          p.fillRect(bpx, bpy, blockPx, blockPx, c);
-        }
-      }
+      // ⚠️ THE BORDER RING IS NOT PAINTED HERE ANY MORE (2026-08-19). It used to get a
+      // translucent blue-grey wash laid over the top from this loop; it now gets a palette of its
+      // OWN inside `render()`, because a tint reads as "the same world, shaded" and the ring is
+      // not the world at all. The Border layer still governs it — it just switches a replacement
+      // on and off instead of an overlay. @see MapEngine::render's `deadZoneRing`.
 
       if ((layers & LayerCutTrees) != 0 && traits->isCutTreeBlock(static_cast<var8>(block))) {
         QColor c = layerColor(LayerCutTrees);
@@ -1347,12 +1391,21 @@ QImage mirroredH(const QImage& img)
 }
 } // namespace
 
-QImage MapEngine::playerSprite(int facing, int contrast, const QRgb* outputPalette)
+QImage MapEngine::playerSprite(int facing, int contrast, const QRgb* outputPalette, bool onBike)
 {
   // gfx/sprites/red.png: six 16x16 frames -- stand down, stand up, stand LEFT, then the
   // three walking ones. There is NO "right" frame: the game draws facing-right as
   // facing-left, X-flipped (SpriteFacingAndAnimationTable -> .FlippedOAM). We do the same.
-  static const QImage sheet = QImage(":/assets/sprites/red.png").convertToFormat(QImage::Format_ARGB32);
+  static const QImage walkSheet = QImage(":/assets/sprites/red.png").convertToFormat(QImage::Format_ARGB32);
+
+  // ⭐ AND THE BIKE (project leadership, 2026-08-19: *"Always on bike should show the player on a
+  // bike on the map, the map should render like the game would."*). `red_bike.png` is the game's
+  // own sheet, laid out frame-for-frame the same as `red.png` — which is not a coincidence: the
+  // console swaps the player's graphics wholesale and keeps using the same facing/animation table,
+  // so every index below stays valid and nothing else in this function has to know.
+  static const QImage bikeSheet = QImage(":/assets/sprites/red_bike.png").convertToFormat(QImage::Format_ARGB32);
+
+  const QImage& sheet = (onBike && !bikeSheet.isNull()) ? bikeSheet : walkSheet;
 
   if (sheet.isNull())
     return QImage();

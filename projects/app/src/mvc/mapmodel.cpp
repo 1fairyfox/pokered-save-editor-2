@@ -238,7 +238,11 @@ QString MapModel::source() const
        + "/" + QString::number(blocksetInd())    // whose BLOCKS -- the save's own second pointer
        + "/" + QString::number(borderBlock())     // what fills the ring -- the save's own byte
        + "/" + QString::number(MapEngine::paletteGeneration())    // the colour filter
-       + "/" + conns;                             // the SAVE's connections -- a Continue-load ring
+       + "/" + conns                              // the SAVE's connections -- a Continue-load ring
+       // Is the Border guide layer on? It decides whether the ring is drawn in its own dead-zone
+       // palette (a REPLACEMENT, not a wash). It rides in the URL because the provider is a cache:
+       // without it, toggling the layer would keep serving the previous image.
+       + "/" + QString::number((shownLayers & MapEngine::LayerBorder) != 0 ? 1 : 0);
 }
 
 QVariantList MapModel::connectionList() const
@@ -652,31 +656,46 @@ QVariantList MapModel::connectionFields(int dir) const
     return m;
   };
 
-  // The v1 field names, in the game's own terms. `stripWidth` is ConnectionStripLength (N/S a width,
-  // E/W a row count); `width` is ConnectedMapWidth (the source row stride) -- two different things.
+  // ⭐ PLAIN ENGLISH, AND THE THREE POINTERS SHOWN AS POINTERS (project leadership, 2026-08-19:
+  // *"strip src/dst and the view pointer shown as hex pointers"*, and the standing rule that
+  // save-format detail belongs in `notes/reference/`, not on screen).
+  //
+  // Every blurb here used to end with the ROM's own symbol — "(ConnectionStripSrc)",
+  // "(ConnectedMapWidth)" — which is the exact jargon that rule is about: it names the byte for
+  // somebody who already knows, and tells somebody who doesn't precisely nothing. What each one
+  // DOES is written out instead; the ROM names live in notes/reference/map-connections.md, which is
+  // where a person who wants them is already looking.
+  //
+  // The three addresses use the `pointer` kind — a memory address is not a quantity, and reading
+  // "50923" where the game means `$C6EB` is a small lie about what the value is.
   out << f("mapPtr",   QObject::tr("Neighbour map id"),
-           QObject::tr("The connected map (ConnectedMap)."), c->mapPtr, 0, 255, "byte");
+           QObject::tr("Which map is on the other side of this edge."), c->mapPtr, 0, 255, "byte");
   out << f("stripSrc", QObject::tr("Strip source"),
-           QObject::tr("ROM pointer into the neighbour's block data (ConnectionStripSrc)."),
-           c->stripSrc, 0, 0xFFFF, "word");
+           QObject::tr("Where in the neighbour's own map the borrowed strip is read FROM. The game "
+                       "copies a slice of the neighbour into our border ring so the walk across is "
+                       "seamless; this is where that slice starts."),
+           c->stripSrc, 0, 0xFFFF, "pointer");
   out << f("stripDst", QObject::tr("Strip destination"),
-           QObject::tr("Where the strip lands in our ring (ConnectionStripDest)."),
-           c->stripDst, 0, 0xFFFF, "word");
+           QObject::tr("Where that borrowed slice lands in our own border ring."),
+           c->stripDst, 0, 0xFFFF, "pointer");
   out << f("stripWidth", QObject::tr("Strip length"),
-           QObject::tr("Blocks per row (N/S) or number of rows (E/W) — ConnectionStripLength."),
+           QObject::tr("How much of the neighbour is borrowed — blocks across for a north or south "
+                       "edge, rows down for an east or west one."),
            c->stripWidth, 0, 255, "byte");
   out << f("width",    QObject::tr("Neighbour width"),
-           QObject::tr("The source row stride: the neighbour's width in blocks (ConnectedMapWidth)."),
+           QObject::tr("How wide the neighbouring map is, in blocks. The game needs it to step from "
+                       "one row of that map to the next while it copies."),
            c->width, 0, 255, "byte");
   out << f("yAlign",   QObject::tr("Y alignment"),
-           QObject::tr("The player's Y when they cross (ConnectedMapYAlignment)."),
+           QObject::tr("Where you come out vertically when you walk across this edge."),
            c->yAlign, -128, 255, "byte");
   out << f("xAlign",   QObject::tr("X alignment"),
-           QObject::tr("The player's X when they cross (ConnectedMapXAlignment)."),
+           QObject::tr("Where you come out horizontally when you walk across this edge."),
            c->xAlign, -128, 255, "byte");
   out << f("viewPtr",  QObject::tr("View pointer"),
-           QObject::tr("The neighbour's upper-left-corner view pointer (ConnectedMapViewPointer)."),
-           c->viewPtr, 0, 0xFFFF, "word");
+           QObject::tr("Where the camera is put in the neighbouring map when you arrive — its "
+                       "top-left corner."),
+           c->viewPtr, 0, 0xFFFF, "pointer");
 
   return out;
 }
@@ -1795,6 +1814,12 @@ QString MapModel::playerSource() const
   // that is the one the "harmless" glitch palettes actually damage.
   return "image://player/" + QString::number(playerFacing())
        + "/" + QString::number(contrast())
+       // ⭐ ON THE BIKE when the save says so (project leadership, 2026-08-19: *"Always on bike
+       // should show the player on a bike on the map, the map should render like the game would."*).
+       // The keyword rides in the URL rather than being read inside the provider, because the
+       // provider is a CACHE: without it in the id, toggling the flag would keep serving the walking
+       // sprite. @see PlayerProvider's `bike` segment.
+       + (alwaysOnBike() ? QStringLiteral("/bike") : QString())
        // Carry the map + tileset + palette generation so the sprite honours the colour filter (SGB
        // colours each map differently) and refreshes when it changes. @see PlayerProvider, its `pal`
        // keyword segment. (project leadership, 2026-08-03: "sprites need to honor it".)
@@ -2056,6 +2081,32 @@ int MapModel::addNpc(int pictureID, int x, int y)
   y = std::max(0, std::min(h - 1, y));
 
   const int slot = npcs->spriteAdd(pictureID, x, y);
+
+  // ⭐ AND THEY HAVE SOMETHING TO SAY (project leadership, 2026-08-19: *"Placing a warp or sign
+  // using the tool needs to also randomize the text id or warp place or something, all legit
+  // values."* — a placed person is the third case). A fresh NPC arrived with text id 0, "Nothing
+  // to say": a character you can walk into and get nothing from, which is not what dropping a
+  // person on a map is meant to produce.
+  //
+  // The pool is this map's own PERSON texts (never the sign ones — those are placards, and a
+  // person reading a placard's words is the kind of nonsense that looks like a bug). If a map has
+  // none, id 0 stands: silent is honest, and better than pointing at a script that isn't there.
+  if (slot >= 0) {
+    if (SpriteData* s = npcs->spriteAt(slot)) {
+      if (MapDBEntry* m = MapsDB::inst()->getStoreAt(mapInd())) {
+        QVector<int> personTexts;
+        for (int i = 0; i < m->getTextEntriesSize(); i++) {
+          const MapDBEntryText* e = m->getTextEntriesAt(i);
+          if (e != nullptr && e->getCategory() != QStringLiteral("sign"))
+            personTexts.append(e->getId());
+        }
+        if (!personTexts.isEmpty()) {
+          s->setTextID(personTexts.at(Random::inst()->rangeExclusive(0, personTexts.size())));
+        }
+      }
+    }
+  }
+
   castEdited = true;
   changed();
   return slot;
@@ -2459,12 +2510,36 @@ int MapModel::addWarp(int x, int y)
   w->y = y;
   w->yChanged();
 
-  // The sane default, and it is not arbitrary: a door is nearly always a way OUT. `$FF` = "back
-  // outside" -- and it is the one destination that is always valid, because it resolves through
-  // `wLastMap` rather than naming a map that may have no arrival points.
-  w->destMap = kReturnMap;
+  // ⭐ A PLACED WARP GOES SOMEWHERE REAL (project leadership, 2026-08-19: *"Placing a warp or sign
+  // using the tool needs to also randomize the text id or warp place or something, **all legit
+  // values**."*). It used to be `$FF` / 0 every time — always valid, and always identical, so the
+  // maker tool produced a row of the same door that you then had to edit one by one.
+  //
+  // The pool is this map's OWN doors as the cartridge ships them: each is a real (map, warp index)
+  // pair the game itself uses, so the destination exists AND has an arrival point at that index.
+  // That is the whole definition of "legit" here, and it needs no validation of ours. Glitch warps
+  // are excluded — a maker tool's default must never be one of the unintended ones.
+  //
+  // `$FF` ("back outside", resolved through `wLastMap`) stays the fallback for a map whose own
+  // doors we cannot read: it is the one destination that is valid everywhere.
+  int destMap = kReturnMap;
+  int destWarp = 0;
+  if (MapDBEntry* m = MapsDB::inst()->getStoreAt(mapInd())) {
+    QVector<MapDBEntryWarpOut*> pool;
+    for (MapDBEntryWarpOut* wo : m->getWarpOut()) {
+      if (wo != nullptr && !wo->getGlitch() && wo->getToMap() != nullptr)
+        pool.append(wo);
+    }
+    if (!pool.isEmpty()) {
+      MapDBEntryWarpOut* pick = pool.at(Random::inst()->rangeExclusive(0, pool.size()));
+      destMap = int(pick->getToMap()->getInd());
+      destWarp = pick->getWarp();
+    }
+  }
+
+  w->destMap = destMap;
   w->destMapChanged();
-  w->destWarp = 0;
+  w->destWarp = destWarp;
   w->destWarpChanged();
 
   warpsWereEdited = true;
@@ -2758,18 +2833,25 @@ int MapModel::addSign(int x, int y)
   s->y = y;
   s->yChanged();
 
-  // A fresh placard should say something real. Default to this map's first SIGN-category text id, so
-  // a new sign reads like a sign; fall back to id 1 if the map has no sign text at all.
+  // ⭐ A fresh placard says something REAL, and not always the same thing (project leadership,
+  // 2026-08-19: *"Placing a warp or sign using the tool needs to also randomize the text id … all
+  // legit values."*). It used to take this map's FIRST sign text every time, so placing three
+  // signs gave you the same placard three times.
+  //
+  // The pool is every SIGN-category text this map actually has, so whatever is picked resolves to
+  // real words through the map's own text table. Fall back to id 1 only where a map has no sign
+  // text at all — an id that at least exists everywhere.
   int defaultText = 1;
   MapDBEntry* m = MapsDB::inst()->getStoreAt(mapInd());
   if (m != nullptr) {
+    QVector<int> signTexts;
     for (int i = 0; i < m->getTextEntriesSize(); i++) {
       const MapDBEntryText* e = m->getTextEntriesAt(i);
-      if (e != nullptr && e->getCategory() == QStringLiteral("sign")) {
-        defaultText = e->getId();
-        break;
-      }
+      if (e != nullptr && e->getCategory() == QStringLiteral("sign"))
+        signTexts.append(e->getId());
     }
+    if (!signTexts.isEmpty())
+      defaultText = signTexts.at(Random::inst()->rangeExclusive(0, signTexts.size()));
   }
 
   s->txtId = defaultText;
@@ -2998,14 +3080,52 @@ QVariantList MapModel::warpFields(int ind) const
                       "you last stood on outdoors — which you can see and change in the toolbar."),
                    w->destMap, 0, 255, "map"));
 
+  // ⭐ THE ARRIVAL POINTS, NAMED (project leadership, 2026-08-19: *"Arriving at warp needs to offer
+  // destination map warps, preferably named well."*). It was a bare 0–255 spinbox, which asked the
+  // person to know how many landing spots a map they are not looking at happens to have — the one
+  // question the app is in a position to answer for them.
+  //
+  // Each option names the destination and the tile it puts you on, so "arrival point 2" becomes
+  // something you can picture. The full byte range stays reachable: `arrival` renders as a list of
+  // the real ones plus the usual way out to any value, because pointing past the end IS a legal
+  // edit and the console's own behaviour there (reading whatever bytes follow) is worth being able
+  // to set up deliberately.
   ret.append(field(leads, "destWarp", tr("Arriving at warp #"),
                    tr("Which arrival point of that map you land on.\n\n⚠️ These are NOT the other "
                       "map's warps — the game keeps a separate list of landing spots, and this "
                       "counts into that. The console does not check it: point it past the end and "
                       "it reads whatever cartridge bytes come next and drops you somewhere undefined."),
-                   w->destWarp, 0, 255, "byte"));
+                   w->destWarp, 0, 255, "arrival", arrivalOptions(w->destMap)));
 
   return ret;
+}
+
+QVariantList MapModel::arrivalOptions(int destMap) const
+{
+  QVariantList out;
+
+  // `$FF` names no map — it means "back outside", and where that is lives in `wLastMap`. Resolve it
+  // the same way the label does, so the list matches what the chip on the canvas already says.
+  const int target = (destMap == kReturnMap) ? lastMap() : destMap;
+
+  auto* entry = MapsDB::inst()->getIndAt(QString::number(target));
+  if (entry == nullptr)
+    return out;
+
+  const auto arrivals = entry->getWarpIn();
+  for (int i = 0; i < arrivals.size(); i++) {
+    MapDBEntryWarpIn* in = arrivals.at(i);
+    if (in == nullptr)
+      continue;
+
+    // "2 — Viridian City, at (17, 5)". The number leads because it IS the stored byte and the
+    // person may be matching it against something; the place follows because that is what they
+    // actually mean.
+    out.append(option(i, tr("%1 — %2, at (%3, %4)")
+                           .arg(i).arg(entry->bestName()).arg(in->getX()).arg(in->getY())));
+  }
+
+  return out;
 }
 
 void MapModel::setWarpField(int ind, const QString& key, int value)
@@ -5610,15 +5730,27 @@ QVariantList MapModel::storageEvents(const QVariantList& mapIds) const
     // ⭐ USELESS (leadership's word, 2026-07-18): editing it changes nothing the game will keep or
     // ever read. Placeholder padding bits; vestigial / defined-unused / plain unused; `temporary`
     // (rewritten on load); and ⭐ WRITE-ONLY -- *"if something is write once never read again its
-    // useless because it has no impact on game code"*. The dossiers' usage sentences carry the
-    // read side ("read back by X" / "X reads" / "checked"); a described flag with none of those
-    // is a write nobody consumes. NOT for merely-advanced controls.
+    // useless because it has no impact on game code"*. NOT for merely-advanced controls.
+    //
+    // ⚠️ "IS IT EVER READ?" IS A FACT, NOT A READING-COMPREHENSION EXERCISE (fixed 2026-08-19).
+    // This used to search the DESCRIPTION for "read back" / "reads" / "checked" and call a flag
+    // write-only when it found none. The generator writes *"Nothing ever reads it back — a
+    // leftover."* for precisely the flags it was meant to catch — so the sentence that SAYS the
+    // flag is never read contains the word "reads", the test concluded it WAS read, and every
+    // write-only flag stayed on screen. Leadership found it on Pokémon Tower 7F ("Rescued Mr
+    // Fuji 2", whose description literally ends "a leftover") and asked for all of it fixed.
+    //
+    // `events.json` now carries the counts the research always had, and `isEverRead()` is the
+    // whole test — a fact that cannot be reversed by a turn of phrase.
+    //
+    // ⚠️ AND "READ" MEANS BY THE GAME, NOT BY A SCRIPT. 335 flags — every "Beat <map> Trainer n"
+    // — have no script check at all: the engine reads them through the map's trainer-header
+    // TABLE. They are entirely real edits (clearing one re-arms that battle), so counting only
+    // script checks would have hidden 335 useful controls while fixing 19 useless ones.
+    // Leadership's rule, same message: *"if there functional and useable and stuff then keep
+    // them … please gate what needs to be gated."* @see EventDBEntry::isEverRead.
     const auto cls = e->getClassification();
-    const QString d = e->getDesc();
-    const bool neverRead = !d.isEmpty()
-        && !d.contains(QStringLiteral("read back"))
-        && !d.contains(QStringLiteral("reads"))
-        && !d.contains(QStringLiteral("checked"));
+    const bool neverRead = !e->isEverRead();
     o[QStringLiteral("useless")] = e->getPlaceholder()
         || cls.contains(QStringLiteral("vestigial"))
         || cls.contains(QStringLiteral("defined-unused"))
@@ -5919,8 +6051,19 @@ void MapModel::setLayers(int layers)
   if (shownLayers == layers)
     return;
 
+  // ⚠️ ONE LAYER REACHES THE MAP IMAGE ITSELF, not just the overlay (2026-08-19). The Border
+  // layer no longer paints a wash on top — it decides whether the ring is rendered in its own
+  // dead-zone palette — so its bit is part of `source()`'s URL, and `source` notifies on
+  // `sourceChanged`, NOT on `overlayChanged`. Without this the URL changed and QML never re-read
+  // it: the toggle did nothing on screen while every value said it had worked. (Caught by
+  // byte-comparing two screenshots rather than trusting that they looked different.)
+  const bool borderMoved =
+    ((shownLayers ^ layers) & MapEngine::LayerBorder) != 0;
+
   shownLayers = layers;
   overlayChanged();
+  if (borderMoved)
+    sourceChanged();
 }
 
 void MapModel::toggleLayer(int layer)

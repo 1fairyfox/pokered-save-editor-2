@@ -443,6 +443,14 @@ public:
   /// nothing, so the caller can say *that* instead.
   Q_INVOKABLE QString warpDestLabel(int destMap, int destWarp) const;
 
+  /// The destination map's arrival points, NAMED — `{ value, name, hack }` per landing spot, e.g.
+  /// *"2 — Viridian City, at (17, 5)"*. Empty when the destination has none we can read.
+  ///
+  /// ⚠️ Not the destination's WARPS. A map keeps a separate list of landing spots, and this is what
+  /// "Arriving at warp #" counts into — which is exactly the distinction a bare 0–255 spinbox left
+  /// the person to work out for a map they are not currently looking at.
+  Q_INVOKABLE QVariantList arrivalOptions(int destMap) const;
+
   /// Has the user changed this map's doors in this session? @see npcsEdited -- same rule, same
   /// reason (we track the EDIT, never a diff against the ROM), and the same sentence is owed:
   /// the game restores the map's original doors when the player leaves and walks back in.

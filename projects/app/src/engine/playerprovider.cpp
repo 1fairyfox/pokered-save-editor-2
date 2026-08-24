@@ -90,7 +90,14 @@ QPixmap PlayerProvider::requestPixmap(const QString& id, QSize* size, const QSiz
     const int facing   = (parts.size() > 0) ? parts.at(0).toInt() : MapEngine::FacingDown;
     const int contrast = (parts.size() > 1) ? parts.at(1).toInt() : 0;
 
-    sprite = MapEngine::playerSprite(facing, contrast, havePal ? outPal : nullptr);
+    // ⭐ `bike` — an optional third word, so the player is drawn on the bike when the save's
+    // "always on bike" is set (project leadership, 2026-08-19: *"the map should render like the
+    // game would"*). A KEYWORD rather than a positional flag, for the same reason `pal` and `sil`
+    // are: the player form has no third field today and a bare "1" would be unreadable in a URL.
+    // Absent → on foot, which is every other caller.
+    const bool onBike = parts.contains(QStringLiteral("bike"));
+
+    sprite = MapEngine::playerSprite(facing, contrast, havePal ? outPal : nullptr, onBike);
   }
 
   if (sprite.isNull()) {

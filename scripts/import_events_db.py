@@ -233,6 +233,35 @@ def main():
             "classification": d.get("classification", []),
             "placeholder": bool(d.get("placeholder")),
         }
+
+        # ⭐ THE READ/WRITE FACTS, CARRIED THROUGH (project leadership, 2026-08-19: *"literally
+        # fix this all"*). The research already knows exactly how many places set, check and
+        # clear each flag -- the dossier's `evidence` block -- but only the PROSE was shipped,
+        # so `MapModel` had to decide "is this flag ever read?" by searching the sentence for
+        # the word "reads". The generator writes *"Nothing ever reads it back -- a leftover."*
+        # for a write-only flag, so the negation was read as PROOF OF A READ and every
+        # write-only flag stayed un-gated. Leadership saw the result on Pokémon Tower 7F
+        # ("Rescued Mr Fuji 2") and called it: *"theres still tons of event flags that are
+        # write-only read-only unused or useless in some way."*
+        #
+        # Prose is not a data channel. These three integers are, and they cannot be negated.
+        ev = d.get("evidence") or {}
+        row["writes"] = int(ev.get("n_set", 0))    # places that SET it
+        row["reads"] = int(ev.get("n_check", 0))   # SCRIPT sites that check it
+        row["clears"] = int(ev.get("n_reset", 0))  # places that RESET it
+
+        # ⚠️ AND A SCRIPT CHECK IS NOT THE ONLY WAY A FLAG IS READ. `tableRefs` counts references
+        # from DATA TABLES -- overwhelmingly `trainer EVENT_BEAT_..._TRAINER_n` inside a map's
+        # trainer-header list, which the engine reads generically in `TalkToTrainer` /
+        # `CheckFightingMapTrainers` rather than from any script.
+        #
+        # This matters enormously: **287 flags have no script sites at all and are read purely
+        # through those tables**, and every one of them is a real, useful edit -- clearing one
+        # re-arms that trainer's battle. Gating on `reads == 0` alone would have hidden all 287
+        # (project leadership, 2026-08-19: *"if there functional and useable and stuff then keep
+        # them"*). Another 66, like the Viridian Gym trainers, are written by a script AND read
+        # through a table, and would have been hidden for the same wrong reason.
+        row["tableRefs"] = int(ev.get("n_data", 0))
         if d.get("caution"):
             row["caution"] = d["caution"]
         rows.append(row)
@@ -244,6 +273,21 @@ def main():
         assert r["byte"] == EV_START + r["ind"] // 8 and r["bit"] == r["ind"] % 8
         for mn in r["maps"]:
             assert mn in valid, f"invalid map {mn}"
+        # The counts must agree with the classification they are supposed to replace: a flag
+        # pret marks `unused` is one nothing sets, checks or clears. A check that can fail.
+        if "unused" in r["classification"] and not r["placeholder"]:
+            assert (r["writes"] == 0 and r["reads"] == 0 and r["clears"] == 0
+                    and r["tableRefs"] == 0), (
+                f"flag {r['ind']} is classified unused but has "
+                f"writes={r['writes']} reads={r['reads']} clears={r['clears']} "
+                f"tableRefs={r['tableRefs']}")
+
+    # The table-driven class must not be empty, or the field is silently doing nothing and 287
+    # real flags would gate themselves away. A check that can fail. @see row["tableRefs"].
+    table_only = [r for r in rows if r["tableRefs"] > 0 and r["reads"] == 0]
+    assert len(table_only) > 200, (
+        f"only {len(table_only)} table-read flags found -- the `data` ref kind is missing from "
+        "event_usage.json, and gating on reads alone would hide every trainer flag")
 
     fixed = [r for r in rows
              if (p := old_by_ind.get(r["ind"])) and r["pretName"]

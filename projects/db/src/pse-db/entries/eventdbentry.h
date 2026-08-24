@@ -56,6 +56,28 @@ struct DB_AUTOPORT EventDBEntry : public QObject {
   Q_PROPERTY(bool getPlaceholder READ getPlaceholder CONSTANT) ///< Unused padding bit.
   Q_PROPERTY(bool getShared READ getShared CONSTANT)        ///< Lives on more than one map.
 
+  // ⭐ THE READ/WRITE FACTS. How many places in the shipped game SET, CHECK and CLEAR this bit.
+  //
+  // ⚠️ These exist so nothing has to infer it from the DESCRIPTION again. The model used to
+  // answer *"is this flag ever read?"* by searching the prose for the word "reads" -- and the
+  // generator writes *"Nothing ever reads it back — a leftover."* for a write-only flag, so the
+  // NEGATION counted as proof of a read and every write-only flag stayed un-gated (leadership
+  // found it on Pokémon Tower 7F, 2026-08-19). A sentence can be negated; a count cannot.
+  //
+  // `getReads() == 0` is the one that decides "useless": a flag the game writes and never looks
+  // at cannot affect anything you play.
+  Q_PROPERTY(int getWrites READ getWrites CONSTANT)  ///< Script sites that SET this bit.
+  Q_PROPERTY(int getReads READ getReads CONSTANT)    ///< Script sites that CHECK it.
+  Q_PROPERTY(int getClears READ getClears CONSTANT)  ///< Script sites that RESET it.
+
+  /// References from DATA TABLES -- almost all `trainer EVENT_BEAT_..._TRAINER_n` in a map's
+  /// trainer-header list, which the engine reads generically instead of any script reading it.
+  ///
+  /// ⚠️ **A SCRIPT CHECK IS NOT THE ONLY WAY A FLAG IS READ.** 335 flags are read only this way,
+  /// and every one is a real edit — clearing one re-arms that trainer's battle. Judging
+  /// "write-only" from @ref getReads alone would hide all of them.
+  Q_PROPERTY(int getTableRefs READ getTableRefs CONSTANT)
+
 public:
   const QString getName() const; ///< @see getName property.
   int getInd() const;            ///< @see getInd property.
@@ -68,6 +90,15 @@ public:
   const QString getCaution() const; ///< @see getCaution property.
   bool getPlaceholder() const;      ///< @see getPlaceholder property.
   bool getShared() const;           ///< @see getShared property.
+  int getWrites() const;            ///< @see getWrites property.
+  int getReads() const;             ///< @see getReads property.
+  int getClears() const;            ///< @see getClears property.
+  int getTableRefs() const;         ///< @see getTableRefs property.
+
+  /// Does the shipped game ever LOOK at this bit -- by script check or through a data table?
+  /// The one question the "is this edit useless?" decision turns on. Unknown (a data file
+  /// predating the counts) answers **true**: never hide a flag because the facts are missing.
+  bool isEverRead() const;
   /// What this flag IS: used / unused / temporary / placeholder / block-swept / ...
   const QVector<QString> getClassification() const;
 
@@ -105,6 +136,14 @@ protected:
   bool placeholder = false; // unused padding bit (no code presence at all)
   bool shared = false;      // lives on more than one map
   QVector<QString> classification; // used / unused / temporary / block-swept / ...
+
+  // The read/write facts. -1 means "this events.json predates them", which is NOT the same as 0
+  // ("the game never does this") -- and the difference matters, because 0 reads is what hides a
+  // flag. An older file must not silently hide half the list, so unknown is treated as "in use".
+  int writes = -1;
+  int reads = -1;
+  int clears = -1;
+  int tableRefs = -1;
 
   friend class EventsDB; ///< Owning DB constructs/populates entries.
 };

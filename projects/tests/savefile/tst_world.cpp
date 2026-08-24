@@ -60,6 +60,7 @@ private slots:
   void events_roundTrip();
   void events_everyEntryIsAtItsCanonicalBit();
   void events_writeExactlyTheirBit();
+  void events_isEverRead_countsTableReadsNotJustScriptChecks();
   void towns_roundTrip();
   void trades_roundTrip();
   void completed_roundTrip();
@@ -189,6 +190,74 @@ void TestWorld::events_everyEntryIsAtItsCanonicalBit()
              qPrintable(QStringLiteral("event %1 (%2): bit %3, expected %4")
                           .arg(ind).arg(e->getName()).arg(e->getBit()).arg(ind % 8)));
   }
+}
+
+/**
+ * "Is this flag ever read?" must be a FACT, and it must count the game's data tables.
+ *
+ * ⚠️ TWO REGRESSIONS ARE PINNED HERE, and they pull in opposite directions.
+ *
+ * 1. It used to be decided by searching the DESCRIPTION for "reads" / "read back" / "checked".
+ *    The dossier generator writes *"Nothing ever reads it back"* for a write-only flag, so the
+ *    sentence that says a flag is never read contains the word "reads" — the negation counted as
+ *    proof of a read, and every write-only flag stayed on screen. (Leadership found it on Pokémon
+ *    Tower 7F: "Rescued Mr Fuji 2", 2026-08-19.)
+ *
+ * 2. Counting only SCRIPT checks is just as wrong the other way. 335 flags — every
+ *    "Beat <map> Trainer n" — have no script check at all: the engine reads them from the map's
+ *    trainer-header TABLE. They are entirely real edits (clear one and that trainer battles you
+ *    again), so a `reads == 0` rule would hide 335 useful controls to gate 19 useless ones.
+ *
+ * Both directions are asserted, with named witnesses, so neither can come back alone.
+ */
+void TestWorld::events_isEverRead_countsTableReadsNotJustScriptChecks()
+{
+  const auto& store = EventsDB::inst()->getStore();
+  QVERIFY2(!store.isEmpty(), "no events loaded -- this test would pass vacuously");
+
+  auto at = [&store](int ind) -> const EventDBEntry* {
+    for(const auto* e : store) if(e->getInd() == ind) return e;
+    return nullptr;
+  };
+
+  // The facts have to be PRESENT. -1 means the data file predates them, and every assertion
+  // below would then be measuring the fallback rather than the data.
+  const EventDBEntry* fuji2 = at(281);      // "Rescued Mr Fuji 2" -- set once, never looked at
+  const EventDBEntry* fuji  = at(1231);     // "Rescued Mr Fuji"   -- read by three other maps
+  const EventDBEntry* tower = at(275);      // "Beat Pokemontower 7 Trainer 0" -- table-read only
+  QVERIFY(fuji2 != nullptr && fuji != nullptr && tower != nullptr);
+  for(const auto* e : { fuji2, fuji, tower })
+    QVERIFY2(e->getReads() >= 0 && e->getTableRefs() >= 0,
+             "events.json is missing the read/write counts -- regenerate it");
+
+  // 1. Write-only really is write-only, however its description is phrased.
+  QCOMPARE(fuji2->getReads(), 0);
+  QCOMPARE(fuji2->getTableRefs(), 0);
+  QVERIFY2(!fuji2->isEverRead(), "a set-once-never-checked flag must read as never-read");
+
+  // 2. A data-table reference IS a read. This is the half that protects 335 real controls.
+  QCOMPARE(tower->getReads(), 0);
+  QVERIFY2(tower->getTableRefs() > 0, "the trainer-header table reference was not counted");
+  QVERIFY2(tower->isEverRead(),
+           "a trainer flag read through the map's trainer table must NOT read as never-read");
+
+  // 3. An ordinary script-checked flag is unaffected.
+  QVERIFY2(fuji->getReads() > 0 && fuji->isEverRead(), "a script-checked flag must read as read");
+
+  // And the table-read class must be POPULATED -- if the importer ever stops carrying it, the
+  // assertions above still pass one by one while 300+ flags quietly vanish from the panel.
+  int tableRead = 0;
+  for(const auto* e : store)
+    if(e->getReads() == 0 && e->getTableRefs() > 0) tableRead++;
+  QVERIFY2(tableRead > 200,
+           qPrintable(QStringLiteral("only %1 table-read flags -- the trainer flags would all "
+                                     "gate themselves away").arg(tableRead)));
+
+  // ⚠️ The "unknown counts answer in-use" path is NOT asserted here, and deliberately so rather
+  // than silently: `EventDBEntry`'s constructors are protected (only `EventsDB` builds them), so
+  // a blank entry cannot be made from a test. The behaviour lives in one place — the `-1`
+  // defaults on the members plus the early return in `isEverRead()` — and reaching it would need
+  // a fixture events.json without the fields, which is a bigger rig than the risk warrants.
 }
 
 /// Keystone: toggling ONE event flag moves EXACTLY its own byte in the whole 32 KB save --

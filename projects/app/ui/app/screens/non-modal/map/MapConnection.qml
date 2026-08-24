@@ -38,6 +38,11 @@ Item {
   /// Which edge this is -- MapDBEntryConnect::ConnectDir (N 0, S 1, E 2, W 3).
   required property int dir
 
+  /// Reachable by name from the DEBUG harness, like every other model-built control on this screen
+  /// (`dockBtn_<id>`, `missableSwitch_<n>`). Without it a connection could only be dragged by
+  /// guessing screen coordinates — which is exactly how the drag bug below went unverified.
+  objectName: "mapConn" + conn.dir
+
   /// The edit info AND the strip geometry, both from the SAVE's live connection (connectionEditList
   /// now carries `stripX/Y/W/H` + `hasStrip`, computed from the save's map + offset via the macro).
   /// ⚠️ NOT connectionList() / connStripFor — that walks the map's *shipped* DB connections, so an
@@ -213,10 +218,29 @@ Item {
 
     property bool moved: false
 
+    // ⚠️ MEASURE IN A FRAME THAT DOES NOT MOVE (fixed 2026-08-19). project leadership:
+    // *"connections move around super glitchy and choppy, clicking and dragging just jerks it all
+    // over the place its almost impossible to use without manually working with the numbers in
+    // details."* — and that is a feedback loop, not a smoothness problem.
+    //
+    // `m.x`/`m.y` are LOCAL to this MouseArea, which fills `conn` — and `conn.x/y` are the strip's
+    // own position, so **the item slides out from under the cursor the moment the offset changes**.
+    // Drag right: offset goes up, the item moves right, the pointer's LOCAL x therefore goes DOWN,
+    // the computed delta shrinks, the offset is written back smaller, the item moves left... every
+    // frame, in both directions. The jerking IS the oscillation.
+    //
+    // So the press point and every sample are taken in the PARENT's space, which is fixed while the
+    // strip moves inside it. `blockPx` is already zoom-scaled, so the arithmetic is unchanged.
+    // MapSprite has always done this (`mapToItem(ghost.parent, …)`); this one was the odd file out.
+    function axisIn(m) {
+      const p = drag.mapToItem(conn.parent, m.x, m.y);
+      return conn.horizontal ? p.x : p.y;
+    }
+
     onPressed: (m) => {
       conn.canvas.selectedConnection = conn.dir;
       conn.baseOffset = conn.edge.offset;
-      conn.pressPos = conn.horizontal ? m.x : m.y;
+      conn.pressPos = drag.axisIn(m);
       drag.moved = false;
       m.accepted = true;
     }
@@ -224,7 +248,7 @@ Item {
     onPositionChanged: (m) => {
       if (!drag.pressed) return;
 
-      const cur = conn.horizontal ? m.x : m.y;
+      const cur = drag.axisIn(m);
       const dpx = cur - conn.pressPos;
       if (!drag.moved && Math.abs(dpx) < 4) return;
       drag.moved = true;

@@ -645,6 +645,30 @@ is the half that stops the two systems bleeding into each other.
 > many phases as needed, ensure this reaches the completion i asked for in full in as many phases
 > needed."*
 
+### ✅ Done (2026-08-19, second pass — the board worked down)
+
+- **#20 Hide empty sections** — CONFIRMED, not assumed: every section gates on `list.length > 0`
+  (verified in the QML at 5 sites and live — `storageTrades([148])` is empty, so the heading does
+  not render), and the test-battle switch is behind **Debug**. Details' "This map, right now" now
+  takes its heading *and* its divider with it when every gate inside is shut.
+- **#25 Maker tools place legit values** — a placed warp takes a real (map, warp) pair from this
+  map's OWN doors; a sign takes a random one of this map's sign texts; a person takes one of its
+  PERSON texts (never a placard's). Legit by construction, not validated after the fact.
+- **#26 "Characters safe" indoors** — the rule was already right (verified: 72 safe in an empty
+  Poké Center, 22 after nine walkers). What was missing was any sign of WHICH rule applied; one
+  adaptive line now says so.
+- **#27 Border ring = dead zone** — a **replacement** palette inside `render()`, after the palette
+  pass, driven by the Border layer. Plus the `sourceChanged` bug that made the toggle do nothing.
+- **#32 Always-on-bike renders** — the game's own `red_bike.png`, and **construction sets the flag
+  correctly** (Cycling Road only), without which the sprite would have drawn an incoherent save.
+- **#36 Connections** — shared map selector, hex pointers, **"Manual control"**, ROM jargon out of
+  the blurbs. ⚠️ One sub-item unresolved: *"use the Pokédex-style friendly string function for any
+  expanded text"* — `friendlyText` is a game-text codec and these are numbers; **needs a word.**
+- **#43 Arriving-at warp** — the destination's landing spots, named, with the full range one
+  "Something else…" away.
+- **The connection drag** (new, reported this day) — measured in the moving item's own coordinates,
+  so it fought itself. Fixed; 90 px now moves exactly 4 blocks.
+
 ### ✅ Done (2026-08-19)
 
 **The bug under the bug report.** *"Some filter flags like Rocket 1 wont appear if toggled but Rocket

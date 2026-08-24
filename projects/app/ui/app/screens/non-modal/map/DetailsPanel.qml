@@ -480,7 +480,17 @@ Item {
         // ⚠️ notes/reference/area-map-state.md. Two durable levers (script step + run-on-load, always
         // on bike), one derived value kept in sync by default (the camera), and two reset-on-load
         // scratch fields behind the "Useless edits" toggle. Every value full-range, hack included.
-        Rectangle { Layout.fillWidth: true; Layout.topMargin: 6; height: 1; color: brg.settings.dividerColor }
+        // ⚠️ A GATED-EMPTY SECTION TAKES ITS HEADING AND ITS DIVIDER WITH IT (§11b, at section
+        // scale). Everything under "This map, right now" is now behind a gate — the live step and
+        // its override behind Tinkerer, the reset-on-load scratch behind "!" — so with both shut
+        // this would otherwise be a title, a rule, and nothing at all.
+        Rectangle {
+          Layout.fillWidth: true
+          Layout.topMargin: 6
+          height: 1
+          color: brg.settings.dividerColor
+          visible: areaState.hasAnything
+        }
 
         ColumnLayout {
           id: areaState
@@ -490,11 +500,15 @@ Item {
 
           property bool rawScript: false   // the script "Something else…" disclosure
 
+          /// Is there a single row to show? The OR of the gates its own contents sit behind.
+          readonly property bool hasAnything: brg.map.showTinkerer || brg.map.showScratch
+
           Label {
             text: qsTr("This map, right now")
             font.bold: true
             font.pixelSize: 12
             Layout.fillWidth: true
+            visible: areaState.hasAnything
           }
 
           // ⚠️ THE PROGRESSION STATE PICKER IS NOT HERE. It lives in World / Persistent Storage.
@@ -512,22 +526,78 @@ Item {
           // sent them looking in the first place ("the world says pallet town is daisy current step
           // but the map details panel says default"), so the two are now named apart and each says
           // which byte it is.
-          // ── Current state step (the LIVE script byte) ────────────────────────────────────────
-          Label {
+          //
+          // ══ THE LIVE STEP + ITS OVERRIDE — ONE GROUP, BEHIND THE TINKERER GATE ═══════════════
+          //
+          // ⭐ CONSOLE-VERIFIED BEFORE BUILDING (project leadership, 2026-08-19: *"If you are 100%
+          // sure and confident that the use_cur_map_script is the only way to use curMapScript and
+          // your 100% sure otherwise that even if the user sets that value it would be overwritten
+          // on load if useCurMapScript is still not set … Make sure this is correct before doing
+          // it."*). It is correct, and the cartridge said so — `scripts/emu/probe_cur_map_script.py`,
+          // Route 12, two mirror-image runs:
+          //
+          //   override CLEAR → we wrote live 0x00 / stored 0x03 and read live **0x03**
+          //                    (the stored byte overwrote the live one; editing it keeps NOTHING)
+          //   override SET   → we wrote live 0x00 / stored 0x03 and read stored **0x00**
+          //                    (the live byte won, and propagated INTO the stored byte)
+          //
+          // The mechanism is `ExecuteCurMapScriptInTable` (home/trainers.asm): every scripted map's
+          // wrapper hands it the map's STORED byte, and it uses that unless BIT_USE_CUR_MAP_SCRIPT
+          // is set — a one-shot bit `res`'d the instant it is read, and set in exactly ONE place in
+          // the whole game (TalkToTrainer, mid trainer-engagement).
+          //
+          // So these two are ONE value with the game's own switch between them, and a save resting
+          // on a desync is a state the console erases on the first tick. That is why they live
+          // together, here (not in World, which holds the durable per-map byte), behind **Tinkerer**
+          // — real, honoured, and unnatural to rest in. @see plans/map-screen.md §11b.
+          ColumnLayout {
+            id: liveStep
             Layout.fillWidth: true
-            Layout.topMargin: 2
-            text: qsTr("Current state step — the loaded map's live byte")
-            font.pixelSize: 11
-            color: brg.settings.textColorMid
+            Layout.topMargin: 4
+            spacing: 6
+
+            // The whole group rides ONE gate — no row inside it carries a second one (§11b).
+            visible: brg.map.showTinkerer
+
+            Label {
+              Layout.fillWidth: true
+              text: qsTr("The step running right now")
+              font.pixelSize: 11
+              font.bold: true
+              color: brg.settings.textColorMid
+            }
+
+            Label {
+              Layout.fillWidth: true
+              wrapMode: Text.Wrap
+              font.pixelSize: 10
+              opacity: 0.6
+              text: qsTr("The map keeps its own progress in World; this is the working copy the game "
+                         + "makes of it while you stand here. Normally the game copies the World "
+                         + "value over this one the moment the map runs, so changing it on its own "
+                         + "changes nothing — unless you also turn on the switch below, which makes "
+                         + "the game use this value once and write it back to World.")
+            }
           }
 
+          // (No second heading here — the group above already says what this is. It used to read
+          //  "Current state step — the loaded map's live byte", which was a byte-name apology for
+          //  two controls that looked identical; naming the group properly retires it.)
+
           // Descriptive picker when this map has named steps…
+          //
+          // ⚠️ AND A PLAIN NUMBER BOX WHEN IT DOESN'T, which is what leadership saw and read as a
+          // removal (*"why did you remove the selection picker originally there for the map state
+          // step"* … *"maybe the current map state doesn't always have options is why i saw a map
+          // without it"* — exactly right). Only 97 maps have a script at all; the rest have no named
+          // steps to offer, so the control degrades to the raw byte rather than showing an empty
+          // dropdown. @see mapHasScriptList.
           ComboBox {
             id: curScriptCombo
             Layout.fillWidth: true
             Layout.preferredHeight: 30
             font.pixelSize: 12
-            visible: brg.map.mapHasScriptList && !areaState.rawScript
+            visible: liveStep.visible && brg.map.mapHasScriptList && !areaState.rawScript
             model: { details.revision; return brg.map.mapScriptList(); }
             textRole: "name"
             valueRole: "value"
@@ -584,7 +654,7 @@ Item {
           RowLayout {
             Layout.fillWidth: true
             spacing: 6
-            visible: !brg.map.mapHasScriptList || areaState.rawScript
+            visible: liveStep.visible && (!brg.map.mapHasScriptList || areaState.rawScript)
             Label { text: qsTr("Step"); font.pixelSize: 10; opacity: 0.6 }
             SpinBox {
               Layout.fillWidth: true
@@ -600,7 +670,7 @@ Item {
 
           // The "Something else…" link only when there IS a named list to step out of.
           Label {
-            visible: brg.map.mapHasScriptList
+            visible: liveStep.visible && brg.map.mapHasScriptList
             text: areaState.rawScript ? qsTr("Pick from the list") : qsTr("Something else…")
             font.pixelSize: 10
             color: brg.settings.accentColor
@@ -611,12 +681,15 @@ Item {
             }
           }
 
+          // ⭐ THE SWITCH THAT MAKES THE STEP ABOVE MEAN ANYTHING. Same group, same gate — it is
+          // half of one idea, not a neighbouring setting. (BIT_USE_CUR_MAP_SCRIPT.)
           RowLayout {
             Layout.fillWidth: true
             spacing: 8
+            visible: liveStep.visible
             Label {
               Layout.fillWidth: true
-              text: qsTr("Run this state step on load")
+              text: qsTr("Use this step instead, once")
               font.pixelSize: 12
               wrapMode: Text.Wrap
             }
@@ -631,19 +704,16 @@ Item {
           // Worth keeping the reason: a button that only navigates somewhere else is not editing
           // anything, and this panel is for editing. The rail already has a World button one click
           // away, permanently, in a fixed place. One short line of context is enough.
+          // ONE closing line for the pair. The old two ("The stage that sets this lives in World." +
+          // a second paragraph about the switch) said the same thing twice and split one idea across
+          // two footnotes; the group's own blurb carries it now.
           Label {
             Layout.fillWidth: true
             Layout.topMargin: 2
-            text: qsTr("The stage that sets this lives in World.")
-            wrapMode: Text.Wrap
-            font.pixelSize: 10
-            opacity: 0.55
-          }
-
-          Label {
-            Layout.fillWidth: true
-            text: qsTr("Runs the step above on the next map load instead of the map's default. On a "
-                       + "scripted map the game consumes it on the first tick; on a quiet map it sticks.")
+            visible: liveStep.visible
+            text: qsTr("Checked on the console: with the switch off the game replaces this with "
+                       + "World's value the moment the map runs; with it on, this value is used "
+                       + "once and becomes World's value.")
             wrapMode: Text.Wrap
             font.pixelSize: 10
             opacity: 0.55
@@ -1316,64 +1386,32 @@ Item {
         }
 
         // ── Neighbour ──────────────────────────────────────────────────────────────────────
+        //
+        // ⭐ THE SHARED MAP SELECTOR (project leadership, 2026-08-19: *"the neighbour map id should
+        // use the shared MapSelectList"* — the arrow's ADD picker already did; this editor was the
+        // last bespoke map list on the screen). So it gains sort, search and the same grouped rows
+        // as every other map list in the app, instead of a one-off ComboBox with its own delegate.
+        //
+        // What the bespoke list did better is kept, not lost: the map the cartridge really connects
+        // to this edge rides at the top as a `leadingEntries` row, because no sort can know that.
         Label { text: qsTr("Connects to"); font.pixelSize: 11; color: brg.settings.textColorMid }
-        ComboBox {
-          id: connMap
+        MapField {
           Layout.fillWidth: true
           Layout.preferredHeight: 30
-          font.pixelSize: 12
-          model: details.hasConnection ? brg.map.connectionMapList(details.connection) : []
-          textRole: "name"
-          valueRole: "value"
-          currentIndex: {
+
+          value: details.connEdge.toMap !== undefined ? details.connEdge.toMap : 0
+
+          leadingEntries: {
             details.revision;
-            const list = model;
-            for (let i = 0; i < list.length; i++)
-              if (list[i].value === details.connEdge.toMap) return i;
-            return -1;
+            if (!details.hasConnection) return [];
+            const l = brg.map.connectionMapList(details.connection);
+            for (let i = 0; i < l.length; i++)
+              if (l[i].isDefault === true)
+                return [{ ind: l[i].value, name: l[i].name, group: l[i].group, size: l[i].size }];
+            return [];
           }
-          onActivated: brg.map.setConnectionMap(details.connection, currentValue)
 
-          // Default ★ first, then the maps that fit this edge, then the rest; size grey on the right.
-          delegate: ItemDelegate {
-            required property var modelData
-            required property int index
-            width: connMap.width
-            height: (modelData.group !== "" ? 20 : 0) + 26
-            highlighted: connMap.highlightedIndex === index
-
-            contentItem: ColumnLayout {
-              spacing: 0
-              Text {
-                visible: modelData.group !== ""
-                Layout.fillWidth: true
-                text: modelData.group
-                font.pixelSize: 10; font.bold: true
-                color: brg.settings.textColorMid
-              }
-              RowLayout {
-                Layout.fillWidth: true
-                spacing: 6
-                Text {
-                  visible: modelData.isDefault === true
-                  text: "★"; font.pixelSize: 11; color: "#e69f00"
-                }
-                Text {
-                  Layout.fillWidth: true
-                  text: modelData.name
-                  font.pixelSize: 12
-                  font.bold: modelData.isDefault === true
-                  color: brg.settings.textColorDark
-                  elide: Text.ElideRight
-                }
-                Text {
-                  text: modelData.size
-                  font.pixelSize: 10; font.family: "monospace"
-                  color: brg.settings.textColorMid
-                }
-              }
-            }
-          }
+          onPicked: (ind) => brg.map.setConnectionMap(details.connection, ind)
         }
 
         // ── Offset (the one real knob) ───────────────────────────────────────────────────────
@@ -1475,11 +1513,16 @@ Item {
               font.bold: true
               opacity: 0.55
             }
+            // ⭐ "MANUAL CONTROL", NOT "BREAK SYNC" (project leadership, 2026-08-19: *"break sync
+            // becomes manual control"*). "Break" names the damage rather than the capability, and
+            // reads like something you'd be warned against; what the switch actually gives you is
+            // the wheel. It is also the word the 🔧 gate that reveals this section already uses, so
+            // the two now say the same thing.
             Switch {
-              text: qsTr("Break sync")
+              text: qsTr("Manual control")
               font.pixelSize: 10
               checked: details.connRawEditable
-              enabled: connRaw.connSynced   // already desynced: always editable, switch moot
+              enabled: connRaw.connSynced   // already on manual: always editable, switch moot
               onToggled: details.connBreakSync = checked
             }
           }
@@ -1487,9 +1530,11 @@ Item {
           Label {
             Layout.fillWidth: true
             text: details.connRawEditable
-                  ? qsTr("Editing these sets bytes directly — the offset above no longer describes the "
-                         + "connection until you pick a neighbour or offset again.")
-                  : qsTr("These follow the offset above. Turn on “Break sync” to set them by hand.")
+                  ? qsTr("You are setting these by hand — the offset above no longer describes the "
+                         + "connection until you pick a neighbour or an offset again. The map "
+                         + "redraws as you change them.")
+                  : qsTr("These follow the offset above. Turn on “Manual control” to set them "
+                         + "yourself.")
             wrapMode: Text.Wrap
             font.pixelSize: 10
             opacity: 0.55
@@ -1509,11 +1554,34 @@ Item {
                 opacity: 0.7
                 elide: Text.ElideRight
               }
+
+              // ⭐ AN ADDRESS IS NOT A QUANTITY (project leadership: *"strip src/dst and the view
+              // pointer shown as hex pointers"*). Three of these eight are memory addresses, and
+              // showing "50923" where the game means `$C6EB` is a small lie about what the value
+              // is — you cannot match it against anything, and the digits carry no structure.
+              // Typing is hex too, so what you read is what you write.
+              TextField {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 26
+                font.pixelSize: 10
+                font.family: "monospace"
+                visible: modelData.kind === "pointer"
+                enabled: details.connRawEditable
+                text: "$" + ("0000" + modelData.value.toString(16).toUpperCase()).slice(-4)
+                onEditingFinished: {
+                  const v = parseInt(text.replace(/^[$#]|^0x/i, ""), 16);
+                  if (!isNaN(v))
+                    brg.map.setConnectionField(details.connection, modelData.key,
+                                               Math.max(0, Math.min(0xFFFF, v)));
+                }
+              }
+
               SpinBox {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 26
                 font.pixelSize: 10
                 editable: true
+                visible: modelData.kind !== "pointer"
                 enabled: details.connRawEditable
                 from: modelData.min
                 to: modelData.max

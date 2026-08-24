@@ -341,6 +341,81 @@ ColumnLayout {
     }
   }
 
+  // ── arrival: the destination map's landing spots, NAMED ───────────────────────────────────
+  //
+  // ⭐ project leadership, 2026-08-19: *"Arriving at warp needs to offer destination map warps,
+  // preferably named well."* This was a bare 0–255 spinbox, which asked you to know how many
+  // landing spots a map you are NOT currently looking at happens to have — the one question the app
+  // is in a position to answer for you. Now each row reads *"2 — Viridian City, at (17, 5)"*.
+  //
+  // The options come from the model (`MapModel::arrivalOptions`) rather than being assembled here,
+  // so the numbering and the resolution of `$FF` ("back outside" → `wLastMap`) are the SAME code
+  // that labels the chip on the canvas. Two places computing arrival numbers separately is how they
+  // come to disagree.
+  //
+  // Same shape as the flyMap/dungeonMap controls: the real list by default, the full byte range one
+  // "Something else…" away — because pointing past the end IS a legal edit, and being able to set
+  // one up deliberately is the point of this editor.
+  ColumnLayout {
+    Layout.fillWidth: true
+    Layout.bottomMargin: 6
+    visible: field.kind === "arrival"
+    spacing: 3
+
+    readonly property var spots: field.fieldData.options || []
+
+    ComboBox {
+      Layout.fillWidth: true
+      Layout.preferredHeight: 30
+      visible: !field.showAll
+      font.pixelSize: 11
+
+      model: parent.spots
+      textRole: "name"
+      valueRole: "value"
+
+      currentIndex: {
+        const list = model;
+        for (let i = 0; i < list.length; i++)
+          if (list[i].value === field.value)
+            return i;
+        return -1;
+      }
+
+      onActivated: field.commit(currentValue)
+
+      // Both empty cases are real answers, not blank combos: a destination with no landing spots at
+      // all, and a value that points past the ones it has (which the console reads as garbage).
+      displayText: (model && model.length > 0)
+                   ? (currentIndex >= 0 ? currentText
+                                        : qsTr("%1 — past the end of the list").arg(field.value))
+                   : qsTr("— this destination has no arrival points —")
+    }
+
+    SpinBox {
+      Layout.fillWidth: true
+      Layout.preferredHeight: 28
+      visible: field.showAll
+      font.pixelSize: 11
+      editable: true
+      from: 0
+      to: 255
+      value: field.value
+      onValueModified: field.commit(value)
+    }
+
+    Label {
+      Layout.fillWidth: true
+      text: field.showAll ? qsTr("Pick from the list") : qsTr("Something else…")
+      font.pixelSize: 10
+      color: brg.settings.accentColor
+      wrapMode: Text.Wrap
+
+      HoverHandler { cursorShape: Qt.PointingHandCursor }
+      TapHandler { onTapped: field.showAll = !field.showAll }
+    }
+  }
+
   // ── byte: the last resort ─────────────────────────────────────────────────────────────────
   SpinBox {
     Layout.fillWidth: true

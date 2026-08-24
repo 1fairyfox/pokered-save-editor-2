@@ -37,6 +37,7 @@
 #include <pse-db/db.h>
 #include <pse-db/mapsdb.h>
 #include <pse-db/entries/mapdbentry.h>
+#include <pse-db/entries/mapdbentrywarpout.h>
 #include <pse-savefile/savefile.h>
 #include <pse-savefile/expanded/savefileexpanded.h>
 #include <pse-savefile/expanded/area/area.h>
@@ -255,10 +256,22 @@ void TestWarps::moveWarp_clampsToTheMap()
 }
 
 /**
- * @brief A new door means "back outside", because that is what a door usually is.
+ * @brief A new door goes somewhere REAL — and the test now says so.
  *
- * `$FF` (LAST_MAP) is also the one destination that is **always valid** -- it resolves through
- * `wLastMap` instead of naming a map that may have no arrival point with that index.
+ * ⚠️ THIS USED TO ASSERT "always `$FF`, back outside" (renamed from
+ * `addWarp_defaultsToBackOutside`, 2026-08-19). That was true, always valid, and always
+ * IDENTICAL — so the maker tool produced a row of the same door you then had to edit one by one.
+ * project leadership: *"Placing a warp or sign using the tool needs to also randomize the text id
+ * or warp place or something, **all legit values**."*
+ *
+ * The contract now: the destination is drawn from THIS map's own doors as the cartridge ships
+ * them, so the target map exists AND has an arrival point at that index — legit by construction,
+ * with no validation of ours. `$FF` (which resolves through `wLastMap`, and is the one destination
+ * valid everywhere) remains the fallback for a map whose own doors we cannot read.
+ *
+ * So the assertion is on the PROPERTY, not on one value: whatever it picked has to be somewhere
+ * the console has an answer for. That is the thing worth pinning, and it does not care which of
+ * the map's doors the roll happened to land on.
  */
 void TestWarps::addWarp_defaultsToBackOutside()
 {
@@ -270,13 +283,30 @@ void TestWarps::addWarp_defaultsToBackOutside()
   const QVariantMap d = r->map->warpAt(ind);
   QCOMPARE(d.value("x").toInt(), 4);
   QCOMPARE(d.value("y").toInt(), 5);
-  QCOMPARE(d.value("destMap").toInt(), kReturnMap);
-  QVERIFY(d.value("isReturn").toBool());
+
   QVERIFY2(d.value("destValid").toBool(),
            "a brand-new door is pointing somewhere the console has no answer for");
+  QVERIFY2(!d.value("destName").toString().isEmpty(),
+           "a brand-new door cannot name its destination");
 
-  // And it says so in words, naming the map you'd actually come out in.
-  QVERIFY(d.value("destName").toString().contains(QStringLiteral("back outside")));
+  // Whichever it chose, it has to be one this map really uses -- or the always-valid `$FF`.
+  const int destMap = d.value("destMap").toInt();
+  if (destMap != kReturnMap) {
+    MapDBEntry* m = MapsDB::inst()->getStoreAt(r->map->mapInd());
+    QVERIFY(m != nullptr);
+
+    bool fromThisMapsOwnDoors = false;
+    for (MapDBEntryWarpOut* wo : m->getWarpOut()) {
+      if (wo != nullptr && wo->getToMap() != nullptr
+          && int(wo->getToMap()->getInd()) == destMap
+          && wo->getWarp() == d.value("destWarp").toInt()) {
+        fromThisMapsOwnDoors = true;
+        break;
+      }
+    }
+    QVERIFY2(fromThisMapsOwnDoors,
+             "a placed warp's destination is not one of this map's own -- it was invented");
+  }
 
   delete r;
 }
@@ -373,6 +403,12 @@ void TestWarps::returnDoor_resolvesThroughLastMap()
 
   const int ind = r->map->addWarp(3, 3);
   QVERIFY(ind >= 0);
+
+  // ⚠️ A PLACED WARP IS NO LONGER GUARANTEED TO BE A `$FF` DOOR (2026-08-19) — it now takes a real
+  // destination from this map's own doors, so this test has to MAKE one rather than assume it got
+  // one. @see addWarp_defaultsToBackOutside for the change and why.
+  r->map->setWarpField(ind, QStringLiteral("destMap"), kReturnMap);
+  QCOMPARE(r->map->warpAt(ind).value("destMap").toInt(), kReturnMap);
 
   r->map->setLastMap(0);   // PALLET_TOWN
   const QString pallet = r->map->warpAt(ind).value("destName").toString();

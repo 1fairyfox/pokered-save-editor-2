@@ -100,10 +100,15 @@ QPixmap MapProvider::requestPixmap(const QString& id, QSize* size, const QSize& 
   QRgb outPal[4];
   MapEngine::outputPaletteFor(mapInd, tilesetInd, outPal);
 
+  // parts[9]: is the Border guide layer on? It no longer paints an overlay -- it decides whether
+  // the ring is drawn in its own DEAD-ZONE palette. Absent (a neighbour-map render, a screenshot
+  // of the raw map) means off, i.e. exactly what a console draws. @see MapEngine::render.
+  const bool deadZoneRing = (parts.size() > 9) && parts.at(9) == QStringLiteral("1");
+
   const auto buffer = MapEngine::buildOverworldMap(mapInd, borderBlock,
                                                    haveConns ? &saveConns : nullptr);
   const QImage img = MapEngine::render(buffer, tilesetInd, frame, contrast, tileAnim, blocksetInd,
-                                       outPal);
+                                       outPal, deadZoneRing);
 
   // No block data (a glitch map id) -- there is nothing in ROM to draw.
   if (img.isNull())

@@ -157,8 +157,20 @@ Item {
 
         // ── 1. SAFE HERE ─────────────────────────────────────────────────────────────────────
         //
-        // No shelves, no ceremony. These are the characters this map has already loaded, so the
-        // game draws them properly. It is the list you want almost every time, so it is first.
+        // No shelves, no ceremony. These are the characters the game would draw properly if you
+        // dropped them here. It is the list you want almost every time, so it is first.
+        //
+        // ⚠️ "SAFE" MEANS TWO DIFFERENT THINGS, AND THE LINE UNDERNEATH SAYS WHICH (2026-08-19,
+        // project leadership: *"Characters safe needs to update if the map is indoors, i think all
+        // characters are allowed then."* — right, and worth spelling out). **Outdoors** a map loads
+        // a fixed set of 10 pictures chosen in ROM, and anything outside it draws as garbage no
+        // matter how empty the map is. **Indoors there is no set at all**: the cast IS the set, so
+        // every character is allowed until the video memory runs out — 10 walking + 2 still slots.
+        // That is why the list starts as all 72 in a quiet building and shrinks as you fill it.
+        //
+        // The rule itself was already right (`MapModel::pictureWouldRenderIfAdded`, grounded in
+        // map_sprites.asm, and verified live: 72 safe in an empty Poké Center, 22 after nine
+        // distinct walkers). What was missing was any sign of WHICH rule you were under.
         Label {
           Layout.fillWidth: true
           Layout.bottomMargin: 2
@@ -167,6 +179,25 @@ Item {
           font.bold: true
           opacity: 0.55
           visible: bar.safeHere.length > 0
+        }
+
+        Label {
+          Layout.fillWidth: true
+          Layout.bottomMargin: 4
+          visible: bar.safeHere.length > 0
+          // `mapIsIndoors` is Q_INVOKABLE, not a property, so it needs the call AND `bar.revision`
+          // to make the binding re-run on a map change (a plain call has no dependency of its own).
+          text: {
+            bar.revision;
+            return brg.map.mapIsIndoors()
+              ? qsTr("Indoors any character is allowed — the only limit is room for their "
+                     + "pictures, so this list shrinks as you add more.")
+              : qsTr("Outdoors the map loads a fixed set of pictures; only these will draw "
+                     + "properly, however much space is left.");
+          }
+          font.pixelSize: 10
+          opacity: 0.55
+          wrapMode: Text.Wrap
         }
 
         GridLayout {

@@ -59,6 +59,12 @@ EventDBEntry::EventDBEntry(QJsonValue& data)
   caution = data["caution"].toString();
   placeholder = data["placeholder"].toBool(false);
   shared = data["shared"].toBool(false);
+  // -1 when the field is absent (an older events.json), which must NOT be read as "0 reads".
+  // @see the members' comment: unknown is treated as in-use, never as useless.
+  writes = data["writes"].toInt(-1);
+  reads = data["reads"].toInt(-1);
+  clears = data["clears"].toInt(-1);
+  tableRefs = data["tableRefs"].toInt(-1);
   for(auto c : data["classification"].toArray())
     classification.append(c.toString());
 }
@@ -179,6 +185,38 @@ bool EventDBEntry::getPlaceholder() const
 bool EventDBEntry::getShared() const
 {
     return shared;
+}
+
+int EventDBEntry::getWrites() const
+{
+    return writes;
+}
+
+int EventDBEntry::getReads() const
+{
+    return reads;
+}
+
+int EventDBEntry::getClears() const
+{
+    return clears;
+}
+
+int EventDBEntry::getTableRefs() const
+{
+    return tableRefs;
+}
+
+bool EventDBEntry::isEverRead() const
+{
+    // Unknown (< 0) means the data file predates these counts. Answer TRUE: a missing fact must
+    // never be the reason a real flag disappears from the panel.
+    if(reads < 0 || tableRefs < 0)
+        return true;
+
+    // A script that checks it, OR a data table the engine reads it through -- a `trainer` entry
+    // in a map's header list is every bit as real a read as an `if` in a script.
+    return reads > 0 || tableRefs > 0;
 }
 
 const QVector<QString> EventDBEntry::getClassification() const
