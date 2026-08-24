@@ -41,6 +41,8 @@
 
 #include <pse-db/mapsdb.h>
 #include <pse-db/mapstatesdb.h>
+#include <pse-db/eventsdb.h>
+#include <pse-db/entries/eventdbentry.h>
 #include <pse-db/entries/mapdbentry.h>
 #include <pse-db/entries/mapdbentrywarpin.h>
 #include <pse-db/entries/mapdbentrywarpout.h>
@@ -438,6 +440,165 @@ QVariantMap MapModel::stateAt(const QString& id, int mapIndArg) const
   m[QStringLiteral("eventsCleared")] = int(st->cleared.size());
   m[QStringLiteral("badges")] = st->badges;
   return m;
+}
+
+QVariantMap MapModel::stateCoherence(int mapIndArg) const
+{
+  QVariantMap out;
+  out[QStringLiteral("hasBlueprint")] = false;
+  out[QStringLiteral("coherent")] = true;
+  out[QStringLiteral("id")] = QString();
+  out[QStringLiteral("name")] = QString();
+  out[QStringLiteral("events")] = 0;
+  out[QStringLiteral("missables")] = 0;
+  out[QStringLiteral("badges")] = 0;
+  out[QStringLiteral("total")] = 0;
+  out[QStringLiteral("summary")] = QString();
+
+  const int ind = mapIndArg < 0 ? mapInd() : mapIndArg;
+  const auto* bp = MapStatesDB::inst()->at(ind);
+  if (bp == nullptr || worldAll == nullptr)
+    return out;
+
+  out[QStringLiteral("hasBlueprint")] = true;
+
+  // ⚠️ ONLY WHEN WE ACTUALLY KNOW WHICH STAGE THIS IS. `currentStateId()` never answers "don't
+  // know" — failing everything else it returns the BEST-SCORING stage, which is a useful thing for a
+  // picker to show and a terrible thing to raise an alarm about. A guess disagreeing with itself is
+  // not a defect in the save, and saying "this doesn't match" would be crying wolf on the very first
+  // panel somebody opens. (The `dungeonWarpDestMap` and fossil lessons, again: legal != armed.)
+  //
+  // So: report a mismatch only when the stage was determined by EVIDENCE or an EXACT match.
+  const QString id = evidenceOrExactRestingId(bp, worldAll, map, mapInd());
+  if (id.isEmpty())
+    return out;
+
+  const auto* st = bp->stage(id);
+  if (st == nullptr || !st->hasSave)
+    return out;                    // a raw step / transient carries no block to disagree with
+
+  out[QStringLiteral("id")] = st->id;
+  out[QStringLiteral("name")] = st->name;
+
+  // ⚠️ COUNT, DO NOT WRITE. This asks the same questions `applyState` answers by assignment, and
+  // answers none of them -- it is the "is this save actually in the stage it says it is?" check, and
+  // reporting is the whole of its job. The offer to fix it is a separate, deliberate act.
+  int evWrong = 0, misWrong = 0, badgeWrong = 0;
+
+  // ⭐ AND IT NAMES THEM. A count alone ("2 event flags differ") tells somebody that something is
+  // wrong and nothing about what — which is the shape of an alarm rather than an offer. The names
+  // are what make it possible to decide whether the difference is a mistake or the point.
+  QVariantList wrongNames;
+  auto nameEvent = [&](int ind, bool wantSet) {
+    EventDBEntry* e = EventsDB::inst()->getStoreAt(ind);
+    QVariantMap n;
+    n[QStringLiteral("ind")] = ind;
+    n[QStringLiteral("kind")] = QStringLiteral("event");
+    n[QStringLiteral("name")] = (e == nullptr) ? tr("Event %1").arg(ind) : e->getName();
+    n[QStringLiteral("shouldBe")] = wantSet ? tr("on") : tr("off");
+    wrongNames.append(n);
+  };
+
+  // ⚠️ `ev.owned` ONLY — the same rule `stageMatches()` uses, and leaving it out was a real bug that
+  // the fixture save caught immediately. A stage's block lists every flag that is TRUE at that point
+  // in the story, including plenty set by other maps entirely; those are not this map's to hold or to
+  // correct. Counting them made BaseSAV report three "mismatches" in Pallet Town for flags Pallet
+  // Town never writes — and "Make them match" would then have reached across the world and set them.
+  if (worldAll->events != nullptr) {
+    for (const auto& ev : st->set)
+      if (ev.owned && !worldAll->events->eventsAt(ev.ind)) { evWrong++; nameEvent(ev.ind, true); }
+    for (const auto& ev : st->cleared)
+      if (ev.owned && worldAll->events->eventsAt(ev.ind)) { evWrong++; nameEvent(ev.ind, false); }
+  }
+
+  // ⚠️ `missablesAt` answers "is it HIDDEN?", not "is it shown" — the bit being SET means hidden.
+  // Getting this backwards would report every coherent map as broken and every broken one as fine.
+  if (worldAll->missables != nullptr) {
+    for (const auto& mis : st->missables)
+      if (worldAll->missables->missablesAt(mis.ind) != mis.hide)
+        misWrong++;
+  }
+
+  if (basics != nullptr && bp->getBadgeUniverse() != 0) {
+    for (int bit = 0; bit < 8; ++bit) {
+      if (!(bp->getBadgeUniverse() & (1u << bit)))
+        continue;
+      if (basics->badgeAt(bit) != st->badges.contains(badgeNames().at(bit)))
+        badgeWrong++;
+    }
+  }
+
+  const int total = evWrong + misWrong + badgeWrong;
+  out[QStringLiteral("events")] = evWrong;
+  out[QStringLiteral("missables")] = misWrong;
+  out[QStringLiteral("badges")] = badgeWrong;
+  out[QStringLiteral("total")] = total;
+  out[QStringLiteral("coherent")] = (total == 0);
+
+  // Plain English, and it counts THINGS rather than naming bytes. Three separate kinds so the
+  // sentence says which part of the world disagrees, not just that something does.
+  // ⚠️ NOT `tr("%n thing(s)", nullptr, n)`. Qt's plural form needs a TRANSLATION to choose between
+  // forms; with no .qm loaded it hands back the source string verbatim, so the app literally shows
+  // "3 event flag(s)". Write both forms out.
+  if (total > 0) {
+    QStringList parts;
+    if (evWrong > 0)
+      parts << (evWrong == 1 ? tr("1 event flag") : tr("%1 event flags").arg(evWrong));
+    if (misWrong > 0)
+      parts << (misWrong == 1 ? tr("1 object shown or hidden")
+                              : tr("%1 objects shown or hidden").arg(misWrong));
+    if (badgeWrong > 0)
+      parts << (badgeWrong == 1 ? tr("1 badge") : tr("%1 badges").arg(badgeWrong));
+    out[QStringLiteral("summary")] = parts.join(tr(", "));
+  }
+  out[QStringLiteral("names")] = wrongNames;
+
+  return out;
+}
+
+void MapModel::makeStateCoherent(int mapIndArg)
+{
+  const int ind = mapIndArg < 0 ? mapInd() : mapIndArg;
+  const QVariantMap c = stateCoherence(ind);
+  if (!c.value(QStringLiteral("hasBlueprint")).toBool()
+      || c.value(QStringLiteral("coherent")).toBool())
+    return;
+
+  const auto* bp = MapStatesDB::inst()->at(ind);
+  const auto* st = (bp == nullptr) ? nullptr
+                                   : bp->stage(c.value(QStringLiteral("id")).toString());
+  if (st == nullptr || !st->hasSave || worldAll == nullptr)
+    return;
+
+  // ⚠️ IT FIXES EXACTLY WHAT THE BOX COUNTED — NOT MORE. The obvious implementation is to call
+  // `applyState()` on the stage it is already in, and that is WRONG here: `applyState` writes the
+  // stage's WHOLE block, including the flags other maps own, while the box only ever counted the
+  // ones this map owns. A button that says "3 event flags differ" and then reaches across the world
+  // to write a dozen more is the exact kind of surprise this project treats as a defect. Same
+  // predicate, same writes, both directions.
+  if (worldAll->events != nullptr) {
+    for (const auto& ev : st->set)
+      if (ev.owned)
+        worldAll->events->eventsSet(ev.ind, true);
+    for (const auto& ev : st->cleared)
+      if (ev.owned)
+        worldAll->events->eventsSet(ev.ind, false);
+  }
+
+  // The quiet form: hiding an object is two writes (the bit AND the slot's picture id), and a stage
+  // can move dozens at once -- one `changed()` at the end, not one per flag. @see applyState.
+  for (const auto& mis : st->missables)
+    setMissableShownQuiet(mis.ind, !mis.hide);
+
+  if (basics != nullptr && bp->getBadgeUniverse() != 0) {
+    for (int bit = 0; bit < 8; ++bit) {
+      if (!(bp->getBadgeUniverse() & (1u << bit)))
+        continue;                  // a badge no stage of this map touches is not ours to move
+      basics->badgeSet(bit, st->badges.contains(badgeNames().at(bit)));
+    }
+  }
+
+  emit changed();
 }
 
 void MapModel::applyState(const QString& id, int mapIndArg)

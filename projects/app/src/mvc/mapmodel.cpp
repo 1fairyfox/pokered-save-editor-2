@@ -245,6 +245,41 @@ QString MapModel::source() const
        + "/" + QString::number((shownLayers & MapEngine::LayerBorder) != 0 ? 1 : 0);
 }
 
+QString MapModel::mapImageSource(int ind) const
+{
+  MapDBEntry* m = MapsDB::inst()->getStoreAt(ind);
+  if (m == nullptr)
+    return QString();
+
+  // ⭐ THE LOADED MAP IS SHOWN AS THE CANVAS SHOWS IT -- the SAVE's ring, not the ROM's. The strip
+  // destination points into OUR border ring, so the picker's grid and the map behind it must be the
+  // same picture: the edited connections, the bled-in neighbours, the lot. Handing back the ROM's
+  // plain border block instead would draw a ring that is *nearly* right, which is worse than one
+  // that is obviously a reference -- you would be aiming at a square that is not the square you get.
+  if (ind == mapInd())
+    return source();
+
+  // ⚠️ THE MAP AS THE ROM HAS IT, not as this save has it. This draws a map the player is not
+  // standing in -- a neighbour, for the pointer picker -- so every byte comes from that map's own DB
+  // entry: its tileset, its blockset, its border block, its own connections. Reusing the LOADED
+  // save's tileset here would paint the neighbour in our colours, which is a lie about where the
+  // pointer lands. Frame 0 (still), and no border-layer flag: this is a reference grid, not the
+  // live canvas.
+  auto* ts = m->getToTileset();
+  const int tsInd = (ts == nullptr) ? tilesetInd() : ts->ind;
+
+  return "image://map/" + QString::number(ind)
+       + "/" + QString::number(tsInd)
+       + "/0"                                                  // frame -- still
+       + "/" + QString::number(contrast())
+       + "/" + QString::number(tileAnim())
+       + "/" + QString::number(tsInd)                          // blockset: the map's own
+       + "/" + QString::number(qMax(0, m->getBorder()))        // the map's own ring filler
+       + "/" + QString::number(MapEngine::paletteGeneration())
+       + "/-"                                                  // the ROM's own ring, not the save's
+       + "/0";
+}
+
 QVariantList MapModel::connectionList() const
 {
   QVariantList out;
@@ -720,6 +755,147 @@ void MapModel::setConnectionField(int dir, const QString& key, int value)
   connectionsWereEdited = true;
   map->connectionsChanged();
   changed();
+}
+
+// ── The three pointers, told as places ────────────────────────────────────────
+//
+// Everything below is one idea: **not one of these addresses is free-floating.** Each is a base plus
+// an index into a grid this app already draws, and the engine has always composed them that way --
+// `MapEngine::viewPointer` builds one out of a block coordinate, `c.srcAddr = to->getDataPtr() + blk`
+// builds another, and `destIndex = stripDst - overworldMapAddr` already takes a third apart. All this
+// does is run that arithmetic backwards so a handle or a picker can drive it.
+//
+// See notes/reference/map-connections.md for where each base comes from (78/78 verified).
+
+namespace {
+
+/// Which grid a pointer key indexes, and how wide that grid is. `mapInd` is the map whose grid it is;
+/// `ring` says whether the 3-block border counts (a ring's stride is the map's width + 6).
+struct PointerGrid {
+  bool valid = false;
+  int  base = 0;        ///< the address the index counts from
+  int  mapInd = -1;     ///< whose grid
+  bool ring = false;    ///< map + border (stride W+6), or the bare map (stride W)
+  int  gridW = 0;       ///< the grid's width in blocks, border included when `ring`
+  int  gridH = 0;
+};
+
+} // namespace
+
+QVariantMap MapModel::pointerPlace(int dir, const QString& key) const
+{
+  QVariantMap m;
+  m["valid"] = false;
+  m["key"] = key;
+  m["ptr"] = 0; m["base"] = 0; m["index"] = 0;
+  m["row"] = 0; m["col"] = 0;
+  m["gridW"] = 0; m["gridH"] = 0; m["gridMapInd"] = -1;
+  m["gridName"] = QString(); m["gridKind"] = QString();
+  m["inRange"] = false; m["where"] = QString();
+
+  if (!connectionExists(dir))
+    return m;
+
+  MapConnData* c = map->connections.value((var8)dir);
+  if (c == nullptr)
+    return m;
+
+  // The neighbour, whose width is the stride for two of the three grids.
+  MapDBEntry* to = MapsDB::inst()->getStoreAt(c->mapPtr);
+  MapDBEntry* cur = MapEngine::sourceMap(mapInd());
+
+  PointerGrid g;
+  int ptr = 0;
+
+  if (key == QLatin1String("stripSrc")) {
+    // The neighbour's BLOCK DATA in ROM -- its bare map grid, no border (the border ring is a WRAM
+    // thing; a map's blocks in ROM are exactly W*H).
+    if (to == nullptr || to->getWidth() < 1)
+      return m;
+    ptr = c->stripSrc;
+    g = { true, to->getDataPtr(), c->mapPtr, false, to->getWidth(), to->getHeight() };
+  }
+  else if (key == QLatin1String("stripDst")) {
+    // OUR border ring: the buffer the strip lands in. Stride is our width + both borders.
+    if (cur == nullptr || cur->getWidth() < 1)
+      return m;
+    ptr = c->stripDst;
+    g = { true, MapEngine::overworldMapAddr, mapInd(), true,
+          cur->getWidth()  + 2 * MapEngine::mapBorder,
+          cur->getHeight() + 2 * MapEngine::mapBorder };
+  }
+  else if (key == QLatin1String("viewPtr")) {
+    // The NEIGHBOUR's ring -- where the camera is parked once you have crossed and their map is the
+    // one loaded. Same buffer address, their stride.
+    if (to == nullptr || to->getWidth() < 1)
+      return m;
+    ptr = c->viewPtr;
+    g = { true, MapEngine::overworldMapAddr, c->mapPtr, true,
+          to->getWidth()  + 2 * MapEngine::mapBorder,
+          to->getHeight() + 2 * MapEngine::mapBorder };
+  }
+  else {
+    return m;                                   // not a pointer field
+  }
+
+  if (!g.valid || g.gridW < 1)
+    return m;
+
+  // ⚠️ FLOOR DIVISION, NOT C'S TRUNCATION. A pointer can legitimately sit *below* its base (a hand-
+  // edited one certainly can), and `-1 / stride` truncating toward zero would report row 0 for an
+  // address that is a whole row above the buffer. That is the difference between "just off the top"
+  // and "fine", and it is exactly the case somebody poking at these wants to see honestly.
+  const int index = ptr - g.base;
+  const int row = (index >= 0) ? (index / g.gridW)
+                               : -(((-index) + g.gridW - 1) / g.gridW);
+  const int col = index - row * g.gridW;
+
+  const bool inRange = (row >= 0 && row < g.gridH && col >= 0 && col < g.gridW);
+
+  MapDBEntry* gm = MapsDB::inst()->getStoreAt(g.mapInd);
+  const QString gname = (gm == nullptr) ? tr("an unknown map") : gm->getName();
+
+  m["valid"] = true;
+  m["ptr"] = ptr;
+  m["base"] = g.base;
+  m["index"] = index;
+  m["row"] = row;
+  m["col"] = col;
+  m["gridW"] = g.gridW;
+  m["gridH"] = g.gridH;
+  m["gridMapInd"] = g.mapInd;
+  m["gridName"] = gname;
+  m["gridKind"] = g.ring ? QStringLiteral("ring") : QStringLiteral("map");
+  m["inRange"] = inRange;
+
+  // The one-line readout that sits beside the hex. Says the place, and says plainly when the address
+  // has left the grid -- which is allowed, and worth knowing.
+  const QString gridWords = g.ring ? tr("%1's border ring").arg(gname)
+                                   : tr("%1's own blocks").arg(gname);
+  m["where"] = inRange
+      ? tr("row %1, column %2 of %3").arg(row).arg(col).arg(gridWords)
+      : tr("row %1, column %2 — outside %3").arg(row).arg(col).arg(gridWords);
+
+  return m;
+}
+
+void MapModel::setPointerPlace(int dir, const QString& key, int row, int col)
+{
+  const QVariantMap p = pointerPlace(dir, key);
+  if (!p.value("valid").toBool())
+    return;
+
+  const int gridW = p.value("gridW").toInt();
+  const int gridH = p.value("gridH").toInt();
+  if (gridW < 1 || gridH < 1)
+    return;
+
+  // Clamp to the grid: a handle cannot be dragged off the thing it indexes. (Typing a raw address that
+  // lands outside is still allowed -- that goes through setConnectionField, which refuses nothing.)
+  const int r = qBound(0, row, gridH - 1);
+  const int cc = qBound(0, col, gridW - 1);
+
+  setConnectionField(dir, key, p.value("base").toInt() + r * gridW + cc);
 }
 
 // ── The sprite set ("the cached sprites") ─────────────────────────────────────
@@ -2633,6 +2809,69 @@ static QString pretTokensToCodec(QString s)
   return s;
 }
 
+/// The one glyph whose font entry is NOT named with an angle-bracket token. Index **240** is the game's
+/// money sign; `font.json` calls it `$` and gives its `alias` as the *word* "Pokédollar", so neither
+/// half of the symmetric rule below can reach it. pret writes it in text as `¥`. Kept as an explicit
+/// pair -- and it is exact, because a literal `$` appears **nowhere** in the 738 text entries (counted).
+static const QString kMoneyGlyph = QStringLiteral("¥");   // ¥
+static const QString kMoneyName  = QStringLiteral("$");
+
+/// ⭐ THE OTHER HALF OF THE ADAPTER, AND THE ONE THAT WAS EATING CHARACTERS.
+///
+/// `expandStr` is a codec keyed on each font entry's **`name`**. For a glyph that is a real character
+/// -- `é`, `♀`, `…`, `×` -- the name is the angle-bracket *token* and the character itself lives in
+/// **`alias`**. So the codec cannot read the character back in: `convertToCode` finds no entry, skips
+/// it, and the character is **deleted**. That is not a rounding error, it is silent data loss, and it
+/// was on screen:
+///
+///     POKéMON  ->  POKMON          (é, 329 occurrences in maps.json)
+///     ¥500     ->  500             (¥,   6 occurrences)
+///     POKé BALL -> POK BALL
+///
+/// This is the exact mirror of @ref fontTokensToCharacters, which already turns the tokens back into
+/// characters on the way OUT. Running both makes the trip lossless.
+///
+/// ⚠️ **`singleChar` ONLY, and a one-character alias only.** The multi-character aliases are a trap:
+/// `<poke>`'s alias is `Poké`, and code 0x54 *expands* to `POK<e>` -- so feeding it a literal "Poké"
+/// would come back **case-changed**. Restricting to single characters removes the ambiguity entirely
+/// (nothing to order by length, nothing to case-fold) and still covers every non-ASCII character the
+/// corpus actually contains: a census of all 738 text entries found exactly `é`, `¥` and `\n`.
+///
+/// ⚠️ **NOT IN THE CODEC.** `convertToCode` is what the trainer/rival name editors validate against;
+/// teaching it to accept aliases would change which characters those accept. Same reasoning, and the
+/// same boundary, as @ref pretTokensToCodec.
+static QString charactersToCodec(QString s)
+{
+  // alias (one real character) -> the codec's name for it. Built once; font.json never changes.
+  static const QHash<QString, QString> table = [] {
+    QHash<QString, QString> t;
+    for (auto* g : FontsDB::inst()->getStore()) {
+      if (g == nullptr || !g->getSingleChar())
+        continue;
+
+      const QString token = g->getName();
+      const QString alias = g->getAlias();
+
+      if (alias.size() != 1 || alias.at(0).unicode() < 128)
+        continue;                                 // plain ASCII already round-trips
+      if (token.size() < 3 || !token.startsWith(QLatin1Char('<')))
+        continue;
+
+      t.insert(alias, token);
+    }
+    t.insert(kMoneyGlyph, kMoneyName);
+    return t;
+  }();
+
+  if (std::none_of(s.cbegin(), s.cend(), [](QChar c) { return c.unicode() > 127; }))
+    return s;                                     // the overwhelmingly common case, for free
+
+  for (auto it = table.cbegin(); it != table.cend(); ++it)
+    s.replace(it.key(), it.value());
+
+  return s;
+}
+
 /// ⭐ THE LAST STEP, AND THE ONE THAT WAS MISSING: turn the game's font TOKENS into real characters.
 ///
 /// Project leadership, 2026-08-18: *"The sign still reads as JUNE`<f>` ... i just want the stupid
@@ -2655,6 +2894,10 @@ static QString pretTokensToCodec(QString s)
 /// has no space in it — which is why "Poké" and "……" pass and "Bold E" and "Player Name" do not.
 static QString fontTokensToCharacters(QString s)
 {
+  // The money sign comes back as its font NAME (`$`), not a token -- @see kMoneyGlyph. It is the one
+  // pair that has to be undone by hand, and it is done first so the early-out below cannot skip it.
+  s.replace(kMoneyName, kMoneyGlyph);
+
   if (!s.contains(QLatin1Char('<')))
     return s;                                   // the overwhelmingly common case, for free
 
@@ -2705,11 +2948,13 @@ QString MapModel::friendlyText(const QString& raw, bool keepLines) const
   QStringList out;
   out.reserve(lines.size());
 
-  // pret's CAPS tokens -> the codec's names -> the game's own expansion -> real characters.
-  // The last step is the one that turns "JUNE<f>" into "JUNE♀". @see fontTokensToCharacters
+  // pret's CAPS tokens -> real characters the codec can't read -> the codec's names -> the game's own
+  // expansion -> real characters again. The two adapters around the codec are mirrors of each other,
+  // and running BOTH is what makes the trip lossless: `charactersToCodec` protects the `é` in POKéMON
+  // and the `¥` in ¥500 on the way in, `fontTokensToCharacters` turns `<f>` back into ♀ on the way out.
   for (const QString& line : lines)
-    out.append(fontTokensToCharacters(
-        FontsDB::inst()->expandStr(pretTokensToCodec(line), 255, rivalName, playerName)));
+    out.append(fontTokensToCharacters(FontsDB::inst()->expandStr(
+        charactersToCodec(pretTokensToCodec(line)), 255, rivalName, playerName)));
 
   // The two presentations, one conversion: keep the game's breaks for something that wraps, or
   // flatten them to " / " for a row that has one line to work with.
@@ -3988,7 +4233,18 @@ QVariantList MapModel::mapTextList() const
   // into this map's text-pointer table, so "Text 3" means nothing on its own; "Text 3 — Fisher 2"
   // is a thing you can actually choose. (project leadership: "Text id needs to reference whatever it's
   // supposed to... it needs to show real data.")
-  QMap<int, QString> named;
+  // ⭐ PEOPLE AND SIGNS ARE SAID APART (project leadership, 2026-08-19: *"better naming for 'a sign',
+  // with a divider below the NPCs"*). Both were mixed into one id-ordered list, and a sign's row read
+  // literally **"a sign"** — lowercase filler sitting among proper names like "Fisher 2", which makes
+  // it look like a placeholder rather than a real choice.
+  //
+  // Now: the people first, then a heading, then the signs — the same `header`-on-the-first-row
+  // mechanism `signTextList()` and the item picker already use, so it groups the way every other
+  // list on this screen does. And a sign is named by **what it says**, which is the one thing about a
+  // sign you cannot get any other way (and which we can now resolve — @see friendlyText).
+  QMap<int, QString> people;
+  QMap<int, QString> signs;
+  QMap<int, int>     signCount;
 
   for (int i = 0; i < m->getSpritesSize(); i++) {
     const MapDBEntrySprite* s = m->getSpritesAt(i);
@@ -4000,8 +4256,8 @@ QVariantList MapModel::mapTextList() const
       continue;
 
     // Two characters can share a script (the game does it). Say so rather than picking a winner.
-    named[id] = named.contains(id) ? tr("%1, %2").arg(named[id], s->getSprite())
-                                   : s->getSprite();
+    people[id] = people.contains(id) ? tr("%1, %2").arg(people[id], s->getSprite())
+                                     : s->getSprite();
   }
 
   for (int i = 0; i < m->getSignsSize(); i++) {
@@ -4013,8 +4269,18 @@ QVariantList MapModel::mapTextList() const
     if (id <= 0)
       continue;
 
-    named[id] = named.contains(id) ? tr("%1, a sign").arg(named[id]) : tr("a sign");
+    // Its own words, elided to one line. Several signs can share a text id — count them rather than
+    // printing the identical sentence twice, which would tell you nothing and cost a row.
+    signCount[id]++;
+    if (!signs.contains(id)) {
+      const QString words = signTextPreview(s->getTextID());
+      signs[id] = words.isEmpty() ? tr("a sign") : words;
+    }
   }
+
+  for (auto it = signCount.constBegin(); it != signCount.constEnd(); ++it)
+    if (it.value() > 1)
+      signs[it.key()] = tr("%1  (on %2 signs)").arg(signs.value(it.key())).arg(it.value());
 
   // ⚠️ ONLY THE SCRIPTS THIS MAP REALLY HAS.
   //
@@ -4024,8 +4290,19 @@ QVariantList MapModel::mapTextList() const
   // click away and reaches every one of the 64, so nothing is lost except the noise.
   ret.append(option(0, tr("Nothing to say")));
 
-  for (auto it = named.constBegin(); it != named.constEnd(); ++it)
-    ret.append(option(it.key(), tr("%1 — %2").arg(it.key()).arg(it.value())));
+  bool firstOfSection = true;
+  for (auto it = people.constBegin(); it != people.constEnd(); ++it) {
+    QVariantMap row = option(it.key(), tr("%1 — %2").arg(it.key()).arg(it.value()));
+    if (firstOfSection) { row["header"] = tr("People"); firstOfSection = false; }
+    ret.append(row);
+  }
+
+  firstOfSection = true;
+  for (auto it = signs.constBegin(); it != signs.constEnd(); ++it) {
+    QVariantMap row = option(it.key(), tr("%1 — %2").arg(it.key()).arg(it.value()));
+    if (firstOfSection) { row["header"] = tr("Signs"); firstOfSection = false; }
+    ret.append(row);
+  }
 
   return ret;
 }
@@ -4146,12 +4423,18 @@ QVariantList MapModel::npcFields(int slot) const
   // (it sits under "Right now", behind the reloaded-values switch), the game always initialises it
   // to **8**, and **the mechanism is bugged**: it only ever checks one end of the range, so a sprite
   // can drift off the other way forever. We keep the bug, because it is the game.
+  // ⚠️ THE BLURB NOW SAYS WHERE THE DISTANCE *IS* (project leadership, 2026-08-19: *"Movement needs
+  // to have an option for wander length or something"*). The old wording said there is no "how far",
+  // which sent them looking for a control that does exist -- it is just live state, so it lives under
+  // "Right now" behind the reloaded-values switch. Saying "there isn't one" when there is, two groups
+  // down, is the kind of half-truth that costs somebody ten minutes.
   add(field(movement, "rangeDirByte", tr("Where they may go"),
-                   tr("Which way they are allowed to wander — and that is ALL this picks. There is "
-                      "no \"how far\": the game's distance limit is a separate value, it is always 8, "
-                      "and it is bugged (it only checks one side, so they can drift off the other "
-                      "way forever).\n\nFor somebody who doesn't walk, this same byte fixes which way "
-                      "they stand."),
+                   tr("Which way they are allowed to wander — an AXIS, and that is all this one "
+                      "picks.\n\nHow FAR they may wander is a different pair of numbers, further "
+                      "down under “Right now”: the game sets both to 8 when it loads the map, and "
+                      "the limit is bugged — it only checks one side, so they can drift off the "
+                      "other way forever. We keep the bug, because it is the game.\n\nFor somebody "
+                      "who doesn't walk, this same byte fixes which way they stand."),
                    s->getRangeDirByte(), 0, 255, "enum", movement2));
 
   const QVariantList facings = {
@@ -4255,14 +4538,18 @@ QVariantList MapModel::npcFields(int slot) const
                       "sprite finishes a step."),
                    s->movementDelay, 0, 255, "frames", {}, true));
 
-  add(field(live, "yDisp", tr("How far it has wandered, up/down"),
-                   tr("Meant to stop a sprite drifting away from where it started. It doesn't: the "
-                      "game only ever checks one end of the range, so a sprite can walk off in the "
-                      "other direction forever. The bug is in the cartridge and we keep it."),
+  // ⭐ THIS IS THE "WANDER LENGTH" — and it is named as one now, because that is what somebody is
+  // looking for when they come here. "How far it has wandered" described the byte; "how far they may
+  // wander" describes what it is FOR, which is the question that was actually asked.
+  add(field(live, "yDisp", tr("Wander limit, up/down"),
+                   tr("How far from where they started they are allowed to get, up and down. The "
+                      "game sets it to 8 every time it loads the map.\n\nIt does not work: the game "
+                      "only ever checks ONE end of the range, so they can drift off in the other "
+                      "direction forever. The bug is in the cartridge and we keep it."),
                    s->yDisp, 0, 255, "byte", {}, true));
 
-  add(field(live, "xDisp", tr("How far it has wandered, left/right"),
-                   tr("As above, and just as bugged."),
+  add(field(live, "xDisp", tr("Wander limit, left/right"),
+                   tr("The same, side to side — and just as bugged."),
                    s->xDisp, 0, 255, "byte", {}, true));
 
   // ── The drawing ────────────────────────────────────────────────────────────────────────────

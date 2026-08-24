@@ -109,6 +109,8 @@ private slots:
   void applyState_writesOnlyStateBytes();
   void roll_walksTheProgressionBothWays();
   void gymStage_movesItsBadge_andOnlyItsBadge();
+  void stateCoherence_countsOnlyWhatThisMapOwns();      // KEYSTONE
+  void makeStateCoherent_fixesExactlyWhatItCounted();    // KEYSTONE
   void changeMapConstructed_buildsTheDestination();
   void mapPreview_roundTripsByteExact();
 
@@ -319,6 +321,124 @@ void TestMapStates::applyState_writesOnlyStateBytes()
 
   // And the save now MATCHES the stage it was set to.
   QCOMPARE(r->map->currentStateId(-1), QStringLiteral("2"));
+
+  delete r;
+}
+
+/**
+ * @brief KEYSTONE. The coherence check counts only the flags THIS MAP owns, and only when the stage
+ *        was actually determined rather than guessed.
+ *
+ * Project leadership, 2026-08-19: *"…or at least have a box that offers to auto-update the filter and
+ * event flags to be correct."* This is the "is it correct?" half.
+ *
+ * Two ways to get it wrong, and the fixture save caught both:
+ *
+ * 1. **Ownership.** A stage's block lists every flag that is TRUE at that point in the story,
+ *    including plenty set by other maps. Counting those made Pallet Town report a mismatch for flags
+ *    Pallet Town never writes.
+ * 2. **Certainty.** `currentStateId()` never answers "don't know" — it falls back to the best-scoring
+ *    stage. Raising an alarm off a guess is crying wolf on the first panel somebody opens, so the
+ *    check only speaks when the stage came from evidence or an exact match.
+ *
+ * A cleanly-applied stage must be perfectly coherent — that is the strongest statement available,
+ * because `applyState` and `stateCoherence` then have to agree about every flag in the block.
+ */
+void TestMapStates::stateCoherence_countsOnlyWhatThisMapOwns()
+{
+  Rig* r = makeRig();
+
+  // A stage written by the app itself is BY DEFINITION the stage it is in.
+  r->map->applyState(QStringLiteral("2"), -1);
+  QVariantMap c = r->map->stateCoherence(-1);
+  QVERIFY2(c.value("hasBlueprint").toBool(), "Pallet Town has no blueprint -- the fixture moved");
+  QVERIFY2(c.value("coherent").toBool(),
+           qPrintable(QStringLiteral("a freshly-applied stage reported %1 mismatch(es): %2")
+                        .arg(c.value("total").toInt()).arg(c.value("summary").toString())));
+  QCOMPARE(c.value("total").toInt(), 0);
+  QVERIFY(c.value("names").toList().isEmpty());
+
+  // Break ONE flag this map owns, by hand, exactly as somebody would in the panel.
+  const auto* bp = MapStatesDB::inst()->at(r->map->mapInd());
+  QVERIFY(bp != nullptr);
+  const auto* st = bp->stage(QStringLiteral("2"));
+  QVERIFY(st != nullptr);
+
+  int ownedInd = -1;
+  for (const auto& ev : st->set)
+    if (ev.owned) { ownedInd = ev.ind; break; }
+  QVERIFY2(ownedInd >= 0, "stage 2 sets no flag Pallet Town owns -- nothing to break");
+
+  r->sf.dataExpanded->world->events->eventsSet(ownedInd, false);
+
+  c = r->map->stateCoherence(-1);
+  QVERIFY2(!c.value("coherent").toBool(), "clearing an owned flag was not noticed");
+  QCOMPARE(c.value("events").toInt(), 1);
+  QCOMPARE(c.value("total").toInt(), 1);
+
+  // It NAMES it, and says which way it should go. A bare count is an alarm; a name is a decision.
+  const QVariantList names = c.value("names").toList();
+  QCOMPARE(names.size(), 1);
+  QCOMPARE(names.first().toMap().value("ind").toInt(), ownedInd);
+  QCOMPARE(names.first().toMap().value("shouldBe").toString(), QStringLiteral("on"));
+  QVERIFY2(!names.first().toMap().value("name").toString().isEmpty(),
+           "the mismatched flag had no name to show");
+
+  // ⚠️ AND THE SUMMARY MUST NOT SAY "1 event flag(s)". Qt's `%n` plural needs a translation to pick
+  // a form; with no .qm loaded it returns the source string verbatim, brackets and all.
+  QCOMPARE(c.value("summary").toString(), QStringLiteral("1 event flag"));
+
+  delete r;
+}
+
+/**
+ * @brief KEYSTONE. The button fixes exactly what the box counted — no more.
+ *
+ * The obvious implementation is `applyState(currentStateId())`, and it is WRONG: that writes the
+ * stage's WHOLE block including the flags other maps own, while the box only ever counted this map's.
+ * A button that says "1 event flag differs" and then reaches across the world to write a dozen more
+ * is precisely the sort of surprise this project treats as a defect. Both directions, one predicate.
+ */
+void TestMapStates::makeStateCoherent_fixesExactlyWhatItCounted()
+{
+  Rig* r = makeRig();
+
+  r->map->applyState(QStringLiteral("2"), -1);
+  QVERIFY(r->map->stateCoherence(-1).value("coherent").toBool());
+
+  const auto* bp = MapStatesDB::inst()->at(r->map->mapInd());
+  const auto* st = bp->stage(QStringLiteral("2"));
+  int ownedInd = -1;
+  for (const auto& ev : st->set)
+    if (ev.owned) { ownedInd = ev.ind; break; }
+  QVERIFY(ownedInd >= 0);
+
+  r->sf.dataExpanded->world->events->eventsSet(ownedInd, false);
+  r->sf.flattenData();
+  const QByteArray before = snapshot(r->sf);
+
+  r->map->makeStateCoherent(-1);
+
+  r->sf.flattenData();
+  const QByteArray after = snapshot(r->sf);
+
+  QVERIFY2(r->map->stateCoherence(-1).value("coherent").toBool(),
+           "the fix did not actually make the save match the stage");
+
+  // It put back the ONE byte it took away, and touched nothing outside the state regions.
+  const QVector<int> moved = diffOffsets(before, after);
+  QVERIFY2(!moved.isEmpty(), "the fix wrote nothing at all");
+  for (int off : moved)
+    QVERIFY2(inAllowedApplyRegion(off),
+             qPrintable(QStringLiteral("the fix moved byte 0x%1 -- outside every state region")
+                          .arg(off, 4, 16, QChar('0'))));
+
+  // A save that already agrees is left completely alone — no "fix" is also a fix.
+  r->sf.flattenData();
+  const QByteArray settled = snapshot(r->sf);
+  r->map->makeStateCoherent(-1);
+  r->sf.flattenData();
+  QCOMPARE(snapshot(r->sf), settled);
 
   delete r;
 }

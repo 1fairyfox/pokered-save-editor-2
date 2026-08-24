@@ -1,5 +1,27 @@
 # UI Patterns
 
+## ⚠️ THE INVISIBLE-TEXT TRAP: `palette.text` is **#ffffff** here (2026-08-23)
+
+**Never write `color: palette.text` on this app's panels.** It resolves to **white**, and the panels
+are white — so the label renders *perfectly* and cannot be seen. Caught three times in one afternoon:
+both new pointer readouts on the map's Details panel, and the Characters panel's "Room for N more".
+
+What makes it expensive is how it *looks*. Invisible text is not blank space — the layout still
+reserves the height, and antialiasing leaves a faint ghost. So it reads as **a clipped sliver of
+text or an unexplained gap**, and the obvious diagnosis is a layout bug. Two separate investigations
+went into `Layout.preferredWidth`, `leftMargin` and delegate stretch before anyone asked the item
+what colour it had ended up:
+
+```
+app_get charsRoomLine height  ->  14        # correct
+app_get charsRoomLine text    ->  "Room for 12 more"   # correct
+app_get charsRoomLine color   ->  "#ffffff"            # ← there it is
+```
+
+**The rule:** a quiet label leaves `color` alone and dims with `opacity` — that is what every other
+label on these screens does. When a label genuinely needs a colour, write the literal (`"#000000"`,
+`"#c04a00"`). If a label is mysteriously missing, **query its `color` before touching the layout.**
+
 ## The two that keep coming back (read these first) — 2026-07-13
 
 Project leadership has reported both of these on **three separate passes**. Each time I fixed the one instance

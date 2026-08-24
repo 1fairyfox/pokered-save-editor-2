@@ -5,15 +5,58 @@ _Current state only._ For the chronological history of what changed each session
 [`reference/qt-patterns.md`](reference/qt-patterns.md) and [`decisions/`](decisions/architecture.md). For the
 commit-by-commit changelog see [`version.md`](version.md).
 
-**Version:** `0.44.19-alpha` — on `dev`, **awaiting leadership's in-app review, then "ship"**. (Previous
+**Version:** `0.45.0-alpha` — on `dev`, **awaiting leadership's in-app review, then "ship"**. (Previous
 release: `0.16.6-alpha`, shipped 2026-07-11.) Single source of truth: repo-root `VERSION`; see
-[`reference/versioning.md`](reference/versioning.md). `tst_map_sprites` 19/19; `tst_qml_screens` 28/28.
+[`reference/versioning.md`](reference/versioning.md). **Full suite 92/92 green.**
 
 ---
 
-## ▶ START HERE — the MAP SCREEN CLEANUP is the live work (2026-08-19, `0.44.19-alpha`)
+## ▶ START HERE — the map-screen cleanup board is CLEAR (2026-08-24, `0.45.0-alpha`)
 
-The board is [`plans/map-screen.md`](plans/map-screen.md) → **§11c**. Today:
+Everything project leadership raised across the 2026-08-18/19/24 run is closed. Today:
+[`sessions/2026-08/2026-08-24.md`](sessions/2026-08/2026-08-24.md). Board:
+[`plans/map-screen.md`](plans/map-screen.md) → **§11c**.
+
+### The three that mattered most today
+
+1. **The three connection addresses became PLACES.** None of `stripSrc` / `stripDst` / `viewPtr` is a
+   free-floating address — each is a base plus an index into a grid the app already draws, and the
+   engine has been composing them that way all along. So it now runs backwards too: a plain-English
+   readout under every pointer field, a **⊞** picker onto the grid it indexes, and a two-axis **✥**
+   grip on the canvas. Checked against the `map_connection` macro for all three of Pallet Town's north
+   pointers. → `MapModel::pointerPlace`, `reference/map-connections.md`.
+2. **`POKéMON` was rendering as `POKMON`, everywhere.** The text codec is keyed on each glyph's *name*,
+   and for a real character (`é`, `♀`, `…`, `×`) the name is the token while the character lives in
+   `alias` — so those characters were **silently deleted**. 329 é's and 6 ¥'s across the corpus;
+   `¥500` read as `500`. Fixed at the boundary (**not** in the codec, which the name editors validate
+   against); pinned by a sweep of every text entry of every map, negative-controlled at 248 losses.
+3. **"This save doesn't quite match this stage."** Applying a state already wrote all of it; the gap
+   was the reverse. There is now an amber offer that counts the disagreements, **names them**, and
+   waits. Two bugs caught before it shipped: it counted flags other maps own, and it raised an alarm
+   off the picker's best-guess fallback rather than a real determination.
+
+### Two rules that came out of it
+
+- **`palette.text` is `#ffffff` here.** Three labels were drawing white on white — perfectly, and
+  invisibly. It reads as a *clipped sliver of text*, so it looks like a layout bug; two investigations
+  went hunting for one that did not exist. **If a label is mysteriously missing, query its `color`
+  before touching the layout.** → [`reference/ui-patterns.md`](reference/ui-patterns.md) (top).
+- **The harness's `scroll` cannot reach a `ScrollView`, and fails silently** — it finds some other
+  Flickable, reports a plausible `contentY`, and moves nothing. Use a panel's own `diagScrollTo`, and
+  always confirm the shot actually changed. → [`reference/dev-harness.md`](reference/dev-harness.md).
+
+### Parked with a question, not a guess
+
+- **#42's depth** (*"a lot of different option configurations with sprites"*) — every byte the format
+  has is already exposed and named, so this wants a different *kind* of control, not more fields.
+- **#11's other half** (*"the current map state must be identified better"*) — about
+  `currentStateId()`'s determination itself, not the offer built here.
+- **#47** — leadership still thinking on it.
+
+---
+
+## The previous day (2026-08-19, `0.44.19-alpha`)
+
 [`sessions/2026-08/2026-08-19.md`](sessions/2026-08/2026-08-19.md).
 
 ### A bug report about one NPC was a save-fidelity bug about every map

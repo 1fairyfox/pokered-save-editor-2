@@ -1,5 +1,37 @@
 # Debug Automation Harness & Fast-Dev Loop
 
+## ⚠️ `scroll` CANNOT REACH A `ScrollView` — and it fails SILENTLY (2026-08-24)
+
+`scroll` walks the object tree looking for a `Flickable`. A `ScrollView`'s scrollable is its
+**`contentItem`**, not the ScrollView, so the walk sails past it and finds some *other* Flickable
+elsewhere on the screen. It then reports a perfectly plausible `contentHeight` / `contentY` — and
+**moves nothing**.
+
+That is the worst possible failure during a screenshot review: the call succeeds, the numbers look
+right, and you photograph the wrong part of the panel. It cost several rounds on the map's Details
+panel before anyone noticed the picture never changed.
+
+**The fix, and the pattern for any panel that needs it:** give the panel a small harness-visible
+method that scrolls its own scroller, and drive that instead.
+
+```qml
+/// Harness-visible: scroll the panel to a pixel offset, and report how far it can go.
+function diagScrollTo(y) {
+  if (scroller.contentItem === null) return -1;
+  const maxY = Math.max(0, scroller.contentItem.contentHeight - scroller.availableHeight);
+  scroller.contentItem.contentY = Math.max(0, Math.min(maxY, y));
+  return scroller.contentItem.contentY;
+}
+```
+
+```
+app_invoke mapDetails diagScrollTo 430
+app_shot   mapDetails
+```
+
+**And the sanity check that catches it:** after any `scroll`, take the shot and confirm the content
+actually moved. If two shots at different offsets look identical, you scrolled something else.
+
 ## `hover` — the pointer, no button (added 2026-07-17)
 
 ```json

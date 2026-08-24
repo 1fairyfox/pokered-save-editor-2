@@ -275,6 +275,32 @@ Item {
         color: brg.settings.textColorMid
       }
 
+      // ⚠️ TWO DIFFERENT MEANINGS OF "INDOOR" WERE COLLIDING (project leadership, 2026-08-19:
+      // *"In Pallett Town, the opening save file as it is, changing it to indoor keeps the list
+      // treated still as outdoor."*).
+      //
+      // They are right about what they saw, and the app is right too — which is exactly why it
+      // needed saying out loud. **This control is not about indoor-ness.** It is `sTileAnimations`
+      // (0x3522), whose three values are NONE / WATER / WATER+FLOWER; "Indoor / Cave / Outdoor" is a
+      // verified 1:1 rename of those (notes/reference/tiles.md). It decides what MOVES on the map.
+      //
+      // Whether a map loads a fixed sprite SET or each character's own artwork is decided by the
+      // **map id**, and nothing else: `InitOutsideMapSprites` (engine/overworld/map_sprites.asm) does
+      // `ld a, [wCurMap] / cp FIRST_INDOOR_MAP / ret nc` — the tileset is never consulted. So Pallet
+      // Town is an outdoor map however this is set, and the Characters panel is correct to say so.
+      //
+      // One line, so nobody has to discover that by experiment again.
+      Text {
+        Layout.fillWidth: true
+        Layout.preferredWidth: 0
+        wrapMode: Text.Wrap
+        text: qsTr("Changes what moves on the map. It doesn't change which characters this map can "
+                   + "draw — that follows the map itself.")
+        font.pixelSize: 10
+        opacity: 0.55
+        color: brg.settings.textColorDark
+      }
+
       ColumnLayout {
         id: animSection
         Layout.fillWidth: true

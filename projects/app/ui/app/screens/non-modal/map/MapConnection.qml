@@ -90,11 +90,20 @@ Item {
   property string gripDrag: ""
 
   /// Which grip is at (@p px, @p py) in this item's own coordinates, or "".
+  ///
+  /// ⚠️ ORDER MATTERS — the landing grip is tested FIRST because it sits at the strip's near corner,
+  /// where a generous hit box can overlap the width grip's on a short strip. First match wins, and
+  /// the one you are most likely to be reaching for should win.
   function gripAt(px, py) {
+    if (gripDest.hit(px, py))   return "stripDst";
     if (gripLength.hit(px, py)) return "stripWidth";
     if (gripWidth.hit(px, py))  return "width";
     return "";
   }
+
+  /// Per-axis hysteresis for the ONE grip that drags in two dimensions. @see gripDest.
+  property int lastStepX: 0
+  property int lastStepY: 0
 
   /// One of the raw connection bytes, by key — the grips read and write through here so there is one
   /// path to the model rather than a copy of the field list on the canvas.
@@ -232,6 +241,10 @@ Item {
 
       readonly property bool alongEdge: fieldKey === "stripWidth"
 
+      /// The landing grip is the odd one out: it drags in BOTH axes, because the address it writes
+      /// is a (row, column) rather than a length. @see the drag handler.
+      readonly property bool twoAxis: fieldKey === "stripDst"
+
       z: 46
       width: 14; height: 14; radius: 3
       color: grip.hovered ? "#d55e00" : "#e6212121"
@@ -239,16 +252,20 @@ Item {
       border.color: "#ffffff"
 
       // The length grip sits at the far end of the strip on the edge's own axis; the width grip sits
-      // on the perpendicular one, so the two can never be confused for each other.
-      x: grip.alongEdge ? (conn.horizontal ? conn.width - width : Math.round((conn.width - width) / 2))
+      // on the perpendicular one, so the two can never be confused for each other. The landing grip
+      // takes the NEAR corner — the strip's own origin, which is literally what the address names.
+      x: grip.twoAxis ? 0
+       : grip.alongEdge ? (conn.horizontal ? conn.width - width : Math.round((conn.width - width) / 2))
                         : (conn.horizontal ? Math.round((conn.width - width) / 2) : conn.width - width)
-      y: grip.alongEdge ? (conn.horizontal ? Math.round((conn.height - height) / 2) : conn.height - height)
+      y: grip.twoAxis ? 0
+       : grip.alongEdge ? (conn.horizontal ? Math.round((conn.height - height) / 2) : conn.height - height)
                         : (conn.horizontal ? conn.height - height : Math.round((conn.height - height) / 2))
 
       Text {
         anchors.centerIn: parent
         anchors.verticalCenterOffset: -1
-        text: grip.alongEdge ? (conn.horizontal ? "⇥" : "⤓") : "⇲"
+        text: grip.twoAxis ? "✥"
+            : grip.alongEdge ? (conn.horizontal ? "⇥" : "⤓") : "⇲"
         font.pixelSize: 10
         color: "white"
       }
@@ -267,7 +284,16 @@ Item {
         Text {
           id: gripLbl
           anchors.centerIn: parent
-          text: grip.fieldLabel + "  " + conn.fieldValue(grip.fieldKey)
+          // The landing grip reads out its PLACE, not its number — "$C6EB" tells you nothing while
+          // you are dragging, and "row 0, column 3" is the thing your hand is actually moving.
+          text: {
+            conn.canvas.revision;
+            if (!grip.twoAxis)
+              return grip.fieldLabel + "  " + conn.fieldValue(grip.fieldKey);
+            const p = brg.map.pointerPlace(conn.dir, "stripDst");
+            return p.valid ? grip.fieldLabel + "  " + qsTr("row %1, col %2").arg(p.row).arg(p.col)
+                           : grip.fieldLabel;
+          }
           font.pixelSize: 10
           color: "white"
         }
@@ -303,6 +329,18 @@ Item {
     fieldKey: "width"
     fieldLabel: qsTr("Neighbour width")
     hovered: conn.gripHover === "width"
+  }
+
+  // ⭐ THE ADDRESS, AS A HANDLE (project leadership, 2026-08-19: *"its silly to say theres no solution
+  // for this … handles on the visual map could be relative to that address"*). Strip destination is a
+  // pointer into our border ring, and a pointer into a grid is a square — so it drags like one, in
+  // both axes, and reads out as "row 2, col 3" while you move it. @see MapModel::pointerPlace.
+  Grip {
+    id: gripDest
+    objectName: "mapConnGrip" + conn.dir + "_stripDst"
+    fieldKey: "stripDst"
+    fieldLabel: qsTr("Lands at")
+    hovered: conn.gripHover === "stripDst"
   }
 
   // The selection ring, above everything, like the door's.
@@ -391,6 +429,12 @@ Item {
     property bool moved: false
     property real gripBase: 0      // the resized field's value when the grip drag began
 
+    // The landing grip's starting SQUARE and the second axis of its press point — it is the one
+    // gesture here that moves in two dimensions. @see gripDest.
+    property real pressPosY: 0
+    property int  destRow: 0
+    property int  destCol: 0
+
     // ⭐ TELL THE CANVAS WE ARE UNDER THE POINTER (project leadership, 2026-08-19: *"the connection
     // icon on the map firstly shows map block squares underneath being highlighted as you try to
     // click the anchor drag icon"* … *"map blocks arent supposed to highlight at all on connections.
@@ -439,7 +483,17 @@ Item {
       // press and then exactly one move, because the pointer leaves a 14 px square immediately.
       conn.gripDrag = conn.gripAt(m.x, m.y);
 
-      if (conn.gripDrag !== "") {
+      if (conn.gripDrag === "stripDst") {
+        // Two axes, so the base is a SQUARE and the press point needs both coordinates. Recorded in
+        // the parent's fixed frame, like every other measurement here — measuring inside an item the
+        // drag itself moves is what made the original connection drag oscillate.
+        const p0 = brg.map.pointerPlace(conn.dir, "stripDst");
+        drag.destRow = p0.valid ? p0.row : 0;
+        drag.destCol = p0.valid ? p0.col : 0;
+        const pp = drag.mapToItem(conn.parent, m.x, m.y);
+        conn.pressPos  = pp.x;
+        drag.pressPosY = pp.y;
+      } else if (conn.gripDrag !== "") {
         drag.gripBase = conn.fieldValue(conn.gripDrag);
         conn.pressPos = drag.axisFor(m, conn.gripDrag);
       } else {
@@ -447,6 +501,8 @@ Item {
         conn.pressPos = drag.axisFor(m, "");
       }
 
+      conn.lastStepX = 0;
+      conn.lastStepY = 0;
       conn.lastStep = 0;
       conn.snapName = "";
       drag.moved = false;
@@ -456,6 +512,33 @@ Item {
     onPositionChanged: (m) => {
       if (!drag.pressed) {
         conn.gripHover = conn.gripAt(m.x, m.y);
+        return;
+      }
+
+      // ── Moving where the strip LANDS — a pointer, dragged as a square ─────────────────────
+      //
+      // The same hysteresis the 1-D grips use, once per axis. `Math.round` is deliberately NOT used:
+      // rounding flips at the halfway point, so a hand resting exactly there chatters between two
+      // squares — the "occasional extra step" leadership reported. Commit a step only once you are
+      // 0.6 of a block past the last one.
+      if (conn.gripDrag === "stripDst") {
+        const pm = drag.mapToItem(conn.parent, m.x, m.y);
+        const rawX = (pm.x - conn.pressPos)  / conn.blockPx;
+        const rawY = (pm.y - drag.pressPosY) / conn.blockPx;
+
+        if (rawX > conn.lastStepX + 0.6)      conn.lastStepX = Math.floor(rawX + 0.4);
+        else if (rawX < conn.lastStepX - 0.6) conn.lastStepX = Math.ceil(rawX - 0.4);
+        if (rawY > conn.lastStepY + 0.6)      conn.lastStepY = Math.floor(rawY + 0.4);
+        else if (rawY < conn.lastStepY - 0.6) conn.lastStepY = Math.ceil(rawY - 0.4);
+
+        const now = brg.map.pointerPlace(conn.dir, "stripDst");
+        const wantRow = drag.destRow + conn.lastStepY;
+        const wantCol = drag.destCol + conn.lastStepX;
+        if (!now.valid || now.row !== wantRow || now.col !== wantCol)
+          brg.map.setPointerPlace(conn.dir, "stripDst", wantRow, wantCol);
+
+        drag.moved = true;
+        conn.dragging = true;
         return;
       }
 

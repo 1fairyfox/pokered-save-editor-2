@@ -56,6 +56,24 @@ Item {
   readonly property int diagFieldCount: (details.fields || []).length
   readonly property int diagSlot: details.slot
 
+  /// Harness-visible: scroll the panel to a pixel offset, and report how far it can go.
+  ///
+  /// ⚠️ THIS EXISTS BECAUSE THE GENERIC SCROLL COULD NOT REACH IT. `app_scroll` walks the tree for a
+  /// Flickable, and a `ScrollView`'s scrollable is its *contentItem*, not the ScrollView -- so the
+  /// walk kept finding some other Flickable, reported a plausible contentY, and moved nothing. That
+  /// is a silent failure: the numbers come back fine and the panel does not budge, which is exactly
+  /// how a screenshot review ends up looking at the wrong thing. @see notes/reference/dev-harness.md
+  function diagScrollTo(y) {
+    if (scroller.contentItem === null)
+      return -1;
+    const maxY = Math.max(0, scroller.contentItem.contentHeight - scroller.availableHeight);
+    scroller.contentItem.contentY = Math.max(0, Math.min(maxY, y));
+    return scroller.contentItem.contentY;
+  }
+
+  readonly property real diagScrollMax: (scroller.contentItem === null) ? 0
+      : Math.max(0, scroller.contentItem.contentHeight - scroller.availableHeight)
+
   readonly property int slot: canvas ? canvas.selectedNpc : -1
   readonly property bool hasSprite: slot > 0
 
@@ -453,6 +471,7 @@ Item {
 
   ScrollView {
     id: scroller
+    objectName: "detailsScroller"   // the DEBUG harness scrolls the panel by this
     anchors.fill: parent
     clip: true
     contentWidth: availableWidth          // never scroll sideways; the rows wrap instead
@@ -1534,14 +1553,46 @@ Item {
 
           Repeater {
             model: details.connFieldsData
-            delegate: RowLayout {
+            delegate: ColumnLayout {
+              id: connFieldRow
               required property var modelData
+              spacing: 1
+
+              // ⚠️ `Layout.fillWidth` ALONE WAS NOT ENOUGH once this delegate became a ColumnLayout.
+              // As a RowLayout it stretched because it held a `fillWidth` child that wanted the room;
+              // wrapped in a column it settled at its implicit 198px while the row inside it drew at
+              // the full 330 — overflowing its own parent, which is why the rows LOOKED right and the
+              // readout underneath them silently had 98px to wrap 44 characters into. Pinning the
+              // preferred width to the section makes it deterministic instead of emergent.
               Layout.fillWidth: true
-              spacing: 6
+              Layout.preferredWidth: connRaw.width
+
+              // So the harness (and a human) can reach one row by name. @see dev-harness.md
+              objectName: "connField_" + connFieldRow.modelData.key
+
+              // ⭐ A POINTER IS A PLACE, AND THE PLACE IS SHOWN (project leadership, 2026-08-19:
+              // *"i am aware of how hex addresses and memory addresses work … but its silly to say
+              // theres no solution for this … the start of the blocks are known"*).
+              //
+              // They are right, and it is exact: none of the three is a free-floating address —
+              // each is a base plus an index into a grid this app already draws. @see
+              // MapModel::pointerPlace, which is the same arithmetic the engine uses to COMPOSE
+              // them, run backwards. Verified against all three of Pallet Town's north pointers
+              // and the macro in notes/reference/map-connections.md.
+              readonly property var place: {
+                details.revision;
+                return connFieldRow.modelData.kind === "pointer" && details.hasConnection
+                  ? brg.map.pointerPlace(details.connection, connFieldRow.modelData.key)
+                  : ({ valid: false });
+              }
+
+              RowLayout {
+                Layout.fillWidth: true
+                spacing: 6
 
               Label {
                 Layout.preferredWidth: 92
-                text: modelData.label
+                text: connFieldRow.modelData.label
                 font.pixelSize: 10
                 opacity: 0.7
                 elide: Text.ElideRight
@@ -1554,10 +1605,11 @@ Item {
               MapField {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 26
-                visible: modelData.key === "mapPtr"
+                visible: connFieldRow.modelData.key === "mapPtr"
                 enabled: details.connRawEditable
-                value: modelData.value
-                onPicked: (ind) => brg.map.setConnectionField(details.connection, modelData.key, ind)
+                value: connFieldRow.modelData.value
+                onPicked: (ind) => brg.map.setConnectionField(details.connection,
+                                                              connFieldRow.modelData.key, ind)
               }
 
               // ⭐ AN ADDRESS IS NOT A QUANTITY (project leadership: *"strip src/dst and the view
@@ -1570,15 +1622,54 @@ Item {
                 Layout.preferredHeight: 26
                 font.pixelSize: 10
                 font.family: "monospace"
-                visible: modelData.kind === "pointer"
+                visible: connFieldRow.modelData.kind === "pointer"
                 enabled: details.connRawEditable
-                text: "$" + ("0000" + modelData.value.toString(16).toUpperCase()).slice(-4)
+                text: "$" + ("0000" + connFieldRow.modelData.value.toString(16).toUpperCase()).slice(-4)
                 onEditingFinished: {
                   const v = parseInt(text.replace(/^[$#]|^0x/i, ""), 16);
                   if (!isNaN(v))
-                    brg.map.setConnectionField(details.connection, modelData.key,
+                    brg.map.setConnectionField(details.connection, connFieldRow.modelData.key,
                                                Math.max(0, Math.min(0xFFFF, v)));
                 }
+              }
+
+              // Pick the square instead of typing the address. Opens the grid the pointer indexes
+              // — the neighbour's own map, or a border ring — with the current target lit up.
+              Rectangle {
+                id: pickBtn
+                Layout.preferredWidth: 26
+                Layout.preferredHeight: 26
+                visible: connFieldRow.modelData.kind === "pointer"
+                radius: 4
+                border.width: 1
+                border.color: brg.settings.dividerColor
+                readonly property bool armed: details.connRawEditable && connFieldRow.place.valid
+                opacity: armed ? 1 : 0.4
+                color: !armed ? "transparent"
+                     : pickArea.pressed  ? Qt.rgba(0, 0, 0, 0.16)
+                     : pickArea.containsMouse ? Qt.rgba(0, 0, 0, 0.08) : "transparent"
+
+                Label {
+                  anchors.centerIn: parent
+                  text: "⊞"
+                  font.pixelSize: 13
+                  opacity: 0.75
+                }
+
+                MouseArea {
+                  id: pickArea
+                  anchors.fill: parent
+                  hoverEnabled: true
+                  enabled: pickBtn.armed
+                  cursorShape: Qt.PointingHandCursor
+                  onClicked: pointerPicker.openFor(details.connection,
+                                                   connFieldRow.modelData.key,
+                                                   connFieldRow.modelData.label)
+                }
+
+                ToolTip.visible: pickArea.containsMouse
+                ToolTip.text: qsTr("Point at a square instead")
+                ToolTip.delay: 400
               }
 
               SpinBox {
@@ -1586,12 +1677,55 @@ Item {
                 Layout.preferredHeight: 26
                 font.pixelSize: 10
                 editable: true
-                visible: modelData.kind !== "pointer" && modelData.key !== "mapPtr"
+                visible: connFieldRow.modelData.kind !== "pointer"
+                         && connFieldRow.modelData.key !== "mapPtr"
                 enabled: details.connRawEditable
-                from: modelData.min
-                to: modelData.max
-                value: modelData.value
-                onValueModified: brg.map.setConnectionField(details.connection, modelData.key, value)
+                from: connFieldRow.modelData.min
+                to: connFieldRow.modelData.max
+                value: connFieldRow.modelData.value
+                onValueModified: brg.map.setConnectionField(details.connection,
+                                                            connFieldRow.modelData.key, value)
+              }
+              }
+
+              // ⭐ THE ADDRESS, IN WORDS. "row 2, column 3 of Pallet Town's border ring" — the same
+              // decode the picker and the on-canvas handle drive, sitting under the hex so the two
+              // readings are always visibly the same number.
+              //
+              // It says so plainly when the address has left its grid. That is ALLOWED — a save can
+              // hold it, the game will read whatever is there, and refusing to show it would be the
+              // opposite of what this screen is for.
+              // ⚠️ `fillWidth` ALONE, and NO `Layout.preferredWidth: 0` here. That pairing is the
+              // right fix for a wrapping Label whose implicitWidth would otherwise blow its column
+              // out — but combined with a `leftMargin` inside a Repeater delegate it resolved to a
+              // zero-width item, and a zero-width wrapping Label is not invisible: it reserves its
+              // height and draws nothing. On screen that is a blank gap under every pointer field,
+              // which looks like a layout bug rather than missing text. Caught in the screenshot
+              // pass; the model was right the whole time.
+              Label {
+                objectName: "connWhere_" + connFieldRow.modelData.key
+                // ⚠️ NO INDENT. It was set to 98 to line up under the field column, which is right on
+                // a wide panel and wrong on this one: the dock is **240 logical px**, the label column
+                // is 92 of it, and indenting by 98 left 98px to wrap 44 characters into. Measured, not
+                // guessed — the panel reported its own width when the readout came out blank.
+                Layout.fillWidth: true
+                Layout.leftMargin: 2
+                Layout.rightMargin: 2
+                Layout.topMargin: 1
+                Layout.bottomMargin: 4
+                visible: connFieldRow.modelData.kind === "pointer" && connFieldRow.place.valid
+                text: connFieldRow.place.where || ""
+                font.pixelSize: 9
+                wrapMode: Text.Wrap
+                opacity: connFieldRow.place.inRange ? 0.55 : 0.9
+
+                // ⚠️ NOT `palette.text` — IT IS WHITE HERE. Every other quiet label on this panel
+                // just leaves `color` alone and dims with `opacity`; this one asked the palette and
+                // got #ffffff, so it drew white text on a white panel: present, correct, measurable
+                // (194 × 12 px, right string) and completely invisible. The only reason it was caught
+                // is that the screenshot showed a gap where words should be and the harness could be
+                // asked what colour it had ended up. @see notes/reference/ui-patterns.md
+                color: connFieldRow.place.inRange ? "#000000" : "#c04a00"
               }
             }
           }
@@ -2333,5 +2467,11 @@ Item {
         }
       }
     }
+  }
+
+  // Aims one of the connection's three raw addresses at a square you can see. One instance for the
+  // whole panel -- the ⊞ beside each pointer field opens it with that field's key.
+  PointerPicker {
+    id: pointerPicker
   }
 }

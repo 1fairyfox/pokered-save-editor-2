@@ -844,6 +844,89 @@ Item {
                   ? stateCombo.model[stateCombo.currentIndex].desc : ""
           }
 
+          // ⭐ "THESE DON'T MATCH THE STAGE" — the offer, and ONLY when there is something to offer.
+          //
+          // Project leadership, 2026-08-19: *"The filter flags and event flags need to act as toggle
+          // groups when changing map states, or at least have a box that offers to auto-update the
+          // filter and event flags to be correct."*
+          //
+          // Picking a stage already writes all of it — @see MapModel::applyState, which moves the
+          // event flags, the shown/hidden objects and the badges in one gesture. The gap was the
+          // OTHER direction: flip a flag by hand and the save quietly stops matching the stage it is
+          // still reported to be in, with nothing on screen saying so.
+          //
+          // ⚠️ IT IS AN OFFER, NOT A WARNING, AND NEVER AN AUTOMATIC FIX. A save that sits between
+          // stages is a legitimate thing to build — mid-cutscene, hand-made, deliberately odd. So
+          // this counts, says what disagrees in plain words, and waits. Nothing is written until the
+          // button is pressed. (Same doctrine as the derived-value break-sync: show the truth, let
+          // them decide.)
+          readonly property var coherence: {
+            panel.revision; panel.editTick;
+            return scriptSection.hasStates
+                 ? brg.map.stateCoherence(scriptSection.stateMapId)
+                 : ({ coherent: true });
+          }
+
+          Rectangle {
+            Layout.fillWidth: true
+            Layout.topMargin: 4
+            visible: scriptSection.coherence.coherent === false
+            implicitHeight: mismatchCol.implicitHeight + 12
+            radius: 4
+            color: Qt.rgba(0.84, 0.55, 0.0, 0.10)
+            border.width: 1
+            border.color: "#c08a3e"
+
+            ColumnLayout {
+              id: mismatchCol
+              anchors.fill: parent
+              anchors.margins: 6
+              spacing: 4
+
+              Label {
+                Layout.fillWidth: true
+                Layout.preferredWidth: 0
+                wrapMode: Text.Wrap
+                font.pixelSize: 10
+                color: "#8a5a10"
+                text: qsTr("This save doesn't quite match “%1”: %2 differ.")
+                        .arg(scriptSection.coherence.name || "")
+                        .arg(scriptSection.coherence.summary || "")
+              }
+
+              // ⭐ AND IT SAYS WHICH ONES. A bare count is an alarm; the names make it a decision.
+              // A save can sit between stages perfectly legitimately — the fixture save does exactly
+              // that (it is past Oak's Lab, but Pallet Town's own two one-shots have not fired
+              // because the player has not walked back in yet) — and you can only tell that from
+              // reading what the flags are.
+              Repeater {
+                model: scriptSection.coherence.names || []
+                delegate: Label {
+                  required property var modelData
+                  Layout.fillWidth: true
+                  Layout.preferredWidth: 0
+                  Layout.leftMargin: 6
+                  wrapMode: Text.Wrap
+                  font.pixelSize: 9
+                  color: "#8a5a10"
+                  opacity: 0.85
+                  text: qsTr("• %1 — should be %2").arg(modelData.name).arg(modelData.shouldBe)
+                }
+              }
+
+              Button {
+                Layout.alignment: Qt.AlignLeft
+                Layout.preferredHeight: 24
+                font.pixelSize: 10
+                text: qsTr("Make them match")
+                onClicked: {
+                  brg.map.makeStateCoherent(scriptSection.stateMapId);
+                  panel.editTick++;
+                }
+              }
+            }
+          }
+
           // ⚠️ THE "CURRENT STATE STEP" CONTROL IS NOT HERE ANY MORE.
           //
           // Project leadership, 2026-08-18: *"Current state step does not belong in

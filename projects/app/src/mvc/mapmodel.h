@@ -620,6 +620,34 @@ public:
   /// the save is touched.
   Q_INVOKABLE void applyState(const QString& id, int mapInd = -1);
 
+  /**
+   * ⭐ DOES THIS SAVE ACTUALLY MATCH THE STATE IT SAYS IT IS IN? The check behind the "make these
+   * agree" offer on the map-state row.
+   *
+   * Project leadership, 2026-08-19: *"The filter flags and event flags need to act as toggle groups
+   * when changing map states, or at least have a box that offers to auto-update the filter and event
+   * flags to be correct."*
+   *
+   * The first half already works — @ref applyState writes the stage's event flags, its shown/hidden
+   * objects AND its badges in one gesture. The gap is the OTHER direction: flip a flag by hand and
+   * the save quietly stops matching the stage it is reported to be in, with nothing on screen saying
+   * so. This counts the disagreements; @ref makeStateCoherent offers to end them.
+   *
+   * Returns `{ hasBlueprint, coherent, id, name, events, missables, badges, total, summary }`.
+   * `summary` is the plain-English count ("2 event flags, 1 object shown or hidden"). A map with no
+   * blueprint, or a save parked on a raw step / transient, is reported `coherent` — there is no
+   * absolute block for it to disagree with, and inventing one would be a lie.
+   *
+   * ⚠️ **Counts, never writes.** Mismatch is not corruption: a save mid-cutscene, or one deliberately
+   * built between stages, is a legitimate thing to hold. This only ever says so.
+   */
+  Q_INVOKABLE QVariantMap stateCoherence(int mapInd = -1) const;
+
+  /// Make the save match the stage @ref stateCoherence says it is in — by re-applying that stage's
+  /// own absolute block through @ref applyState. Nothing outside the stage's named flags is touched,
+  /// and a save that already agrees is left completely alone.
+  Q_INVOKABLE void makeStateCoherent(int mapInd = -1);
+
   /// Roll the map one stage forward/backward along the progression (branches: forward
   /// takes the first branch; backward returns to the fork). Applies the target stage's
   /// absolute save block. @return false at the line's end (nothing written).
@@ -881,6 +909,46 @@ public:
   /// exactly that one field (one or two bytes) and leaves the others where they lie, so the stored
   /// struct diverges from what the offset would derive (@ref connectionSynced then returns false).
   Q_INVOKABLE void setConnectionField(int dir, const QString& key, int value);
+
+  /**
+   * ⭐ A POINTER, TOLD AS A PLACE. The decode behind the handles and the picker for @p key --
+   * `stripSrc`, `stripDst` or `viewPtr` -- on @p dir's connection.
+   *
+   * Project leadership, 2026-08-19: *"i am aware of how hex addresses and memory addresses work …
+   * but its silly to say theres no solution for this. memory addresses point to ram this means the
+   * start of the blocks are known … handles on the visual map could be relative to that address."*
+   *
+   * They are right, and it is not even approximate. **None of the three is a free-floating address**
+   * -- each is a *base plus an index into a grid this app already draws*, and the engine has been
+   * composing them that way all along (`MapEngine::viewPointer`, `c.srcAddr = to->getDataPtr() + blk`,
+   * `destIndex = stripDst - overworldMapAddr`). All this does is run that arithmetic backwards.
+   *
+   * | key | base | the grid it indexes | stride |
+   * |---|---|---|---|
+   * | `stripSrc` | the neighbour's block data in ROM | the **neighbour's own map** | its width |
+   * | `stripDst` | `wOverworldMap` (`$C6E8`) | **our border ring** | our width + 6 |
+   * | `viewPtr`  | `wOverworldMap` (`$C6E8`) | the **neighbour's ring**, after you cross | their width + 6 |
+   *
+   * Returns `{ valid, key, ptr, base, index, row, col, cols, rows, gridW, gridH, gridMapInd,
+   * gridName, gridKind, inRange, where }` -- `gridKind` is `"map"` (a plain map grid) or `"ring"`
+   * (a map plus its 3-block border), `where` is the one-line English readout ("row 2, column 3 of
+   * Viridian City's border ring"), and `inRange` is false when the address lands outside that grid
+   * entirely. **`inRange == false` is shown, never refused** -- a pointer that leaves its buffer is a
+   * real thing a save can hold and is exactly what a person poking at this wants to see.
+   */
+  Q_INVOKABLE QVariantMap pointerPlace(int dir, const QString& key) const;
+
+  /// Set @p key's pointer on @p dir's connection **by grid square** -- the inverse of @ref
+  /// pointerPlace, and the one call a handle drag or a picker click makes. Writes the same one field
+  /// @ref setConnectionField does (so it is the same break-sync edit, two bytes, nothing else moved).
+  /// Out-of-grid @p row / @p col are clamped to the grid rather than refused; a pointer is still only
+  /// ever composed from that grid's own base and stride.
+  Q_INVOKABLE void setPointerPlace(int dir, const QString& key, int row, int col);
+
+  /// An `image://map/...` source for ANY map @p ind, drawn from that map's OWN ROM data (its tileset,
+  /// blockset, border block and connections) rather than the loaded save's. The reference grid the
+  /// pointer picker shows — a neighbour the player is not standing in. Empty for an unknown map.
+  Q_INVOKABLE QString mapImageSource(int ind) const;
 
   // ── The sprite set ────────────────────────────────────────────────────────────
   int spriteSetId() const;

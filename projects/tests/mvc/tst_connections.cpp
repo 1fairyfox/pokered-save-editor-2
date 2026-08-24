@@ -119,6 +119,11 @@ private slots:
   void connectionFields_nameEveryByteInEnglish();
   void setConnectionField_writesRawByte_andBreaksSync();
 
+  // ── The three pointers, told as places (Q2) ─────────────────────────────────
+  void pointerPlace_decodesEveryPointerToItsOwnGrid();   // KEYSTONE: matches the game's own macro
+  void pointerPlace_isHonestAboutLeavingTheGrid();       // an out-of-buffer address is shown, not hidden
+  void setPointerPlace_roundTripsAndWritesTwoBytesOnly(); // KEYSTONE
+
   void loadingAndResavingAnUntouchedSave_changesNothing();
 
 private:
@@ -564,6 +569,162 @@ void TestConnections::setConnectionField_writesRawByte_andBreaksSync()
 /**
  * @brief Load an untouched save, re-save it, and not one bit moves. The connection blocks included.
  */
+/**
+ * @brief KEYSTONE. Each of the three pointers decodes to a square of the grid it actually indexes —
+ *        and the arithmetic is the game's own, run backwards.
+ *
+ * Project leadership, 2026-08-19: *"its silly to say theres no solution for this … memory addresses
+ * point to ram this means the start of the blocks are known."* They were right, and this is why the
+ * handles and the picker are honest rather than approximate: **none of the three is a free-floating
+ * address.** Each is a base plus an index, and the engine already composes them that way.
+ *
+ * Checked against the `map_connection` macro as documented in notes/reference/map-connections.md
+ * (78/78 verified against the cartridge), for the NORTH edge with offset 0:
+ *
+ *     stripSrc  ->  W * (H - 3) + _src        the neighbour's LAST THREE ROWS
+ *     stripDst  ->  _tgt = offset + 3         our ring, top row
+ *     viewPtr   ->  (W + 6) * H + 1           the neighbour's ring, after you cross
+ *
+ * If the decode is ever wrong, a drag or a picker click writes a plausible address to the wrong
+ * square — the worst kind of failure here, because the number still looks like an address.
+ */
+void TestConnections::pointerPlace_decodesEveryPointerToItsOwnGrid()
+{
+  Rig* r = makeRig();
+
+  bool checkedNorth = false;
+
+  for (int dir : existingDirs(r->map)) {
+    for (const QString& key : { QStringLiteral("stripSrc"),
+                                QStringLiteral("stripDst"),
+                                QStringLiteral("viewPtr") }) {
+      const QVariantMap p = r->map->pointerPlace(dir, key);
+      QVERIFY2(p.value("valid").toBool(),
+               qPrintable(QStringLiteral("dir %1 / %2 did not decode at all").arg(dir).arg(key)));
+
+      // The decode must be self-consistent: base + row*stride + col has to be the pointer itself.
+      const int rebuilt = p.value("base").toInt()
+                        + p.value("row").toInt() * p.value("gridW").toInt()
+                        + p.value("col").toInt();
+      QCOMPARE(rebuilt, p.value("ptr").toInt());
+
+      QVERIFY2(!p.value("where").toString().isEmpty(), "a decoded pointer had no English readout");
+      QVERIFY(p.value("gridW").toInt() > 0 && p.value("gridH").toInt() > 0);
+    }
+
+    if (dir != MapDBEntryConnect::ConnectDir::NORTH)
+      continue;
+
+    // ── The macro itself, for the one edge we can state in closed form ──────────────────────
+    MapConnData* c = r->area->connections.value((var8)dir);
+    MapDBEntry* to = MapsDB::inst()->getStoreAt(c->mapPtr);
+    QVERIFY(to != nullptr);
+
+    const int W = to->getWidth();
+    const int H = to->getHeight();
+
+    const QVariantMap src = r->map->pointerPlace(dir, QStringLiteral("stripSrc"));
+    QCOMPARE(src.value("gridKind").toString(), QStringLiteral("map"));     // ROM blocks: no border
+    QCOMPARE(src.value("gridW").toInt(), W);
+    QCOMPARE(src.value("row").toInt() * W + src.value("col").toInt(), W * (H - 3));
+
+    const QVariantMap dst = r->map->pointerPlace(dir, QStringLiteral("stripDst"));
+    QCOMPARE(dst.value("gridKind").toString(), QStringLiteral("ring"));    // WRAM buffer: + border
+    QCOMPARE(dst.value("row").toInt(), 0);                                 // the ring's top row
+    QCOMPARE(dst.value("col").toInt(), 3);                                 // offset 0 -> _tgt = 3
+
+    const QVariantMap vp = r->map->pointerPlace(dir, QStringLiteral("viewPtr"));
+    QCOMPARE(vp.value("gridKind").toString(), QStringLiteral("ring"));
+    QCOMPARE(vp.value("gridW").toInt(), W + 6);
+    QCOMPARE(vp.value("row").toInt() * (W + 6) + vp.value("col").toInt(), (W + 6) * H + 1);
+
+    checkedNorth = true;
+  }
+
+  QVERIFY2(checkedNorth, "the fixture map has no NORTH connection -- the macro check never ran");
+
+  delete r;
+}
+
+/// An address that has left its buffer is a real thing a save can hold, and it is exactly what
+/// somebody poking at these wants to see. It must be reported, with its (possibly negative) square,
+/// and flagged — never quietly clamped into something that looks fine.
+///
+/// ⚠️ The negative row is the point: C's integer division truncates toward zero, so a naive
+/// `index / stride` reports row 0 for an address a whole row ABOVE the buffer. That is the
+/// difference between "just off the top" and "fine".
+void TestConnections::pointerPlace_isHonestAboutLeavingTheGrid()
+{
+  Rig* r = makeRig();
+  const int dir = existingDirs(r->map).first();
+
+  const QVariantMap base = r->map->pointerPlace(dir, QStringLiteral("stripDst"));
+  QVERIFY(base.value("valid").toBool());
+  QVERIFY2(base.value("inRange").toBool(), "the fixture's own pointer was already out of range");
+
+  // One whole row ABOVE the buffer's start.
+  const int stride = base.value("gridW").toInt();
+  r->map->setConnectionField(dir, QStringLiteral("stripDst"),
+                             base.value("base").toInt() - stride + 2);
+
+  const QVariantMap out = r->map->pointerPlace(dir, QStringLiteral("stripDst"));
+  QVERIFY2(out.value("valid").toBool(), "an out-of-grid address stopped decoding entirely");
+  QVERIFY2(!out.value("inRange").toBool(), "an address above the buffer was reported as in range");
+  QCOMPARE(out.value("row").toInt(), -1);      // floor, not truncation
+  QCOMPARE(out.value("col").toInt(), 2);
+  QVERIFY2(out.value("where").toString().contains(QStringLiteral("outside")),
+           "the readout did not say the address had left its grid");
+
+  delete r;
+}
+
+/**
+ * @brief KEYSTONE. Picking a square writes that square's address — and moves TWO BYTES, nothing else.
+ *
+ * This is the write path behind both the picker click and the on-canvas drag, so it carries the
+ * project's byte-fidelity rule directly: a pointer edit is a two-byte edit.
+ */
+void TestConnections::setPointerPlace_roundTripsAndWritesTwoBytesOnly()
+{
+  Rig* r = makeRig();
+  const int dir = existingDirs(r->map).first();
+
+  r->sf.flattenData();
+  const QByteArray before = snapshot(r->sf);
+
+  const QVariantMap p0 = r->map->pointerPlace(dir, QStringLiteral("stripDst"));
+  QVERIFY(p0.value("valid").toBool());
+
+  const int wantRow = p0.value("row").toInt() + 2;
+  const int wantCol = p0.value("col").toInt() + 1;
+  r->map->setPointerPlace(dir, QStringLiteral("stripDst"), wantRow, wantCol);
+
+  const QVariantMap p1 = r->map->pointerPlace(dir, QStringLiteral("stripDst"));
+  QCOMPARE(p1.value("row").toInt(), wantRow);
+  QCOMPARE(p1.value("col").toInt(), wantCol);
+
+  r->sf.flattenData();
+  const QByteArray after = snapshot(r->sf);
+
+  // stripDst is the two bytes at slot + 3 (mapPtr 1 + stripSrc 2).
+  const int at = slotOf(dir) + 3;
+  const QVector<int> moved = diffOffsets(before, after);
+  for (int off : moved)
+    QVERIFY2(off == at || off == at + 1,
+             qPrintable(QStringLiteral("aiming a pointer moved a byte it had no business touching: %1")
+                          .arg(describeDiff(moved))));
+  QVERIFY2(!moved.isEmpty(), "aiming a pointer at a different square wrote nothing at all");
+
+  // Off the grid entirely -> clamped to the grid, never refused and never written out of bounds.
+  r->map->setPointerPlace(dir, QStringLiteral("stripDst"), 9999, 9999);
+  const QVariantMap p2 = r->map->pointerPlace(dir, QStringLiteral("stripDst"));
+  QCOMPARE(p2.value("row").toInt(), p2.value("gridH").toInt() - 1);
+  QCOMPARE(p2.value("col").toInt(), p2.value("gridW").toInt() - 1);
+  QVERIFY2(p2.value("inRange").toBool(), "a clamped pick did not land inside the grid");
+
+  delete r;
+}
+
 void TestConnections::loadingAndResavingAnUntouchedSave_changesNothing()
 {
   Rig* r = makeRig();

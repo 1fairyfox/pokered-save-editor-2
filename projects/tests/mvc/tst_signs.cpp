@@ -91,6 +91,7 @@ private slots:
   void signFields_nameEveryByteInEnglish();
   void outOfRangeTextId_isFlaggedNotRefused();
 
+  void everyCharacterInEveryMapsText_survivesTheTrip();
   void everyShippedSignResolvesInItsMapsText();
   void loadingAndResavingAnUntouchedSave_changesNothing();
 
@@ -406,6 +407,80 @@ void TestSigns::outOfRangeTextId_isFlaggedNotRefused()
   QCOMPARE(s.value("textId").toInt(), past);              // taken, unmangled
   QVERIFY2(!s.value("textValid").toBool(), "an out-of-range text id was not flagged");
   QVERIFY(s.value("preview").toString().isEmpty());       // nothing to resolve
+
+  delete r;
+}
+
+/**
+ * @brief DATA KEYSTONE. Not one character of the game's words is lost on the way to the screen.
+ *
+ * The conversion in `MapModel::friendlyText` runs the words through `FontsDB::expandStr`, which is a
+ * **codec keyed on each font entry's `name`**. For a glyph that is a real character -- `é`, `♀`, `…`,
+ * `×` -- the name is the angle-bracket *token* and the character itself lives in `alias`. So the codec
+ * could not read those characters back in: `convertToCode` found no entry, skipped them, and they were
+ * **silently deleted**. It was on screen and it was wrong:
+ *
+ *     POKéMON  ->  POKMON        (é, 329 occurrences across maps.json)
+ *     ¥500     ->  500           (¥,   6 occurrences)
+ *
+ * A spot-check would not have found it -- the strings *look* fine until you know what is missing. So
+ * this walks **every text entry of every map** and asserts that each distinct non-ASCII character in
+ * the source survives into the output. Nothing in the pipeline legitimately removes one: `<player>`
+ * substitution only ever *adds*. Fails by map, id and character.
+ */
+void TestSigns::everyCharacterInEveryMapsText_survivesTheTrip()
+{
+  Rig* r = makeRig();
+
+  int entriesChecked = 0, charsChecked = 0;
+  QStringList losses;
+
+  for (int i = 0; i < MapsDB::inst()->getStoreSize(); i++) {
+    MapDBEntry* m = MapsDB::inst()->getStoreAt(i);
+    if (m == nullptr || m->getTextEntriesSize() < 1)
+      continue;
+
+    r->map->setMapInd(i);
+
+    for (int t = 0; t < m->getTextEntriesSize(); t++) {
+      const MapDBEntryText* e = m->getTextEntriesAt(t);
+      if (e == nullptr || e->getText().isEmpty())
+        continue;
+
+      const QString src = e->getText();
+      const QString out = r->map->signTextFull(t + 1);
+      entriesChecked++;
+
+      QSet<QChar> seen;
+      for (QChar c : src) {
+        if (c.unicode() < 128 || seen.contains(c))
+          continue;                               // ASCII round-trips; report each character once
+        seen.insert(c);
+        charsChecked++;
+
+        if (!out.contains(c))
+          losses << QStringLiteral("map %1 (%2) text id %3: lost U+%4 '%5'")
+                      .arg(i).arg(m->getName()).arg(t + 1)
+                      .arg(int(c.unicode()), 4, 16, QChar('0')).arg(c);
+      }
+    }
+  }
+
+  QVERIFY2(losses.isEmpty(),
+           qPrintable(QStringLiteral("%1 character(s) were deleted by the text conversion:\n  %2")
+                        .arg(losses.size()).arg(losses.mid(0, 12).join(QStringLiteral("\n  ")))));
+
+  QVERIFY2(entriesChecked > 500,
+           qPrintable(QStringLiteral("only %1 text entries were checked -- the corpus is missing")
+                        .arg(entriesChecked)));
+  // ⚠️ This counts each character ONCE PER ENTRY (the `seen` set), not once per occurrence -- the 329
+  // é's in the corpus are spread across a couple of hundred entries. 248 is the real figure today; the
+  // guard exists so that a corpus that silently emptied could not make this test pass by having
+  // nothing to check.
+  QVERIFY2(charsChecked > 200,
+           qPrintable(QStringLiteral("only %1 non-ASCII characters were seen across %2 entries -- this "
+                                     "test would be passing vacuously")
+                        .arg(charsChecked).arg(entriesChecked)));
 
   delete r;
 }

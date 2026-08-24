@@ -103,14 +103,28 @@ Item {
     spacing: 6
 
     // Say the cap BEFORE they hit it, not after the drop is swallowed.
+    //
+    // ⚠️ `Layout.preferredWidth: 0` — the same trap the "Safe on this map" blurb below was fixed for,
+    // and this one was missed at the time. Without it a wrapping Label reports its whole UNWRAPPED
+    // string as its implicitWidth, the column sizes its height for one line, the text wraps to two,
+    // and the second line is clipped: on a 240px dock that showed as a sliver of half-cut text above
+    // the filter box. Caught in the screenshot pass. @see notes/reference/ui-patterns.md
     Label {
+      objectName: "charsRoomLine"
       Layout.fillWidth: true
+      Layout.preferredWidth: 0
       text: brg.map.npcRoomLeft() > 0
               ? qsTr("Room for %1 more").arg(brg.map.npcRoomLeft())
               : qsTr("Full — 15 is the most a map can hold")
       font.pixelSize: 10
       opacity: 0.6
-      color: brg.map.npcRoomLeft() > 0 ? palette.text : "#c04a00"
+      // ⚠️ NOT `palette.text` — IT IS #ffffff HERE, so this line has been drawing white on a white
+      // panel: right string, right size, invisible. It looked like a clipped sliver of text, which
+      // sent the first two investigations chasing a LAYOUT bug that did not exist. Every other quiet
+      // label on this screen leaves `color` alone and dims with `opacity`; do that.
+      // The same trap bit both pointer readouts on the Details panel the same afternoon.
+      // @see notes/reference/ui-patterns.md
+      color: brg.map.npcRoomLeft() > 0 ? "#000000" : "#c04a00"
       wrapMode: Text.Wrap
     }
 
@@ -200,15 +214,21 @@ Item {
           // to make the binding re-run on a map change (a plain call has no dependency of its own).
           text: {
             bar.revision;
+            // ⚠️ "THIS MAP IS…", NOT "INDOORS:". The screen has a second control literally labelled
+            // Indoor/Cave/Outdoor (the tile animation), and leadership reasonably expected changing
+            // it to change this list. It cannot: the console decides sprite loading from the MAP ID
+            // alone (`InitOutsideMapSprites`: `ld a, [wCurMap] / cp FIRST_INDOOR_MAP / ret nc`).
+            // Naming the MAP rather than a condition removes the collision from this end too.
             if (!brg.map.mapIsIndoors())
-              return qsTr("Outdoors: only the pictures this map loads.");
+              return qsTr("This map is outdoors: only the pictures it loads.");
             // ⚠️ SAY WHEN THE ROOM HAS RUN OUT. A full indoor map allows almost nothing, which looks
             // exactly like the outdoor restriction and is a different fact entirely — @see
             // MapModel::vramUsage.
             const u = brg.map.vramUsage();
             return u.full
-              ? qsTr("Indoors: out of room (%1 of %1 pictures).").arg(u.walkingMax)
-              : qsTr("Indoors: anyone (%1 of %2 pictures used).").arg(u.walking).arg(u.walkingMax);
+              ? qsTr("This map is indoors: out of room (%1 of %1 pictures).").arg(u.walkingMax)
+              : qsTr("This map is indoors: anyone (%1 of %2 pictures used).")
+                  .arg(u.walking).arg(u.walkingMax);
           }
           font.pixelSize: 10
           opacity: 0.55
