@@ -1128,6 +1128,12 @@ public:
   /// **Indoors it is not**: the cast is the set, so the answer is "yes, if there is a slot left".
   Q_INVOKABLE bool pictureWouldRenderIfAdded(int picture) const;
 
+  /// How full the console's sprite memory is here: `{ walking, walkingMax, still, stillMax, full }`.
+  /// Lets the Characters panel say *"this map is out of room"* on its own line instead of leaving it
+  /// to a per-character tooltip — indoors, a full map looks identical to the outdoor restriction and
+  /// is a completely different fact. @see vramUsage's note in the .cpp.
+  Q_INVOKABLE QVariantMap vramUsage() const;
+
   /// **This map's own scripts**, out of the cartridge: `{ value, name, hack }`, where the name says
   /// who the script belongs to ("3 — Fisher 2"). A text id is an index into *this map's* text table,
   /// so a bare number is meaningless and a name is not.
@@ -1475,6 +1481,16 @@ public:
    * other, worse, way to get this wrong: QML garbage-collects them. See qt-patterns.md.)
    */
   Q_INVOKABLE QVariantList tilesetList() const;
+
+  /// The tileset index the cartridge gives map @p mapInd, or -1. The merged tileset control picks a
+  /// MAP and takes this for both pointers — a correct (tiles, blocks) pair by construction, and a
+  /// question anyone can answer ("draw it like Viridian Forest") without knowing tileset names.
+  Q_INVOKABLE int tilesetOfMap(int mapInd) const;
+
+  /// A map that uses tileset @p tilesetInd, so the merged picker's face can show a map name. -1 if
+  /// none. ⚠️ Representative only — many maps share a tileset and the SAVE stores the tileset, so
+  /// the caption beneath still names the tileset itself. @see the note in the .cpp.
+  Q_INVOKABLE int mapDrawnLikeTileset(int tilesetInd) const;
 
   /**
    * @brief What the CARTRIDGE has for the current tileset: { bank, blockPtr, gfxPtr, collPtr,

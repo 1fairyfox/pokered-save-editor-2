@@ -181,19 +181,34 @@ Item {
           visible: bar.safeHere.length > 0
         }
 
+        // ⚠️ ONE SHORT LINE, AND `Layout.preferredWidth: 0` (project leadership, 2026-08-19: *"a
+        // description below it that oddly seems to have a large right margin or unusual small
+        // width, shorten the description"*). Both halves of that were real:
+        //
+        //   * it was three sentences where one does, and
+        //   * **a wrapping Label in a Layout needs its preferred width pinned.** Without it the
+        //     Label reports the whole unwrapped string as its implicitWidth, the column sizes to
+        //     something else entirely, and the text wraps at a width that matches nothing on screen
+        //     — which is exactly what "large right margin / unusual small width" looks like.
+        //     `Layout.preferredWidth: 0` with `fillWidth` makes the LAYOUT decide, as intended.
         Label {
           Layout.fillWidth: true
+          Layout.preferredWidth: 0
           Layout.bottomMargin: 4
           visible: bar.safeHere.length > 0
           // `mapIsIndoors` is Q_INVOKABLE, not a property, so it needs the call AND `bar.revision`
           // to make the binding re-run on a map change (a plain call has no dependency of its own).
           text: {
             bar.revision;
-            return brg.map.mapIsIndoors()
-              ? qsTr("Indoors any character is allowed — the only limit is room for their "
-                     + "pictures, so this list shrinks as you add more.")
-              : qsTr("Outdoors the map loads a fixed set of pictures; only these will draw "
-                     + "properly, however much space is left.");
+            if (!brg.map.mapIsIndoors())
+              return qsTr("Outdoors: only the pictures this map loads.");
+            // ⚠️ SAY WHEN THE ROOM HAS RUN OUT. A full indoor map allows almost nothing, which looks
+            // exactly like the outdoor restriction and is a different fact entirely — @see
+            // MapModel::vramUsage.
+            const u = brg.map.vramUsage();
+            return u.full
+              ? qsTr("Indoors: out of room (%1 of %1 pictures).").arg(u.walkingMax)
+              : qsTr("Indoors: anyone (%1 of %2 pictures used).").arg(u.walking).arg(u.walkingMax);
           }
           font.pixelSize: 10
           opacity: 0.55

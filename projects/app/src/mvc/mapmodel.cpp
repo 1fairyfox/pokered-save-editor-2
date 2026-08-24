@@ -959,6 +959,34 @@ bool MapModel::pictureWouldRender(int picture) const
   return vramPictures().contains(picture);
 }
 
+QVariantMap MapModel::vramUsage() const
+{
+  // How full the console's sprite memory is, in the two kinds it keeps separately.
+  //
+  // ⚠️ THIS EXISTS TO EXPLAIN A CONFUSING-BUT-CORRECT STATE (2026-08-19). Indoors every character is
+  // allowed — until the room runs out, and then almost nothing is, which looks exactly like the
+  // outdoor "wrong map" restriction and is a completely different fact. project leadership hit it and
+  // read it as the indoor rule not working: *"characters still show normally for outdoor when
+  // switched to indoor, theres still yellow exclamation icons and a 'Safe on this map' section that
+  // lists a small amount of characters."* The rule was working; the panel just had no way to say
+  // *"you are out of room"* at a glance, only per-character in a tooltip you have to go looking for.
+  const QVector<int> vram = vramPictures();
+
+  int walking = 0, still = 0;
+  for (int p : vram) {
+    if (p >= FirstStillSprite) still++;
+    else walking++;
+  }
+
+  QVariantMap m;
+  m["walking"]    = walking;
+  m["walkingMax"] = WalkingVramSlots;
+  m["still"]      = still;
+  m["stillMax"]   = StillVramSlots;
+  m["full"]       = (walking >= WalkingVramSlots);
+  return m;
+}
+
 bool MapModel::pictureWouldRenderIfAdded(int picture) const
 {
   if (picture <= 0)
@@ -6425,6 +6453,40 @@ QVariantList MapModel::tilesetList() const
   }
 
   return out;
+}
+
+int MapModel::tilesetOfMap(int mapIndArg) const
+{
+  // ⭐ THE MERGED TILESET PICKER IS A MAP-NAME PRESET (project leadership, 2026-08-19: *"the
+  // 'merged' state will be a map name preset that contains the correct combo making it way more UX
+  // friendly"*). Nobody thinks in tileset names; everybody thinks *"draw it like Viridian Forest"*.
+  // So the combined control picks a MAP and takes its tileset for both pointers, which is exactly
+  // the combination the cartridge ships for that map — a correct pair by construction.
+  auto* m = MapsDB::inst()->getStoreAt(mapIndArg);
+  if (m == nullptr)
+    return -1;
+
+  // ⚠️ THE RESOLVED ENTRY, NOT A NAME MATCH. `getTileset()` returns the cartridge's ALIAS
+  // ("OVERWORLD"); `TilesetDBEntry::name` is the friendly one ("Overworld"). Comparing those two
+  // matches nothing and returns -1 for every map in the game — which is exactly what the first cut
+  // of this did. The DB already deep-links the pair, so ask it.
+  TilesetDBEntry* t = m->getToTileset();
+  return (t != nullptr) ? int(t->ind) : -1;
+}
+
+int MapModel::mapDrawnLikeTileset(int tilesetIndArg) const
+{
+  // A map that uses this tileset, so the merged picker's FACE can show a map name rather than a
+  // tileset name. The first one in id order, which keeps it stable between calls.
+  //
+  // ⚠️ The caption under the picker still shows the real TILESET name, because this is only ever a
+  // representative: dozens of maps share a tileset, and the save stores the tileset, not the map.
+  // The face is a convenience; the caption is the truth.
+  for (auto* m : MapsDB::inst()->getStore())
+    if (m != nullptr && tilesetOfMap(int(m->getInd())) == tilesetIndArg)
+      return int(m->getInd());
+
+  return -1;
 }
 
 QVariantMap MapModel::canonicalTileset() const

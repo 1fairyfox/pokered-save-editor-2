@@ -535,15 +535,17 @@ Item {
         // map" are both nonsense there — and printing either is exactly the fake-map behaviour
         // project leadership struck out (2026-08-18: *"It doesnt need the not map state text because
         // its not a map it doesnt need to act as a fake map."*).
+        // ⚠️ "— edits are live" IS GONE (project leadership, 2026-08-19: *"its dumb to announce
+        // messages talking about this is live this isnt live, you scatter these in different
+        // places"*). The half that carries information stays: whether you are looking at the map
+        // you are STANDING on, which is a fact about where the player is, not about the editor.
         Label {
           Layout.fillWidth: true
-          visible: !panel.onOtherPage
+          visible: !panel.onOtherPage && !panel.onShownMap
           wrapMode: Text.Wrap
           font.pixelSize: 10
           opacity: 0.55
-          text: panel.onShownMap
-                ? qsTr("You're on this map — edits are live.")
-                : qsTr("Not your current map — stored, applies when you're there.")
+          text: qsTr("Not the map you're standing on.")
         }
 
         // (No useless-edits switch HERE: the toolbar's "!" is the one gate for the whole map

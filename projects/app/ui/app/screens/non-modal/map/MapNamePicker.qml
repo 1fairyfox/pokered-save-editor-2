@@ -46,6 +46,15 @@ Item {
   /// the panel is just the map picker until you ask for more (project leadership, 2026-08-03).
   property bool advancedOpen: false
 
+  /// Ticks on every model change, so bindings that CALL a Q_INVOKABLE (which has no dependency of
+  /// its own) re-run. The merged tileset preset needs it: `mapDrawnLikeTileset()` and
+  /// `tilesetList()` are calls, not properties.
+  property int revision: 0
+  Connections {
+    target: brg.map
+    function onChanged() { root.revision++; }
+  }
+
   /// Tileset & blocks: ONE combined selector by default, or two separate ones. The user chooses with
   /// explicit "Separate" / "Merge" buttons (project leadership, 2026-08-03). We always show the split
   /// view when the save's tileset and blocks genuinely differ — one combo can't represent two values.
@@ -474,35 +483,74 @@ Item {
         // (tiles & blocks move together) and two (each set on its own). The split view also shows
         // whenever the save's two values genuinely differ. (project leadership, 2026-08-03.)
 
-        // ── Combined selector (one control, moves both) ──
-        RowLayout {
+        // ── Combined selector: a MAP-NAME PRESET (one control, moves both) ──
+        //
+        // ⭐ project leadership, 2026-08-19: *"for tileset and blockset a little different, the
+        // 'merged' state will be a map name preset that contains the correct combo making it way
+        // more UX friendly, there can still be a merged and split, split will act normal."*
+        //
+        // It used to be a list of TILESET names — "Overworld", "Pokecenter", "Gym" — which asks you
+        // to already know which of them a cave uses, or which one has the counter tiles you want.
+        // Nobody thinks that way; everybody thinks *"draw it like Viridian Forest"*. So the merged
+        // control is the shared map selector now (sort, search, grouped rows like everywhere else),
+        // and picking a map takes THAT map's tileset for both pointers — the exact pair the
+        // cartridge ships, correct by construction.
+        //
+        // Split is untouched and still the two tileset lists, exactly as before.
+        ColumnLayout {
           Layout.fillWidth: true
           visible: !root.blocksSplitShown
-          spacing: 6
+          spacing: 3
 
-          ComboBox {
+          RowLayout {
             Layout.fillWidth: true
-            Layout.preferredHeight: 32
-            font.pixelSize: 12
-            model: brg.map.tilesetList()
-            textRole: "name"
-            valueRole: "ind"
-            currentIndex: {
-              const list = model;
-              for (let i = 0; i < list.length; i++)
-                if (list[i].ind === brg.map.tilesetInd)
-                  return i;
-              return -1;
+            spacing: 6
+
+            MapField {
+              Layout.fillWidth: true
+              Layout.preferredHeight: 32
+
+              // A representative map for the tileset the save actually holds. @see the caption.
+              value: {
+                root.revision;
+                const m = brg.map.mapDrawnLikeTileset(brg.map.tilesetInd);
+                return m >= 0 ? m : brg.map.mapInd;
+              }
+
+              onPicked: (ind) => {
+                const ts = brg.map.tilesetOfMap(ind);
+                if (ts < 0)
+                  return;
+                brg.map.tilesetInd = ts;
+                brg.map.blocksetInd = ts;   // merged moves BOTH — the whole point of merging them
+              }
             }
-            // The combined selector moves BOTH — the whole point of combining them.
-            onActivated: { brg.map.tilesetInd = currentValue; brg.map.blocksetInd = currentValue; }
+
+            FieldButtons {
+              Layout.alignment: Qt.AlignVCenter
+              showRevert: true
+              onRandomize: { brg.map.randomizeTileset(); brg.map.blocksetInd = brg.map.tilesetInd; }
+              onRevert: { brg.map.revertTileset(); brg.map.revertBlockset(); }
+            }
           }
 
-          FieldButtons {
-            Layout.alignment: Qt.AlignVCenter
-            showRevert: true
-            onRandomize: { brg.map.randomizeTileset(); brg.map.blocksetInd = brg.map.tilesetInd; }
-            onRevert: { brg.map.revertTileset(); brg.map.revertBlockset(); }
+          // ⚠️ THE CAPTION IS THE TRUTH. The face shows a map because that is the useful handle, but
+          // the SAVE stores a tileset and dozens of maps share each one — so the thing actually
+          // being set is named here, plainly, and cannot be mistaken for "this map".
+          Label {
+            Layout.fillWidth: true
+            Layout.preferredWidth: 0
+            wrapMode: Text.Wrap
+            font.pixelSize: 10
+            opacity: 0.55
+            text: {
+              root.revision;
+              const l = brg.map.tilesetList();
+              for (let i = 0; i < l.length; i++)
+                if (l[i].ind === brg.map.tilesetInd)
+                  return qsTr("Tiles and blocks: %1").arg(l[i].name);
+              return qsTr("Tiles and blocks: %1").arg(brg.map.tilesetInd);
+            }
           }
         }
 

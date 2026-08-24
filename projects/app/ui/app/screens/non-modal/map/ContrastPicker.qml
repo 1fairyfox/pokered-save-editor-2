@@ -70,6 +70,11 @@ Item {
   /// precedent without meeting the same bar.
   property bool showGlitchChosen: false
 
+  /// The full-byte escape. 0–9 are the ten values the strip can draw; the other 246 are storable
+  /// too, and the console reads further off the end of its fade table for each. @see the note on the
+  /// "Something else…" link at the bottom of the dropdown.
+  property bool showAny: false
+
   /// ⚠️ The `contrastIsGlitch` half is not a second gate — it is the answer to a different question. A
   /// save ALREADY sitting on 4 has nothing to hide: refusing to draw the segment the save is on would
   /// leave the strip unable to show its own value.
@@ -326,6 +331,56 @@ Item {
           text: qsTr("Glitch contrast")
           font.pixelSize: 11
           color: brg.settings.textColorDark
+        }
+      }
+
+      // ── Something else… — the rest of the byte ───────────────────────────────────────────────
+      //
+      // ⭐ project leadership, 2026-08-19: *"I think contrast can technically be any value can you
+      // add a Something else... link right below the glitch contrast."* Correct: `wMapPalOffset` is
+      // a whole byte. 0–9 are the four real levels plus the six in-between reads; **10–255 are also
+      // storable**, and the console subtracts them from the same pointer, so they read further and
+      // further off the end of the fade table. The strip could never offer those, and a control that
+      // silently caps a byte is the one thing this editor does not do.
+      //
+      // House standard, verbatim: "Something else…" opens it, "Pick from the list" comes back.
+      ColumnLayout {
+        Layout.fillWidth: true
+        Layout.topMargin: 2
+        spacing: 3
+
+        RowLayout {
+          Layout.fillWidth: true
+          spacing: 6
+          visible: root.showAny
+          Text {
+            text: qsTr("Value")
+            font.pixelSize: 10
+            opacity: 0.6
+            color: brg.settings.textColorDark
+          }
+          SpinBox {
+            Layout.fillWidth: true
+            Layout.preferredHeight: 26
+            font.pixelSize: 11
+            editable: true
+            from: 0
+            to: 255
+            value: brg.map.contrast
+            onValueModified: brg.map.contrast = value
+          }
+        }
+
+        Text {
+          text: root.showAny ? qsTr("Pick from the list") : qsTr("Something else…")
+          font.pixelSize: 10
+          color: brg.settings.accentColor
+
+          MouseArea {
+            anchors.fill: parent
+            cursorShape: Qt.PointingHandCursor
+            onClicked: root.showAny = !root.showAny
+          }
         }
       }
 

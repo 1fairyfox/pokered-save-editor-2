@@ -213,10 +213,16 @@ ColumnLayout {
 
     // A quiet link, not a checkbox: the raw range is not forbidden, it is just not what you usually
     // want. (The doctrine: hack values are first-class.)
+    //
+    // ⚠️ THE HOUSE WORDS, VERBATIM. This said *"Point it at any id (past this map's text)…"* and
+    // *"Typing a raw id. ⟲ Back to this map's text"* — accurate, and a third different phrasing for
+    // the one control every panel has. project leadership has now asked twice (2026-08-18, and
+    // again 2026-08-19 while auditing that EVERY field has one): the two strings are
+    // **"Something else…"** and **"Pick from the list"**, everywhere, so the link reads as a control
+    // rather than as a sentence about the current state.
     Label {
       Layout.fillWidth: true
-      text: field.showRaw ? qsTr("Typing a raw id. ⟲ Back to this map's text")
-                          : qsTr("Point it at any id (past this map's text)…")
+      text: field.showRaw ? qsTr("Pick from the list") : qsTr("Something else…")
       font.pixelSize: 10
       color: brg.settings.accentColor
       wrapMode: Text.Wrap

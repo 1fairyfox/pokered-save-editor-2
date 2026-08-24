@@ -76,14 +76,33 @@ Item {
 
   readonly property real blockPx: 32 * conn.canvas.zoom
 
-  /// Snap @p off to the nearest landmark within one block; sets snapName. Returns the (possibly
-  /// snapped) offset, clamped to the legal range.
+  /// The last whole-block step this drag committed. The rounding is HYSTERETIC around it, so a few
+  /// pixels of pointer jitter can never push the offset back and forth. @see the note below.
+  property int  lastStep: 0
+
+  /// Snap @p off to the nearest landmark; sets snapName. Returns the (possibly snapped) offset,
+  /// clamped to the legal range.
+  ///
+  /// ⚠️ THE GRAB RADIUS AND THE RELEASE RADIUS ARE DIFFERENT ON PURPOSE (2026-08-19). A magnet that
+  /// lets go at exactly the distance it grabs at CHATTERS: sit one block from a landmark and the
+  /// smallest movement snaps in, un-snaps, snaps in again. That is half of project leadership's
+  /// *"the handle drags now occasionally an extra step still making it somewhat unusable"* — the
+  /// "extra step" is the magnet pulling you a block you didn't ask for and then dropping you.
+  /// Grab within 1 block; hold until you are clearly 2 blocks away.
   function withSnap(off) {
-    conn.snapName = "";
     const lo = conn.edge.offsetMin, hi = conn.edge.offsetMax;
     off = Math.max(lo, Math.min(hi, off));
 
     const snaps = conn.edge.snaps || [];
+
+    // Already magnetised? Stay until we have properly left.
+    if (conn.snapName !== "") {
+      for (let h = 0; h < snaps.length; h++)
+        if (snaps[h].name === conn.snapName && Math.abs(off - snaps[h].offset) <= 2)
+          return snaps[h].offset;
+    }
+
+    conn.snapName = "";
     for (let i = 0; i < snaps.length; i++) {
       if (Math.abs(off - snaps[i].offset) <= 1) {
         conn.snapName = snaps[i].name;
@@ -117,16 +136,29 @@ Item {
   }
 
   // The grab handle -- a small disc in the middle of the strip, so there is an obvious thing to slide.
+  //
+  // ⚠️ WHOLE-PIXEL PLACEMENT, NOT `anchors.centerIn` (project leadership, 2026-08-19: *"the anchor
+  // drag icon is offcenter slightly looks further below"*). The strip's height is
+  // `blocks × 32 × zoom`, so at most zooms it is FRACTIONAL — 67.2 px at 0.7 — and centring an
+  // 18 px disc in it puts the disc at 24.6, which the renderer resolves downward and softens with
+  // antialiasing. Small, but it reads as "not quite centred", and it is worse at some zooms than
+  // others, which is why it looks like a mistake rather than a rounding artefact. Rounding both the
+  // position and the size to whole pixels makes it land the same way at every zoom.
   Rectangle {
-    anchors.centerIn: parent
     visible: conn.canvas.zoom >= 0.6
     width: 18; height: 18; radius: 9
+    x: Math.round((conn.width  - width)  / 2)
+    y: Math.round((conn.height - height) / 2)
     color: drag.containsMouse || conn.dragging ? "#d55e00" : "#e6212121"
     border.width: 1
     border.color: "#ffffff"
 
     Text {
       anchors.centerIn: parent
+      // ⚠️ The arrow glyphs carry more descent than cap-height, so a box-centred one sits visibly
+      // low inside an 18 px disc. One pixel up puts the STROKE on the centre line, which is what
+      // the eye actually measures.
+      anchors.verticalCenterOffset: -1
       text: conn.horizontal ? "↔" : "↕"
       font.pixelSize: 12
       color: "white"
@@ -218,6 +250,18 @@ Item {
 
     property bool moved: false
 
+    // ⭐ TELL THE CANVAS WE ARE UNDER THE POINTER (project leadership, 2026-08-19: *"the connection
+    // icon on the map firstly shows map block squares underneath being highlighted as you try to
+    // click the anchor drag icon"* … *"map blocks arent supposed to highlight at all on connections.
+    // Thats only for the main map and its out of bounds area."*).
+    //
+    // `canvas.hoverConnection` already existed and the cell highlight already consulted it — but
+    // **nothing ever set it**. It was added for the ADD arrows and the strip was never wired, so the
+    // white block outline kept lighting up under the very handle you were reaching for. A declared
+    // signal with no sender is worse than none: everything downstream looks correct and does nothing.
+    onContainsMouseChanged: conn.canvas.hoverConnection = containsMouse
+    Component.onDestruction: conn.canvas.hoverConnection = false
+
     // ⚠️ MEASURE IN A FRAME THAT DOES NOT MOVE (fixed 2026-08-19). project leadership:
     // *"connections move around super glitchy and choppy, clicking and dragging just jerks it all
     // over the place its almost impossible to use without manually working with the numbers in
@@ -241,6 +285,8 @@ Item {
       conn.canvas.selectedConnection = conn.dir;
       conn.baseOffset = conn.edge.offset;
       conn.pressPos = drag.axisIn(m);
+      conn.lastStep = 0;
+      conn.snapName = "";
       drag.moved = false;
       m.accepted = true;
     }
@@ -256,8 +302,19 @@ Item {
       // Slide along the edge -> a whole-block change in offset. A desynced connection can't be driven
       // by the offset knob (its bytes no longer match it), so a drag first re-syncs it to its own
       // recovered offset and then moves from there.
-      const deltaBlocks = Math.round(dpx / conn.blockPx);
-      const want = conn.withSnap(conn.baseOffset + deltaBlocks);
+      //
+      // ⚠️ HYSTERESIS, NOT `Math.round` (2026-08-19). Plain rounding flips at exactly half a block,
+      // so a pointer resting near that boundary — which is where it spends a lot of its time, since
+      // you stop moving when you are nearly there — steps back and forth on a pixel of jitter. That
+      // is the other half of *"the handle drags now occasionally an extra step"*. You have to travel
+      // 60% of a block past the CURRENT step to advance, and the step never falls back on noise.
+      const raw = dpx / conn.blockPx;
+      if (raw > conn.lastStep + 0.6)
+        conn.lastStep = Math.floor(raw + 0.4);
+      else if (raw < conn.lastStep - 0.6)
+        conn.lastStep = Math.ceil(raw - 0.4);
+
+      const want = conn.withSnap(conn.baseOffset + conn.lastStep);
 
       if (want !== conn.edge.offset)
         brg.map.setConnectionOffset(conn.dir, want);

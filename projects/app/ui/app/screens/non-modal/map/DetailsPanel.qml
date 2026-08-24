@@ -107,11 +107,38 @@ Item {
     return details.hasConnection ? brg.map.connectionFields(details.connection) : [];
   }
 
-  /// The break-sync switch (the power path). Reset whenever the selection changes -- a fresh connection
-  /// starts synced (its raw fields read-only) until you deliberately break it. A connection that is
-  /// ALREADY desynced (raw-edited) shows its fields editable regardless.
-  property bool connBreakSync: false
-  onConnectionChanged: details.connBreakSync = false
+  /// Which connections the person has put on MANUAL CONTROL, by direction. A connection not in here
+  /// is on auto: its raw fields follow the offset and stay read-only.
+  ///
+  /// ⭐ NOTHING BUT THEM MAY TURN IT OFF (project leadership, 2026-08-19: *"Never auto turn off
+  /// manual sync i moved the number down and it suddenly greyed out and switched to sync."*).
+  ///
+  /// Two things did that, and both are gone:
+  ///
+  ///   * it was a single `bool` reset by `onConnectionChanged` — and `connection` reads through
+  ///     `canvas.selectedConnection`, so anything that so much as re-touched the selection while you
+  ///     were typing dropped you back to auto. Per-direction state means selecting away and back
+  ///     keeps your choice, and nothing else can clear it.
+  ///   * the switch was `enabled: connSynced`, so the FIRST raw edit — which by definition desyncs
+  ///     the connection — greyed the switch out. It looked exactly like the app had changed its
+  ///     mind for you, which is what they described.
+  ///
+  /// Manual is a state you chose. It ends when you say so.
+  property var connManualDirs: ({})
+
+  readonly property bool connBreakSync: details.hasConnection
+                                        && details.connManualDirs[details.connection] === true
+
+  function setConnManual(on) {
+    if (!details.hasConnection)
+      return;
+    // A new object, not a mutation — QML only re-evaluates a var binding when the reference changes.
+    let next = {};
+    for (let k in details.connManualDirs)
+      next[k] = details.connManualDirs[k];
+    next[details.connection] = on;
+    details.connManualDirs = next;
+  }
 
   readonly property bool connRawEditable: details.connBreakSync
                                         || (details.hasConnection && details.connEdge.synced === false)
@@ -1153,33 +1180,13 @@ Item {
           }
         }
 
-        // ── The honest note ────────────────────────────────────────────────────────────────
-        //
-        // It appears ONLY once the user has actually changed a door -- the same rule as the cast, and
-        // for the same reason: a notice that fires on every save anybody ever opens is noise, and
-        // noise is a bug.
-        Rectangle {
-          Layout.fillWidth: true
-          Layout.topMargin: 8
-          visible: brg.map.warpsEdited()
-          radius: 6
-          color: Qt.rgba(1, 0.84, 0.31, 0.15)
-          border.width: 1
-          border.color: "#ffd54f"
-          implicitHeight: liveNote.implicitHeight + 14
-
-          Label {
-            id: liveNote
-            anchors.fill: parent
-            anchors.margins: 7
-            wrapMode: Text.Wrap
-            font.pixelSize: 10
-            text: qsTr("These warps are live — the game will use them when this save loads.\n\n"
-                       + "It puts the map's original warps back as soon as the player walks out of "
-                       + "this map and back in again. That's the game's own behaviour, not a limit "
-                       + "of the editor.")
-          }
-        }
+        // ⚠️ NO "THESE WARPS ARE LIVE" NOTICE. Removed 2026-08-19 — project leadership: *"remove
+        // these connections are live whole block, please its dumb to announce messages talking
+        // about this is live this isnt live, you scatter these in different places and its silly
+        // and takes up space."* It was one of three identical panels (warps, signs, connections)
+        // and the standing rule now is: **do not announce liveness anywhere.** An editor's edits
+        // being real is the assumption, not news; the restore-on-re-entry behaviour belongs in
+        // notes/reference/warps.md, where somebody who wants it is already looking.
       }
 
       // ══ ▤ A SIGN SELECTED ══════════════════════════════════════════════════════════════════
@@ -1313,29 +1320,7 @@ Item {
           }
         }
 
-        // ── The honest note (same rule, same words, as the doors) ─────────────────────────────
-        Rectangle {
-          Layout.fillWidth: true
-          Layout.topMargin: 8
-          visible: brg.map.signsEdited()
-          radius: 6
-          color: Qt.rgba(1, 0.84, 0.31, 0.15)
-          border.width: 1
-          border.color: "#ffd54f"
-          implicitHeight: signLiveNote.implicitHeight + 14
-
-          Label {
-            id: signLiveNote
-            anchors.fill: parent
-            anchors.margins: 7
-            wrapMode: Text.Wrap
-            font.pixelSize: 10
-            text: qsTr("These signs are live — the game will use them when this save loads.\n\n"
-                       + "It puts the map's original signs back as soon as the player walks out of "
-                       + "this map and back in again. That's the game's own behaviour, not a limit "
-                       + "of the editor.")
-          }
-        }
+        // ⚠️ NO LIVENESS NOTICE — see the warps section for the ruling (2026-08-19).
       }
 
       // ══ 🔗 A CONNECTION SELECTED ═══════════════════════════════════════════════════════════
@@ -1518,12 +1503,14 @@ Item {
             // reads like something you'd be warned against; what the switch actually gives you is
             // the wheel. It is also the word the 🔧 gate that reveals this section already uses, so
             // the two now say the same thing.
+            // ⚠️ ALWAYS ENABLED. It used to disable itself the moment the connection desynced —
+            // which is the moment you make your first raw edit — so turning it on and typing a
+            // number greyed the switch out under your hand. @see details.connManualDirs.
             Switch {
               text: qsTr("Manual control")
               font.pixelSize: 10
-              checked: details.connRawEditable
-              enabled: connRaw.connSynced   // already on manual: always editable, switch moot
-              onToggled: details.connBreakSync = checked
+              checked: details.connBreakSync
+              onToggled: details.setConnManual(checked)
             }
           }
 
@@ -1555,6 +1542,19 @@ Item {
                 elide: Text.ElideRight
               }
 
+              // ⭐ THE NEIGHBOUR ID IS A MAP, SO IT GETS THE MAP LIST (project leadership,
+              // 2026-08-19: *"neighbor map id should be the map list"*). It is still the raw byte —
+              // the shared selector offers all 248 including the glitch ids, so nothing is refused;
+              // it just stops asking anybody to know that Route 1 is 12.
+              MapField {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 26
+                visible: modelData.key === "mapPtr"
+                enabled: details.connRawEditable
+                value: modelData.value
+                onPicked: (ind) => brg.map.setConnectionField(details.connection, modelData.key, ind)
+              }
+
               // ⭐ AN ADDRESS IS NOT A QUANTITY (project leadership: *"strip src/dst and the view
               // pointer shown as hex pointers"*). Three of these eight are memory addresses, and
               // showing "50923" where the game means `$C6EB` is a small lie about what the value
@@ -1581,7 +1581,7 @@ Item {
                 Layout.preferredHeight: 26
                 font.pixelSize: 10
                 editable: true
-                visible: modelData.kind !== "pointer"
+                visible: modelData.kind !== "pointer" && modelData.key !== "mapPtr"
                 enabled: details.connRawEditable
                 from: modelData.min
                 to: modelData.max
@@ -1619,28 +1619,7 @@ Item {
           }
         }
 
-        // ── The honest note (same rule as doors/signs) ──────────────────────────────────────
-        Rectangle {
-          Layout.fillWidth: true
-          Layout.topMargin: 8
-          visible: brg.map.connectionsEdited()
-          radius: 6
-          color: Qt.rgba(1, 0.84, 0.31, 0.15)
-          border.width: 1
-          border.color: "#ffd54f"
-          implicitHeight: connLiveNote.implicitHeight + 14
-          Label {
-            id: connLiveNote
-            anchors.fill: parent
-            anchors.margins: 7
-            wrapMode: Text.Wrap
-            font.pixelSize: 10
-            text: qsTr("These connections are live — the game will use them when this save loads.\n\n"
-                       + "It puts the map's original connections back as soon as the player walks out "
-                       + "of this map and back in again. That's the game's own behaviour, not a limit "
-                       + "of the editor.")
-          }
-        }
+        // ⚠️ NO LIVENESS NOTICE — see the warps section for the ruling (2026-08-19).
       }
 
       // ══ ⟐ A SCRIPT TRIGGER SELECTED ════════════════════════════════════════════════════════

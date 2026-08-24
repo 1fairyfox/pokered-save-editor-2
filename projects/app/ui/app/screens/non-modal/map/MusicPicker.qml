@@ -37,6 +37,10 @@ Item {
 
   property bool openState: false
 
+  /// The raw bank + track escape. The list names 151 of the 256×256 pairs the save can hold, so it
+  /// is a subset and therefore needs one. @see the "Something else…" link under the combo.
+  property bool showRaw: false
+
   /// The save's audio node: musicID / musicBank / noAudioFadeout / preventMusicChange.
   readonly property var audio: (brg.file && brg.file.data && brg.file.data.dataExpanded
                                 && brg.file.data.dataExpanded.area)
@@ -209,6 +213,72 @@ Item {
                 color: "#0072b2"
               }
             }
+          }
+        }
+      }
+
+      // ── Something else… — the raw bank + id ────────────────────────────────────────────────
+      //
+      // ⭐ project leadership, 2026-08-19: *"Make sure every field has a Something else... unless the
+      // field is already fully populated with the entire number range … the music list may also do
+      // the same."* It does NOT: the list is the 46 real tracks plus the 105 sub-tracks we can name,
+      // and the save stores a **bank and an id**, both whole bytes. Everything outside those 151
+      // rows is storable, and this editor does not cap a byte.
+      //
+      // ⚠️ THE BANK IS THE DANGEROUS ONE, and it says so rather than being refused: an invalid bank
+      // makes the console execute arbitrary ROM as code and hang. @see reference/glitch-music.md.
+      ColumnLayout {
+        Layout.fillWidth: true
+        spacing: 3
+
+        RowLayout {
+          Layout.fillWidth: true
+          spacing: 6
+          visible: music.showRaw && music.hasAudio
+
+          Label { text: qsTr("Bank"); font.pixelSize: 10; opacity: 0.6 }
+          SpinBox {
+            Layout.preferredWidth: 70
+            Layout.preferredHeight: 26
+            font.pixelSize: 10
+            editable: true
+            from: 0; to: 255
+            value: music.hasAudio ? music.audio.musicBank : 0
+            onValueModified: if (music.hasAudio) music.audio.musicBank = value
+          }
+
+          Label { text: qsTr("Track"); font.pixelSize: 10; opacity: 0.6 }
+          SpinBox {
+            Layout.fillWidth: true
+            Layout.preferredHeight: 26
+            font.pixelSize: 10
+            editable: true
+            from: 0; to: 255
+            value: music.hasAudio ? music.audio.musicID : 0
+            onValueModified: if (music.hasAudio) music.audio.musicID = value
+          }
+        }
+
+        Label {
+          Layout.fillWidth: true
+          Layout.preferredWidth: 0
+          visible: music.showRaw
+          wrapMode: Text.Wrap
+          font.pixelSize: 10
+          opacity: 0.6
+          text: qsTr("A bank the game doesn't use makes the console run whatever is at that "
+                     + "address as code — it will usually hang.")
+        }
+
+        Label {
+          text: music.showRaw ? qsTr("Pick from the list") : qsTr("Something else…")
+          font.pixelSize: 10
+          color: brg.settings.accentColor
+
+          MouseArea {
+            anchors.fill: parent
+            cursorShape: Qt.PointingHandCursor
+            onClicked: music.showRaw = !music.showRaw
           }
         }
       }
