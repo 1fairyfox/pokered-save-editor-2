@@ -138,6 +138,11 @@ Item {
       next[k] = details.connManualDirs[k];
     next[details.connection] = on;
     details.connManualDirs = next;
+
+    // The canvas shows the resize grips off this, so the panel's choice and the map agree. Two
+    // copies of one state, and the panel is the owner — @see MapCanvas.connManual.
+    if (details.canvas)
+      details.canvas.connManual = next;
   }
 
   readonly property bool connRawEditable: details.connBreakSync

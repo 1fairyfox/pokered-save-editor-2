@@ -80,6 +80,33 @@ Item {
   /// pixels of pointer jitter can never push the offset back and forth. @see the note below.
   property int  lastStep: 0
 
+  /// Is this connection on MANUAL control? The resize grips only exist then, so an ordinary drag of
+  /// a synced strip is never ambiguous. Driven by the Details panel, which owns that choice.
+  property bool manual: false
+
+  /// Which grip the pointer is over ("stripWidth" / "width" / ""), and which one a drag is resizing
+  /// ("" while the drag is an ordinary move). Both are decided by the strip's ONE MouseArea.
+  property string gripHover: ""
+  property string gripDrag: ""
+
+  /// Which grip is at (@p px, @p py) in this item's own coordinates, or "".
+  function gripAt(px, py) {
+    if (gripLength.hit(px, py)) return "stripWidth";
+    if (gripWidth.hit(px, py))  return "width";
+    return "";
+  }
+
+  /// One of the raw connection bytes, by key — the grips read and write through here so there is one
+  /// path to the model rather than a copy of the field list on the canvas.
+  function fieldValue(key) {
+    conn.canvas.revision;
+    const f = brg.map.connectionFields(conn.dir);
+    for (let i = 0; i < f.length; i++)
+      if (f[i].key === key)
+        return f[i].value;
+    return 0;
+  }
+
   /// Snap @p off to the nearest landmark; sets snapName. Returns the (possibly snapped) offset,
   /// clamped to the legal range.
   ///
@@ -163,6 +190,119 @@ Item {
       font.pixelSize: 12
       color: "white"
     }
+  }
+
+  // ══ MANUAL HANDLES — the numbers, grabbable on the map ═══════════════════════════════════════
+  //
+  // ⭐ project leadership, 2026-08-19: *"theres no drag and resize handles for the different numbers
+  // in manual … Strip length needs a handle … Neighbour width needs a handle … These handles dont
+  // need to be confusing as to what they are they should ideally be easy and intuitive."*
+  //
+  // Two of the five manual numbers are LENGTHS, so they get the handle everybody already knows: a
+  // grip at the end of the thing, dragged to make it longer or shorter. They only appear on the
+  // selected connection AND only under Manual control, so an ordinary drag of the strip is never
+  // ambiguous — one grip in the middle moves it, the grips at the ends resize it.
+  //
+  //   * **Strip length** — how much of the neighbour is borrowed. The grip sits at the far end of
+  //     the strip and runs along the edge, which is the axis the length is measured on.
+  //   * **Neighbour width** — the row stride the copy steps by. It is not a distance on OUR map, so
+  //     it gets its own grip on the perpendicular axis with its own label; dragging it wider or
+  //     narrower is exactly what the number does to the copy.
+  //
+  // ⚠️ The other three (strip source, strip destination, view pointer) are ADDRESSES, and a handle
+  // for them has to mean "which block does this address land on" — which needs the block/bank
+  // address-space model that notes/reference/map-connections.md describes and we have not built.
+  // Guessing a mapping would put a confident handle on a wrong number, which is worse than a
+  // spinbox. They stay numeric (as hex) until that phase lands. @see plans/map-screen.md.
+  // ⚠️ TWO FIXED ITEMS, NOT A REPEATER — and this file's own header says why, which is exactly the
+  // trap I walked into (2026-08-19). A Repeater whose `model` is a JS array literal REBUILDS ITS
+  // DELEGATES whenever any dependency of that expression changes; `conn.present` reads `conn.edge`,
+  // which reads `canvas.revision`, which a field write bumps. So the first commit of a grip drag
+  // destroyed the very item holding the grab and the gesture died silently — the number never moved,
+  // and nothing looked wrong. The move handle has been a fixed item since July for this reason.
+  component Grip: Rectangle {
+      id: grip
+      required property string fieldKey
+      required property string fieldLabel
+
+      /// Lit by the strip's own MouseArea, which is the only thing that sees the pointer.
+      property bool hovered: false
+
+      visible: conn.present && conn.selected && conn.manual
+
+      readonly property bool alongEdge: fieldKey === "stripWidth"
+
+      z: 46
+      width: 14; height: 14; radius: 3
+      color: grip.hovered ? "#d55e00" : "#e6212121"
+      border.width: 1
+      border.color: "#ffffff"
+
+      // The length grip sits at the far end of the strip on the edge's own axis; the width grip sits
+      // on the perpendicular one, so the two can never be confused for each other.
+      x: grip.alongEdge ? (conn.horizontal ? conn.width - width : Math.round((conn.width - width) / 2))
+                        : (conn.horizontal ? Math.round((conn.width - width) / 2) : conn.width - width)
+      y: grip.alongEdge ? (conn.horizontal ? Math.round((conn.height - height) / 2) : conn.height - height)
+                        : (conn.horizontal ? conn.height - height : Math.round((conn.height - height) / 2))
+
+      Text {
+        anchors.centerIn: parent
+        anchors.verticalCenterOffset: -1
+        text: grip.alongEdge ? (conn.horizontal ? "⇥" : "⤓") : "⇲"
+        font.pixelSize: 10
+        color: "white"
+      }
+
+      // Its own name and its own live value, so a grip is never a mystery square.
+      Rectangle {
+        visible: grip.hovered
+        z: 47
+        anchors.bottom: parent.top
+        anchors.bottomMargin: 3
+        anchors.horizontalCenter: parent.horizontalCenter
+        width: gripLbl.implicitWidth + 10
+        height: gripLbl.implicitHeight + 5
+        radius: 3
+        color: "#e6212121"
+        Text {
+          id: gripLbl
+          anchors.centerIn: parent
+          text: grip.fieldLabel + "  " + conn.fieldValue(grip.fieldKey)
+          font.pixelSize: 10
+          color: "white"
+        }
+      }
+
+      // ⚠️ NO MouseArea OF ITS OWN — and this is the second delivery lesson of the day. A grip that
+      // owned its own MouseArea received the PRESS and then exactly ONE move: the pointer leaves a
+      // 14 px square almost immediately, and the grab did not survive it. Rather than fight event
+      // delivery with `preventStealing` and negative margins, the STRIP's single MouseArea (which
+      // already drags reliably) decides from WHERE the press landed which gesture this is. One grab,
+      // one handler, no ambiguity — the same shape the move drag has always had.
+      //
+      // `hit(px, py)` is in `conn`-local coordinates, and generous: a small square is a small
+      // target, so the grab region is bigger than the square you can see.
+      function hit(px, py) {
+        return grip.visible
+            && px >= grip.x - 5 && px <= grip.x + grip.width + 5
+            && py >= grip.y - 5 && py <= grip.y + grip.height + 5;
+      }
+  }
+
+  Grip {
+    id: gripLength
+    objectName: "mapConnGrip" + conn.dir + "_stripWidth"
+    fieldKey: "stripWidth"
+    fieldLabel: qsTr("Length")
+    hovered: conn.gripHover === "stripWidth"
+  }
+
+  Grip {
+    id: gripWidth
+    objectName: "mapConnGrip" + conn.dir + "_width"
+    fieldKey: "width"
+    fieldLabel: qsTr("Neighbour width")
+    hovered: conn.gripHover === "width"
   }
 
   // The selection ring, above everything, like the door's.
@@ -249,6 +389,7 @@ Item {
     preventStealing: true
 
     property bool moved: false
+    property real gripBase: 0      // the resized field's value when the grip drag began
 
     // ⭐ TELL THE CANVAS WE ARE UNDER THE POINTER (project leadership, 2026-08-19: *"the connection
     // icon on the map firstly shows map block squares underneath being highlighted as you try to
@@ -281,10 +422,31 @@ Item {
       return conn.horizontal ? p.x : p.y;
     }
 
+    /// The same fixed-frame reading, but on whichever axis the CURRENT gesture measures along: the
+    /// edge for a move or a length, the perpendicular for the neighbour's width.
+    function axisFor(m, key) {
+      const p = drag.mapToItem(conn.parent, m.x, m.y);
+      const along = (key === "width") ? !conn.horizontal : conn.horizontal;
+      return along ? p.x : p.y;
+    }
+
     onPressed: (m) => {
       conn.canvas.selectedConnection = conn.dir;
-      conn.baseOffset = conn.edge.offset;
-      conn.pressPos = drag.axisIn(m);
+
+      // ⭐ ONE GRAB, THREE GESTURES. Where the press landed decides which: on a resize grip it sets
+      // that field, anywhere else it moves the strip. Deciding here — rather than giving each grip
+      // its own MouseArea — is what makes the resize survive; a grip with its own area received the
+      // press and then exactly one move, because the pointer leaves a 14 px square immediately.
+      conn.gripDrag = conn.gripAt(m.x, m.y);
+
+      if (conn.gripDrag !== "") {
+        drag.gripBase = conn.fieldValue(conn.gripDrag);
+        conn.pressPos = drag.axisFor(m, conn.gripDrag);
+      } else {
+        conn.baseOffset = conn.edge.offset;
+        conn.pressPos = drag.axisFor(m, "");
+      }
+
       conn.lastStep = 0;
       conn.snapName = "";
       drag.moved = false;
@@ -292,9 +454,27 @@ Item {
     }
 
     onPositionChanged: (m) => {
-      if (!drag.pressed) return;
+      if (!drag.pressed) {
+        conn.gripHover = conn.gripAt(m.x, m.y);
+        return;
+      }
 
-      const cur = drag.axisIn(m);
+      // ── Resizing one of the manual numbers ────────────────────────────────────────────────
+      if (conn.gripDrag !== "") {
+        const rawG = (drag.axisFor(m, conn.gripDrag) - conn.pressPos) / conn.blockPx;
+        if (rawG > conn.lastStep + 0.6) conn.lastStep = Math.floor(rawG + 0.4);
+        else if (rawG < conn.lastStep - 0.6) conn.lastStep = Math.ceil(rawG - 0.4);
+
+        const wantG = Math.max(0, Math.min(255, drag.gripBase + conn.lastStep));
+        if (wantG !== conn.fieldValue(conn.gripDrag))
+          brg.map.setConnectionField(conn.dir, conn.gripDrag, wantG);
+
+        drag.moved = true;
+        conn.dragging = true;
+        return;
+      }
+
+      const cur = drag.axisFor(m, "");
       const dpx = cur - conn.pressPos;
       if (!drag.moved && Math.abs(dpx) < 4) return;
       drag.moved = true;
@@ -322,7 +502,10 @@ Item {
     }
 
     onReleased: () => {
-      if (!drag.moved) {
+      const wasGrip = conn.gripDrag !== "";
+      conn.gripDrag = "";
+
+      if (!drag.moved && !wasGrip) {
         conn.editRequested();   // a plain click opens the Details panel on this connection
         return;
       }
@@ -331,7 +514,11 @@ Item {
       drag.moved = false;
     }
 
-    onCanceled: { conn.dragging = false; conn.snapName = ""; drag.moved = false; }
+    onCanceled: {
+      conn.dragging = false; conn.snapName = ""; drag.moved = false; conn.gripDrag = "";
+    }
+
+    onExited: conn.gripHover = ""
   }
 
   // Esc mid-drag: put the offset back where it began, write nothing further.

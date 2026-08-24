@@ -649,6 +649,11 @@ Item {
   /// `hoverMovable` since July purely to withdraw the tab strip). @see the highlight's own note.
   property bool hoverConnection: false
 
+  /// Which connection directions are on MANUAL control, as a `{ dir: true }` map. Set by the Details
+  /// panel (which owns that choice) and read by MapConnection to decide whether to show its resize
+  /// grips — so a synced strip has exactly one grab (move) and a manual one has three.
+  property var connManual: ({})
+
   /// Is the pointer on SOMETHING rather than on the map? The cell highlight stands down when it is.
   readonly property bool hoverOverObject:
       canvasRoot.hoverConnection
@@ -1205,6 +1210,7 @@ Item {
           required property int index
           canvas: canvasRoot
           dir: index
+          manual: canvasRoot.connManual[index] === true
           onEditRequested: canvasRoot.editRequested(-1)   // -1 = "not a sprite"; panel reads selectedConnection
         }
       }

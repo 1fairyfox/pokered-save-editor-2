@@ -1,5 +1,47 @@
 # Qt / QML Patterns
 
+## THREE WAYS A DRAG DIES SILENTLY — 2026-08-19
+
+All three cost real time on the map screen in one day, all three look identical from the outside (the
+number simply does not move, and nothing is logged), and all three have the same tell: **the press
+arrives and the moves do not.**
+
+**1. Measuring in a frame that the drag itself moves.** A `MouseArea` filling an item reports `m.x` /
+`m.y` in that item's coordinates — so if the drag changes the item's position, the item slides out
+from under the cursor and the delta fights itself. Drag right → value up → item moves right →
+local x goes *down* → value down → repeat, every frame. That is not "jittery", it is an oscillation,
+and it is what project leadership described as *"jerks it all over the place"*. **Always
+`mapToItem(<something that does not move>, m.x, m.y)`.**
+
+**2. A `Repeater` delegate holding the grab.** A `Repeater` whose `model` is a JS array literal
+re-creates its delegates whenever ANY dependency of that expression changes. If the drag writes
+something that bumps a revision the expression reads, the very item holding the grab is destroyed
+mid-gesture. `MapConnection.qml`'s own header had warned about this since July and I did it anyway.
+**Fixed items, or a model that cannot churn.**
+
+**3. A grab area smaller than the gesture.** A 14 px grip with its own `MouseArea` received the press
+and exactly ONE move — the pointer leaves a 14 px square immediately, and the grab did not survive
+it. `preventStealing` and negative margins do not reliably fix this. **Let the big, already-working
+`MouseArea` own the gesture and decide from WHERE the press landed which gesture it is** — one grab,
+one handler, no delivery subtleties.
+
+> **The diagnostic that found all three: count the events.** A debug counter on `onPressed` and
+> `onPositionChanged`, read back through the harness, turns "it doesn't work" into "press 1, move 1"
+> in one build. Guessing at z-order and `preventStealing` produced nothing for several rounds; the
+> counter produced the answer immediately.
+
+## HYSTERESIS, NOT `Math.round`, FOR ANYTHING SNAPPED TO A GRID — 2026-08-19
+
+`Math.round(delta / step)` flips at exactly half a step — and half a step is precisely where a
+pointer *rests*, because you stop moving when you are nearly there. A pixel of jitter then steps the
+value back and forth. Require ~60% of a step past the CURRENT position to advance, and remember the
+committed step so it cannot fall back on noise.
+
+The same applies to magnets: **a snap that releases at the distance it grabs at will chatter.** Give
+the release radius room (grab within 1, hold until 2), or the value flips in and out of the landmark
+as you sit beside it. Between them these were project leadership's *"occasionally an extra step still
+making it somewhat unusable"*.
+
 ## A LAYOUT MANAGES EVERY VISIBLE CHILD — so a backdrop cannot live in one — 2026-08-19
 
 Project leadership, on the Map Storage panel:

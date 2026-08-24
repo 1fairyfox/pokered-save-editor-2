@@ -254,10 +254,16 @@ Rectangle {
           }
 
           // A sprite SLOT, so it's a slot picker -- "which of this map's 16 sprites".
+          //
+          // ⚠️ 16 OF 256, SO IT NEEDS AN ESCAPE (project leadership, 2026-08-19: *"Make sure every
+          // field has a Something else... unless the field is already fully populated with the
+          // entire number range"*). A map only ever has 16 slots, but the byte holds 0–255 and the
+          // console reads whichever one it is told to — off the end of the table included.
           ComboBox {
             Layout.fillWidth: true
             Layout.preferredHeight: 30
             font.pixelSize: 11
+            visible: !boulderRaw.on
 
             model: {
               const out = [qsTr("None")];
@@ -273,6 +279,31 @@ Rectangle {
             onActivated: {
               if (!panel.hasTs) return;
               panel.ts.boulderIndex = currentIndex;   // save 0x29C4 (wBoulderSpriteIndex)
+            }
+          }
+
+          SpinBox {
+            Layout.fillWidth: true
+            Layout.preferredHeight: 28
+            font.pixelSize: 11
+            visible: boulderRaw.on
+            editable: true
+            from: 0
+            to: 255
+            value: panel.hasTs ? panel.ts.boulderIndex : 0
+            onValueModified: if (panel.hasTs) panel.ts.boulderIndex = value
+          }
+
+          Label {
+            id: boulderRaw
+            property bool on: false
+            text: boulderRaw.on ? qsTr("Pick from the list") : qsTr("Something else…")
+            font.pixelSize: 10
+            color: brg.settings.accentColor
+            MouseArea {
+              anchors.fill: parent
+              cursorShape: Qt.PointingHandCursor
+              onClicked: boulderRaw.on = !boulderRaw.on
             }
           }
         }
