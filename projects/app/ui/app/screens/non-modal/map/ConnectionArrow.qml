@@ -181,17 +181,20 @@ Item {
       arrow.canvas.popupsOpen += (pop.opened ? 1 : -1);
       if (arrow.canvas.popupsOpen < 0) arrow.canvas.popupsOpen = 0;
 
-      // ⭐ THIS PICKER OPENS ON "BY CONNECTIONS" (project leadership, 2026-08-18: *"it should default
-      // there to connections sorting"*). It is the one map list where that sort is the answer to the
-      // question being asked — you are choosing a neighbour, so grouping the list by which edges a
-      // map already connects on puts the plausible ones together.
+      // ⭐ THIS PICKER OPENS ON "BY CONNECTIONS" — AND ONLY THIS ONE (project leadership, 2026-08-18:
+      // *"it should default there to connections sorting"*; 2026-08-19: *"it defaults to tileset for
+      // map select, the connections default to connections sorting only here"*). It is the one map
+      // list where that sort is the answer to the question being asked — you are choosing a
+      // neighbour, so grouping by which edges a map already connects on puts the plausible ones
+      // together.
       //
-      // ⚠️ `mapSort` is deliberately GLOBAL and shared, so this is a nudge on OPEN and nothing more —
-      // change the sort while the picker is up and it stays changed, here and everywhere. That is the
-      // point of one shared setting; a picker that silently re-imposed its own on every frame would be
-      // taking the choice back.
+      // ⚠️ IT SETS THE LIST'S OWN SORT, NOT THE SHARED ONE. Writing `brg.map.mapSort` here (which is
+      // what this did for a day) meant opening this dropdown once re-grouped **every map list in the
+      // app** for the rest of the session — the map selector included — with nothing on screen to say
+      // why. A picker may answer its own question; it may not answer everyone else's. @see
+      // MapSelectList.ownSort.
       if (pop.opened)
-        brg.map.mapSort = MapModel.SortConnections;
+        sel.ownSort = MapModel.SortConnections;
     }
 
     background: Rectangle {
@@ -223,6 +226,11 @@ Item {
         listHeight: 150
         selectedInd: -1
         leadingEntries: arrow.defaultRow
+
+        // Its own sort, seeded here so the list is right on its very first frame (the popup's
+        // onOpenedChanged re-seeds it on every open). @see MapSelectList.ownSort — this is the ONE
+        // list in the app that does not share the global sort, and the reason is written down there.
+        ownSort: MapModel.SortConnections
 
         onPicked: (ind) => {
           if (ind < 0)

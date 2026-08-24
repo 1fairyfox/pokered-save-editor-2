@@ -1305,9 +1305,13 @@ int MapModel::contrastPercent() const
   return qRound((1.0 - (c / static_cast<double>(contrastMax()))) * 100.0);
 }
 
-QVariantList MapModel::mapList() const
+QVariantList MapModel::mapList(int sortMode) const
 {
   QVariantList out;
+
+  // The sort THIS call runs under. Out of range means "the shared one" -- @see the header note for
+  // why one caller (the connection picker) is allowed its own without imposing it on the rest.
+  const int sort = (sortMode < SortTileset || sortMode > SortSize) ? m_mapSort : sortMode;
 
   // DB entry fields are protected -- always the getters, never the members (a standing rule; see
   // CLAUDE.md).
@@ -1384,7 +1388,7 @@ QVariantList MapModel::mapList() const
   // "Unfinished copies"); A–Z: the first letter; Connections: the direction signature; Size: the
   // bucket name; By number: none.
   auto displayGroup = [&](MapDBEntry* e) -> QString {
-    switch (m_mapSort) {
+    switch (sort) {
       case SortAlphabetical: {
         const QString n = e->getName();
         return n.isEmpty() ? QStringLiteral("#") : n.left(1).toUpper();
@@ -1402,7 +1406,7 @@ QVariantList MapModel::mapList() const
     }
   };
 
-  switch (m_mapSort) {
+  switch (sort) {
     case SortAlphabetical:
       std::stable_sort(sorted.begin(), sorted.end(), [&coll](MapDBEntry* a, MapDBEntry* b) {
         return coll.compare(a->getName(), b->getName()) < 0;

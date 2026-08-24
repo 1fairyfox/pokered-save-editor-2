@@ -46,6 +46,7 @@
 #include <pse-savefile/expanded/area/areageneral.h>
 #include <pse-savefile/expanded/area/areatileset.h>
 #include <pse-savefile/expanded/area/areasprites.h>
+#include <pse-savefile/expanded/fragments/spritedata.h>
 #include <pse-savefile/expanded/player/player.h>
 #include <pse-savefile/expanded/player/playerbasics.h>
 #include <pse-savefile/expanded/world/world.h>
@@ -400,9 +401,19 @@ void TestMapStates::changeMapConstructed_buildsTheDestination()
   QCOMPARE(r->map->mapInd(), dest);
   QVERIFY2(r->map->headerMatches(), "construction must leave a coherent header");
 
-  // The cast is the ROM's cast for the destination.
+  // The cast is the ROM's cast for the destination, PLUS THE PLAYER IN SLOT 0.
+  //
+  // ⚠️ This line used to read `== entry->getSprites().size()`, and that was **the bug written down
+  // as an expectation** (fixed 2026-08-19). `AreaSprites::setTo()` rebuilt the list without a player
+  // slot, so the map's first object sat in slot 0 — the slot every reader skips — and the first
+  // object of every map was invisible after a map change. The test agreed with the code because it
+  // had been written from the code rather than from the format. The save's own layout is the
+  // authority: `wNumSprites` counts NPCs and the player is slot 0, so a map with N objects holds
+  // N + 1 sprites. @see tst_map_sprites::constructingAMap_keepsThePlayerInSlotZeroAndEveryObject.
   QCOMPARE(r->sf.dataExpanded->area->sprites->spriteCount(),
-           int(entry->getSprites().size()));
+           int(entry->getSprites().size()) + 1);
+  QVERIFY2(r->sf.dataExpanded->area->sprites->spriteAt(0)->getMissableIndex() < 0,
+           "slot 0 carries a filter-flag index -- an OBJECT is sitting in the player's slot");
 
   // The player stands on the blueprint's entry spot.
   const auto* bp = MapStatesDB::inst()->at(dest);

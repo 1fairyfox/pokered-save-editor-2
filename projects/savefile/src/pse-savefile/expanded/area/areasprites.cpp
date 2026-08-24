@@ -184,20 +184,69 @@ void AreaSprites::reset()
   spritesChanged();
 }
 
+// ⭐ SLOT 0 IS THE PLAYER, AND A REBUILD MUST NOT LOSE HIM ─────────────────────────────────────────
+//
+// Detach the player from the front of the list so `reset()` cannot delete him, and hand him back for
+// the rebuilt list to put in slot 0. If there is somehow no list yet, make the same default player
+// the constructor makes.
+//
+// ⚠️ THE BUG THIS FIXES (found 2026-08-19 from project leadership's report: *"Some filter flags like
+// Rocket 1 wont appear if toggled but Rocket 2 and 3 toggle just fine in Pokemon Tower 7f"*).
+// `setTo()` and `randomize()` both did `reset(); sprites = <built from ROM>;` -- which threw the
+// player away and left **the map's FIRST object sitting in slot 0**. Everything downstream treats
+// slot 0 as the player and skips it (`npcList()` starts at `i = 1`, `spriteRemove` refuses `ind <= 0`,
+// `checkMissable` is only consulted for NPC slots), so after any constructed map change the first
+// object on the map was invisible, undraggable, and its filter flag toggled nothing. Rocket 1 is
+// simply Pokémon Tower 7F's first object; the same was true of the first object of **every** map.
+//
+// ⚠️ And it was a SAVE-FIDELITY bug, not only a display one, which is the more serious half:
+// `save()` writes `wNumSprites = size - 1` and stores slot `i` at index `i`, so the count went out
+// one short and **the first NPC's bytes were written over the player's own sprite record**. Keeping
+// the player object itself (rather than making a fresh one) also keeps his bytes exactly as they
+// were -- a map change has no business editing the player's picture or facing.
+SpriteData* AreaSprites::detachPlayer()
+{
+  if(sprites.isEmpty())
+    return new SpriteData(false);
+
+  SpriteData* player = sprites.first();
+  sprites.removeFirst();
+  return player;
+}
+
 void AreaSprites::randomize(QVector<MapDBEntrySprite*> spriteData)
 {
+  SpriteData* player = detachPlayer();
   reset();
-  sprites = SpriteData::randomizeAll(spriteData);
+
+  sprites.append(player);
+  const auto built = SpriteData::randomizeAll(spriteData);
+  for(auto* s : built) {
+    if(sprites.size() >= maxSprites) { s->deleteLater(); continue; }
+    sprites.append(s);
+  }
+
   spritesChanged();
 }
 
 void AreaSprites::setTo(MapDBEntry* map)
 {
+  SpriteData* player = detachPlayer();
   reset();
 
-  if(map == nullptr)
-    return;
+  sprites.append(player);
 
-  sprites = SpriteData::setToAll(map->getSprites());
+  if(map == nullptr) {
+    spritesChanged();
+    return;
+  }
+
+  // The player already holds slot 0, so a map with the full 15 objects still fits exactly.
+  const auto built = SpriteData::setToAll(map->getSprites());
+  for(auto* s : built) {
+    if(sprites.size() >= maxSprites) { s->deleteLater(); continue; }
+    sprites.append(s);
+  }
+
   spritesChanged();
 }

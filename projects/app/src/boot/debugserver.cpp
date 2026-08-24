@@ -51,6 +51,8 @@
 #include <QJsonArray>
 #include <QJsonValue>
 #include <QMetaObject>
+#include <QMetaMethod>
+#include <QMetaType>
 #include <QByteArray>
 #include <QDebug>
 #include <QElapsedTimer>
@@ -142,6 +144,30 @@ QObject* qmlRoot()
 // reach ANYTHING -- even an unnamed control -- from a named ancestor, e.g. "mapRightPanel/2/0".
 QObject* findByName(const QString& name)
 {
+  // ── "@thing" -- a MODEL off the Bridge, not an item in the visual tree ──────────────────────────
+  //
+  // ⭐ WHY THIS EXISTS (2026-08-19). Everything else here walks the QML object tree, and the models
+  // are not in it: `brg` is a CONTEXT PROPERTY, so `map`, `mapLayers`, `file` and the rest hang off
+  // the Bridge and are reachable from QML but invisible to `findChild` and to the visual-tree walk.
+  // That left the harness able to poke any button on the screen and unable to ask the model a single
+  // question -- so investigating a data bug (the one that prompted this: a filter flag that would not
+  // show its sprite) meant driving a dropdown by simulated taps to reach a state one method call
+  // away. Two hours of clicking to test a one-line hypothesis.
+  //
+  //   {"cmd":"get","obj":"@map","prop":"mapInd"}
+  //   {"cmd":"invoke","obj":"@map","method":"beginMapPreview","args":[148]}
+  //   {"cmd":"get","obj":"@map/0","prop":"objectName"}          -- paths still work from here
+  //
+  // The '@' is deliberate: no QML `objectName` in this codebase starts with one, so a model name can
+  // never shadow (or be shadowed by) an item name. Any Bridge Q_PROPERTY that holds a QObject* works
+  // -- there is no allow-list to keep in sync. DEBUG-only, like the whole server.
+  if(name.startsWith(QLatin1Char('@'))) {
+    Bridge* brg = MainWindow::bridge;
+    if(brg == nullptr) return nullptr;
+    const QVariant v = brg->property(name.mid(1).toUtf8().constData());
+    return v.isValid() ? v.value<QObject*>() : nullptr;
+  }
+
   QObject* root = qmlRoot();
   if(root == nullptr) return nullptr;
   if(name.isEmpty() || name == QStringLiteral("root")) return root;
@@ -346,14 +372,68 @@ QJsonObject execute(const QJsonObject& c)
     const QJsonArray a = c.value(QStringLiteral("args")).toArray();
     QVariantList vargs;
     for(const QJsonValue& v : a) vargs.append(v.toVariant());
-    QGenericArgument g[4];
-    for(int i = 0; i < vargs.size() && i < 4; i++)
-      g[i] = QGenericArgument("QVariant", &vargs[i]);
-    const bool okInv = QMetaObject::invokeMethod(it, method.toUtf8().constData(), Qt::DirectConnection,
-                                                 g[0], g[1], g[2], g[3]);
-    return okInv ? ok(true)
-                 : err(QStringLiteral("no invokable/signal '") + method
-                       + QStringLiteral("' (or arg types don't match)"));
+
+    // ⚠️ ARGUMENTS MUST BE CONVERTED TO THE METHOD'S OWN PARAMETER TYPES (fixed 2026-08-19). This
+    // used to hand every argument over as a `QVariant`, which meant `invoke` silently worked ONLY on
+    // methods that happen to declare `QVariant` or `QString` parameters -- Qt matches by exact type
+    // name, so `changeMapConstructed(int)` came back as *"no invokable/signal (or arg types don't
+    // match)"*, a message that reads like "you spelled it wrong" for something that was spelled
+    // right. Every `Q_INVOKABLE(int)` on the models was unreachable, which is most of them.
+    //
+    // So: find the method by NAME AND ARITY first, then convert each argument into the type that
+    // parameter actually declares, and pass typed storage. Overloads are handled by trying each
+    // candidate in turn -- the first whose conversions all succeed wins.
+    const QMetaObject* mo = it->metaObject();
+    QString lastErr;
+    for(int mi = 0; mi < mo->methodCount(); mi++) {
+      const QMetaMethod mm = mo->method(mi);
+      if(mm.name() != method.toUtf8() || mm.parameterCount() != vargs.size())
+        continue;
+      if(vargs.size() > 4) { lastErr = QStringLiteral("at most 4 args"); continue; }
+
+      // Convert in place; a failure means this overload is not the one.
+      //
+      // ⚠️ A `QVariant` parameter is NOT a conversion target -- the value already is one, and asking
+      // `QVariant::convert(QMetaType::QVariant)` to wrap it fails. This matters more than it sounds:
+      // **every QML `function foo(a, b)` declares its parameters as QVariant**, so without this case
+      // no QML-side function was callable at all.
+      bool convertible = true;
+      for(int i = 0; i < vargs.size(); i++) {
+        const QMetaType want = mm.parameterMetaType(i);
+        if(want.id() == QMetaType::QVariant || vargs[i].metaType() == want) continue;
+        if(!vargs[i].convert(want)) { convertible = false; break; }
+      }
+      if(!convertible) { lastErr = QStringLiteral("arg types don't match"); continue; }
+
+      QGenericArgument g[4];
+      for(int i = 0; i < vargs.size(); i++) {
+        const QMetaType want = mm.parameterMetaType(i);
+        g[i] = (want.id() == QMetaType::QVariant)
+                 ? QGenericArgument(want.name(), &vargs[i])          // the QVariant itself
+                 : QGenericArgument(want.name(), vargs[i].constData());
+      }
+
+      // ⭐ AND THE RETURN VALUE COMES BACK (2026-08-19). `invoke` used to answer `true` and throw the
+      // result away, so every QUERY on a model -- npcList(), storageMissables(), warpStateFields(),
+      // the whole "what does the app think?" surface -- was invisible to the harness even once it
+      // could be called. Answering a data question meant driving the UI until the answer appeared on
+      // screen and reading it off a screenshot. Now the value itself comes back as JSON.
+      const QMetaType ret = mm.returnMetaType();
+      if(ret.isValid() && ret.id() != QMetaType::Void) {
+        QVariant out(ret);
+        if(QMetaObject::invokeMethod(it, method.toUtf8().constData(), Qt::DirectConnection,
+                                     QGenericReturnArgument(ret.name(), out.data()),
+                                     g[0], g[1], g[2], g[3]))
+          return ok(QJsonValue::fromVariant(out));
+      } else if(QMetaObject::invokeMethod(it, method.toUtf8().constData(), Qt::DirectConnection,
+                                          g[0], g[1], g[2], g[3])) {
+        return ok(true);
+      }
+      lastErr = QStringLiteral("call failed");
+    }
+    return err(QStringLiteral("no invokable/signal '") + method + QStringLiteral("' (")
+               + (lastErr.isEmpty() ? QStringLiteral("no method of that name and arity") : lastErr)
+               + QStringLiteral(")"));
   }
 
   // ── tap: a REAL mouse press+release, on the window ────────────────────────────────────────────

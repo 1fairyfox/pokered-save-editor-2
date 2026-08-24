@@ -1,5 +1,38 @@
 # Qt / QML Patterns
 
+## A LAYOUT MANAGES EVERY VISIBLE CHILD — so a backdrop cannot live in one — 2026-08-19
+
+Project leadership, on the Map Storage panel:
+
+> *"When a panel is opened and entry highlighted the highlight is actually way too tall and creates a
+> lot of extra space above the item until the highlight goes away which causes everything to
+> re-flow. It looks bad."*
+
+The row delegate was a `ColumnLayout` holding two things: a highlight `Rectangle` and the row's own
+`RowLayout`. The rectangle was written as a backdrop — `z: -1`, `anchors.fill: parent`,
+`anchors.margins: -3` — and it read like one. It was not one.
+
+**`RowLayout` / `ColumnLayout` / `GridLayout` lay out *every visible child*, without exception.**
+There is no "this one is decoration" opt-out. So the moment `visible` turned true the column adopted
+the rectangle as a second **cell**, stacked above the row, contributing its own height. And
+**anchors are ignored inside a Layout** (Qt warns, then the Layout wins), so `anchors.fill: parent`
+never sized it to anything: its height was whatever fell out, which is why it looked *"way too tall"*
+rather than merely misplaced. Both symptoms — the gap and the re-flow — are the one cause.
+
+Two things follow, and the second is the general one:
+
+- **A background belongs in something that is not laying its children out.** Make the delegate root a
+  plain `Item`, anchor the content inside it, anchor the backdrop to the *content*, and give the Item
+  the content's `implicitHeight`. The backdrop can then bleed past the row (negative margins) as much
+  as it likes: an overlay borrows space from its neighbours instead of demanding its own.
+- **`visible` on a Layout child is a LAYOUT change, not a paint change.** Anything that flips
+  `visible` inside a Layout moves everything after it. That is usually what you want for a row and
+  never what you want for a highlight, a glow, a focus ring or a hover wash.
+
+⚠️ The tell, if you are looking for others: a decoration inside a Layout that has `anchors.*` on it.
+The anchors are a confession that the author expected it not to be laid out. Search for `anchors.fill`
+directly under a `*Layout` and check each one.
+
 ## "HOVER CAN'T BE TESTED" — wrong, and wrong the SAME WAY as the aqtinstall "ceiling" — 2026-07-17
 
 I told project leadership that hover could not be driven synthetically — *"only your cursor can confirm the

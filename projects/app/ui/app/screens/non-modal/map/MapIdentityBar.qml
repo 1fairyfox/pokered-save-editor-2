@@ -197,168 +197,21 @@ Rectangle {
     // save byte; its face is the four colours it is currently painting with.
     ColourPicker { id: colourPicker }
 
-    // ── The abnormal-values options panel (!) — hard right ───────────────────────────────────────
+    // ── The GATES panel (🔧) — "do I want to work at this level?" ────────────────────────────────
     //
-    // Was a single "show useless edits" toggle; now a dropdown panel of TIERS of abnormal options
-    // (project leadership, 2026-08-03). The face's little light says which tier is currently revealed:
-    //   • grey  — nothing abnormal shown
-    //   • blue  — Tier 2 only (no-effect edits: overwritten on load, read-only, or never read)
-    //   • amber — Tier 1 (unused / unstable: the game DOES act on them, with unintended effects)
-    //
-    // The tiers are two independent switches, each turning its whole class on across the map screen.
-    // Tier 1 also governs the unused/glitch MAPS in the selection list (brg.map.showUnused).
-    Item {
-      id: optionsButton
-      objectName: "mapOptionsButton"   // the DEBUG harness drives the panel through this
-      implicitWidth: 30
-      implicitHeight: 26
-
-      /// Open/shut by name for the harness / screenshot review.
-      property bool openState: false
-      onOpenStateChanged: openState ? optionsPop.open() : optionsPop.close()
-
-      readonly property bool t1: brg.map.showUnused        // unused / unstable (dangerous)
-      readonly property bool t2: brg.map.showScratch       // no-effect (harmless)
-      readonly property bool t3: brg.map.showTrulyUnused   // truly unused (never read/written)
-
-      Rectangle {
-        id: optionsFace
-        anchors.fill: parent
-        radius: 13
-
-        color: (optHover.hovered || optionsButton.openState) ? Qt.rgba(0, 0, 0, 0.10)
-             : Qt.rgba(0, 0, 0, 0.05)
-        border.width: 1
-        border.color: optionsButton.t1 ? "#b3261e"
-                    : optionsButton.t2 ? "#3a6ea5"
-                    : optionsButton.t3 ? "#6a6a6a"
-                    : brg.settings.dividerColor
-        Behavior on color { ColorAnimation { duration: 90 } }
-
-        Text {
-          anchors.centerIn: parent
-          text: "!"
-          font.pixelSize: 13
-          font.bold: true
-          color: optionsButton.t1 ? "#b3261e"
-               : optionsButton.t2 ? "#3a6ea5"
-               : optionsButton.t3 ? "#6a6a6a"
-               : brg.settings.textColorMid
-          opacity: (optionsButton.t1 || optionsButton.t2 || optionsButton.t3) ? 1.0 : 0.55
-        }
-
-        // The "level" light — a small dot, top-right, coloured by the highest tier currently shown.
-        Rectangle {
-          width: 7; height: 7; radius: 3.5
-          anchors.right: parent.right
-          anchors.top: parent.top
-          anchors.margins: 2
-          visible: optionsButton.t1 || optionsButton.t2 || optionsButton.t3
-          color: optionsButton.t1 ? "#e53935" : optionsButton.t2 ? "#42a5f5" : "#9e9e9e"
-          border.width: 1
-          border.color: "#ffffff"
-        }
-      }
-
-      HoverHandler { id: optHover; cursorShape: Qt.PointingHandCursor }
-      TapHandler {
-        gesturePolicy: TapHandler.ReleaseWithinBounds
-        onTapped: optionsButton.openState = !optionsButton.openState
-      }
-
-      MapToolTip {
-        shown: optHover.hovered && !optionsButton.openState
-        text: qsTr("Uncommon options — reveal abnormal values the app normally hides: unused/unstable "
-                   + "ones the game acts on with unintended effects, no-effect ones it overwrites or "
-                   + "writes-but-never-reads, and truly-unused ones it never touches at all.")
-      }
-
-      Popup {
-        id: optionsPop
-        y: optionsButton.height + 6
-        x: optionsButton.width - width   // right-aligned under the chip, stays inside the window
-        width: 288
-        padding: 10
-        margins: 8
-        modal: false
-        focus: true
-        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
-        onClosed: optionsButton.openState = false
-
-        background: Rectangle {
-          color: "#ffffff"
-          radius: 6
-          border.width: 1
-          border.color: brg.settings.dividerColor
-        }
-
-        ColumnLayout {
-          anchors.fill: parent
-          spacing: 8
-
-          Text {
-            Layout.fillWidth: true
-            text: qsTr("Uncommon options")
-            font.pixelSize: 11
-            font.bold: true
-            color: brg.settings.textColorMid
-          }
-
-          // ── Tier 1: Unused / unstable — the game acts on them, with unintended effects ──────────
-          OptionTierRow {
-            Layout.fillWidth: true
-            dotColor: "#e53935"
-            title: qsTr("Unused & unstable")
-            // ⚠️ No longer says "developer leftovers" (project leadership, 2026-08-18: *"Unused and
-            // unstable should no longer include debug or developer stuff, that is moved to its own
-            // gate out of unused and unstable"*). Development leftovers are the **Debug** gate now.
-            // This tier is strictly: the game reads it, acts on it, and the result is unintended.
-            blurb: qsTr("Values the game does read and act on, but that were never finished or never "
-                        + "meant to be reached — editing them has real, often unintended effects "
-                        + "(glitches, even crashes). Also shows the unused/glitch maps in the list.")
-            checked: brg.map.showUnused
-            onToggled: brg.map.showUnused = !brg.map.showUnused
-          }
-
-          Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: brg.settings.dividerColor }
-
-          // ── Tier 2: No-effect — overwritten on load, or write-only ─────────────────────────────
-          OptionTierRow {
-            Layout.fillWidth: true
-            dotColor: "#42a5f5"
-            title: qsTr("No-effect edits")
-            blurb: qsTr("Values the game overwrites when it loads your save, or writes but never reads "
-                        + "back — reset scratch, the sprite cache, write-only flags. Real bytes, all "
-                        + "editable — they just have no effect you can keep.")
-            checked: brg.map.showScratch
-            onToggled: brg.map.showScratch = !brg.map.showScratch
-          }
-
-          Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: brg.settings.dividerColor }
-
-          // ── Tier 3: Truly unused — the game never reads AND never writes them ──────────────────
-          OptionTierRow {
-            Layout.fillWidth: true
-            dotColor: "#9e9e9e"
-            title: qsTr("Truly unused")
-            blurb: qsTr("Flags the game never reads and never writes — literally never used in any "
-                        + "way: placeholder padding, and vestigial or defined-but-unused bits. Not the "
-                        + "rewritten-on-load or write-only ones (those are No-effect above).")
-            checked: brg.map.showTrulyUnused
-            onToggled: brg.map.showTrulyUnused = !brg.map.showTrulyUnused
-          }
-        }
-      }
-    }
-
-    // ── The GATES panel (🔧) — its own button, beside the "!" ─────────────────────────────────────
+    // ⭐ IT SITS TO THE LEFT OF THE "!" (project leadership, 2026-08-19): *"The wrench icon needs to be
+    // left of the exclamation icon."* Reading order is the argument: the wrench opens up MORE REAL
+    // CONTROLS, and the "!" is the further, stranger step past them — so the pair now runs
+    // ordinary → deeper → abnormal from left to right instead of jumping over the middle.
     //
     // ⭐ A SECOND BUTTON, NOT A SECOND HALF (project leadership, 2026-08-18): *"Tinkerer, Debug and
     // Manual should be their own icon next to the exclamation point icon, which should still contain
     // the 3 it has."* They were briefly stacked into the "!" popup and that was wrong — the "!" answers
     // *"is this value real?"* (unused / no-effect / truly unused: things the game does not honour), and
     // these three answer *"do I want to work at this level?"* (things the game honours perfectly well).
-    // Two different questions, so two different buttons.
+    // Two different questions, so two different buttons — and, since 2026-08-19, two names that say so:
+    // **Deeper controls** here, **Values that don't behave** there. Neither may be called "more
+    // options" again; that was the word that made them read as the same button twice.
     //
     // ⭐ ONE GATE PER OPTION, FLAT: *"An option is ONLY gated by 1 box. An option NEVER requires 2 or
     // more gates to be enabled for it to show, just like an option will never BELONG to any more than
@@ -439,9 +292,9 @@ Rectangle {
 
       MapToolTip {
         shown: gateHover.hovered && !gatesButton.openState
-        text: qsTr("More to work with — reveal real, working options the app keeps out of the way: "
-                   + "finicky mid-scene states, the hand-controls for values kept in sync for you, "
-                   + "and the game's own development leftovers.")
+        text: qsTr("Deeper controls — real, working options the app keeps out of the way: finicky "
+                   + "mid-scene states, the hand-controls for values kept in sync for you, and the "
+                   + "game's own development leftovers.")
       }
 
       Popup {
@@ -467,9 +320,15 @@ Rectangle {
           anchors.fill: parent
           spacing: 8
 
+          // ⚠️ NOT "More options" / "More to work with" (project leadership, 2026-08-19: *"it should
+          // not show more options as a title, it should be titled something better and more
+          // descriptive that sets it apart from the uncommon options"*). Both popups were named after
+          // their SIZE ("more", "uncommon") rather than their SUBJECT, so neither told you which one
+          // you wanted. This one is about the CONTROLS and how deep you want to work; the "!" is about
+          // the VALUES and whether they are real.
           Text {
             Layout.fillWidth: true
-            text: qsTr("More to work with")
+            text: qsTr("Deeper controls")
             font.pixelSize: 11
             font.bold: true
             color: brg.settings.textColorMid
@@ -483,6 +342,11 @@ Rectangle {
           // list you named and it's already intuitive."* Right on both counts: after naming six
           // mid-motion states the reader has already drawn the conclusion, and a sentence of theory
           // trailing a concrete list reads as a hedge.
+          //
+          // ⚠️ THE GLITCH PALETTES ARE NOT IN THIS LIST ANY MORE (project leadership, 2026-08-19):
+          // *"the glitch palettes aren't finicky to work with, they're fun — let's bring them back out
+          // of tinkerer gate and gate them behind the original switch it was at, I feel it's just an
+          // exception."* @see ContrastPicker.qml for the exception, written down where it lives.
           OptionTierRow {
             objectName: "gateTinkerer"   // the DEBUG harness flips the gates by name
             Layout.fillWidth: true
@@ -490,7 +354,7 @@ Rectangle {
             title: qsTr("Tinkerer")
             blurb: qsTr("Real options that are finicky to set from a save file — mid-cutscene steps, "
                         + "a warp or a fall already in progress, scripted walking, a queued battle, "
-                        + "fly-destination selection, the tileset and blocks, and the glitch palettes.")
+                        + "fly-destination selection, and the tileset and blocks.")
             checked: brg.map.showTinkerer
             onToggled: brg.map.showTinkerer = !brg.map.showTinkerer
           }
@@ -534,5 +398,165 @@ Rectangle {
         }
       }
     }
+
+    // ── The abnormal-values options panel (!) — hard right ───────────────────────────────────────
+    //
+    // Was a single "show useless edits" toggle; now a dropdown panel of TIERS of abnormal options
+    // (project leadership, 2026-08-03). The face's little light says which tier is currently revealed:
+    //   • grey  — nothing abnormal shown
+    //   • blue  — Tier 2 only (no-effect edits: overwritten on load, read-only, or never read)
+    //   • amber — Tier 1 (unused / unstable: the game DOES act on them, with unintended effects)
+    //
+    // The tiers are two independent switches, each turning its whole class on across the map screen.
+    // Tier 1 also governs the unused/glitch MAPS in the selection list (brg.map.showUnused).
+    Item {
+      id: optionsButton
+      objectName: "mapOptionsButton"   // the DEBUG harness drives the panel through this
+      implicitWidth: 30
+      implicitHeight: 26
+
+      /// Open/shut by name for the harness / screenshot review.
+      property bool openState: false
+      onOpenStateChanged: openState ? optionsPop.open() : optionsPop.close()
+
+      readonly property bool t1: brg.map.showUnused        // unused / unstable (dangerous)
+      readonly property bool t2: brg.map.showScratch       // no-effect (harmless)
+      readonly property bool t3: brg.map.showTrulyUnused   // truly unused (never read/written)
+
+      Rectangle {
+        id: optionsFace
+        anchors.fill: parent
+        radius: 13
+
+        color: (optHover.hovered || optionsButton.openState) ? Qt.rgba(0, 0, 0, 0.10)
+             : Qt.rgba(0, 0, 0, 0.05)
+        border.width: 1
+        border.color: optionsButton.t1 ? "#b3261e"
+                    : optionsButton.t2 ? "#3a6ea5"
+                    : optionsButton.t3 ? "#6a6a6a"
+                    : brg.settings.dividerColor
+        Behavior on color { ColorAnimation { duration: 90 } }
+
+        Text {
+          anchors.centerIn: parent
+          text: "!"
+          font.pixelSize: 13
+          font.bold: true
+          color: optionsButton.t1 ? "#b3261e"
+               : optionsButton.t2 ? "#3a6ea5"
+               : optionsButton.t3 ? "#6a6a6a"
+               : brg.settings.textColorMid
+          opacity: (optionsButton.t1 || optionsButton.t2 || optionsButton.t3) ? 1.0 : 0.55
+        }
+
+        // The "level" light — a small dot, top-right, coloured by the highest tier currently shown.
+        Rectangle {
+          width: 7; height: 7; radius: 3.5
+          anchors.right: parent.right
+          anchors.top: parent.top
+          anchors.margins: 2
+          visible: optionsButton.t1 || optionsButton.t2 || optionsButton.t3
+          color: optionsButton.t1 ? "#e53935" : optionsButton.t2 ? "#42a5f5" : "#9e9e9e"
+          border.width: 1
+          border.color: "#ffffff"
+        }
+      }
+
+      HoverHandler { id: optHover; cursorShape: Qt.PointingHandCursor }
+      TapHandler {
+        gesturePolicy: TapHandler.ReleaseWithinBounds
+        onTapped: optionsButton.openState = !optionsButton.openState
+      }
+
+      MapToolTip {
+        shown: optHover.hovered && !optionsButton.openState
+        text: qsTr("Values that don't behave — the ones the app normally hides: unused/unstable ones "
+                   + "the game acts on with unintended effects, no-effect ones it overwrites or "
+                   + "writes-but-never-reads, and truly-unused ones it never touches at all.")
+      }
+
+      Popup {
+        id: optionsPop
+        y: optionsButton.height + 6
+        x: optionsButton.width - width   // right-aligned under the chip, stays inside the window
+        width: 288
+        padding: 10
+        margins: 8
+        modal: false
+        focus: true
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
+        onClosed: optionsButton.openState = false
+
+        background: Rectangle {
+          color: "#ffffff"
+          radius: 6
+          border.width: 1
+          border.color: brg.settings.dividerColor
+        }
+
+        ColumnLayout {
+          anchors.fill: parent
+          spacing: 8
+
+          // ⚠️ NOT "Uncommon options" (project leadership, 2026-08-19: *"actually that should be
+          // titled better too"*). "Uncommon" describes how OFTEN you'd want it, which is the wrench's
+          // job — and having both popups named after their size is what made them read as the same
+          // button twice. This one is about the VALUES: the app is not hiding rare settings, it is
+          // hiding values the console does not treat as settings at all.
+          Text {
+            Layout.fillWidth: true
+            text: qsTr("Values that don't behave")
+            font.pixelSize: 11
+            font.bold: true
+            color: brg.settings.textColorMid
+          }
+
+          // ── Tier 1: Unused / unstable — the game acts on them, with unintended effects ──────────
+          OptionTierRow {
+            Layout.fillWidth: true
+            dotColor: "#e53935"
+            title: qsTr("Unused & unstable")
+            // ⚠️ No longer says "developer leftovers" (project leadership, 2026-08-18: *"Unused and
+            // unstable should no longer include debug or developer stuff, that is moved to its own
+            // gate out of unused and unstable"*). Development leftovers are the **Debug** gate now.
+            // This tier is strictly: the game reads it, acts on it, and the result is unintended.
+            blurb: qsTr("Values the game does read and act on, but that were never finished or never "
+                        + "meant to be reached — editing them has real, often unintended effects "
+                        + "(glitches, even crashes). Also shows the unused/glitch maps in the list.")
+            checked: brg.map.showUnused
+            onToggled: brg.map.showUnused = !brg.map.showUnused
+          }
+
+          Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: brg.settings.dividerColor }
+
+          // ── Tier 2: No-effect — overwritten on load, or write-only ─────────────────────────────
+          OptionTierRow {
+            Layout.fillWidth: true
+            dotColor: "#42a5f5"
+            title: qsTr("No-effect edits")
+            blurb: qsTr("Values the game overwrites when it loads your save, or writes but never reads "
+                        + "back — reset scratch, the sprite cache, write-only flags. Real bytes, all "
+                        + "editable — they just have no effect you can keep.")
+            checked: brg.map.showScratch
+            onToggled: brg.map.showScratch = !brg.map.showScratch
+          }
+
+          Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: brg.settings.dividerColor }
+
+          // ── Tier 3: Truly unused — the game never reads AND never writes them ──────────────────
+          OptionTierRow {
+            Layout.fillWidth: true
+            dotColor: "#9e9e9e"
+            title: qsTr("Truly unused")
+            blurb: qsTr("Flags the game never reads and never writes — literally never used in any "
+                        + "way: placeholder padding, and vestigial or defined-but-unused bits. Not the "
+                        + "rewritten-on-load or write-only ones (those are No-effect above).")
+            checked: brg.map.showTrulyUnused
+            onToggled: brg.map.showTrulyUnused = !brg.map.showTrulyUnused
+          }
+        }
+      }
+    }
+
   }
 }

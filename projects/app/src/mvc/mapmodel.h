@@ -695,7 +695,18 @@ public:
   /// Every map in the game -- `{ ind, name, incomplete, copyOf }`, glitch/half-baked ids included
   /// and labelled. 248 of them, and every one renders. Sorted/grouped per @ref mapSort — the ONE
   /// shared setting every map list in the app reads (project leadership, 2026-08-03).
-  Q_INVOKABLE QVariantList mapList() const;
+  ///
+  /// @param sortMode  A sort for THIS call only. Out of range (the default, `-1`) means *"use the
+  ///                  shared @ref mapSort"*, which is what almost every caller wants.
+  ///
+  /// ⚠️ THE OVERRIDE EXISTS FOR ONE REASON (project leadership, 2026-08-19: *"it defaults to tileset
+  /// for map select, the connections default to connections sorting only here"*). The connection
+  /// picker opens on *By connections*, and before this it did that by **writing the shared setting** —
+  /// so picking a neighbour once left every other map list in the app grouped by connections
+  /// afterwards, with nothing to tell you why. A per-call sort lets one list answer its own question
+  /// without answering everyone else's. It is deliberately not a general escape hatch: pass nothing
+  /// and you get the shared sort, which remains the rule.
+  Q_INVOKABLE QVariantList mapList(int sortMode = -1) const;
 
   /// The shared sort/grouping for every map list (name picker, designated-map combos, warp
   /// destinations…). One setting, so they all agree. ⚠️ Progression mode is a queued follow-up — it

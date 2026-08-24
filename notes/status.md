@@ -5,14 +5,53 @@ _Current state only._ For the chronological history of what changed each session
 [`reference/qt-patterns.md`](reference/qt-patterns.md) and [`decisions/`](decisions/architecture.md). For the
 commit-by-commit changelog see [`version.md`](version.md).
 
-**Version:** `0.44.18-alpha` — on `dev`, **awaiting leadership's in-app review, then "ship"**. (Previous
+**Version:** `0.44.19-alpha` — on `dev`, **awaiting leadership's in-app review, then "ship"**. (Previous
 release: `0.16.6-alpha`, shipped 2026-07-11.) Single source of truth: repo-root `VERSION`; see
-[`reference/versioning.md`](reference/versioning.md). Full `ctest` green (**92/92**);
-`tst_qml_screens` 28/28; `tst_warps` 25/25.
+[`reference/versioning.md`](reference/versioning.md). `tst_map_sprites` 19/19; `tst_qml_screens` 28/28.
 
 ---
 
-## ▶ START HERE — the MAP SCREEN CLEANUP is the live work (2026-08-18, `0.44.18-alpha`)
+## ▶ START HERE — the MAP SCREEN CLEANUP is the live work (2026-08-19, `0.44.19-alpha`)
+
+The board is [`plans/map-screen.md`](plans/map-screen.md) → **§11c**. Today:
+[`sessions/2026-08/2026-08-19.md`](sessions/2026-08/2026-08-19.md).
+
+### A bug report about one NPC was a save-fidelity bug about every map
+
+> *"Some filter flags like Rocket 1 wont appear if toggled but Rocket 2 and 3 toggle just fine in
+> Pokemon Tower 7f."*
+
+`AreaSprites::setTo()`/`randomize()` rebuilt the cast from ROM with `reset(); sprites = <built>;`,
+which **threw the player away** and put the map's **first object in slot 0** — the slot every reader
+skips. So after any constructed map change **the first object of every map was absent**, and on save
+`wNumSprites` went out one short with that object's bytes landing **on the player's own sprite
+record**. Fixed by keeping the player object itself across a rebuild; pinned by
+`tst_map_sprites::constructingAMap_keepsThePlayerInSlotZeroAndEveryObject`. Live before/after proof on
+the running app. → [`reference/sprites.md`](reference/sprites.md) § "The 16 slots".
+
+**The lesson:** *an invariant every reader assumes and only one writer establishes is a bug waiting
+for a second writer.* `load()` set "slot 0 is the player"; `setTo()` came later and didn't know.
+
+### Also this day
+
+- **The highlight that re-flowed the panel** — a Layout manages every visible child, so a backdrop
+  declared inside one becomes a **cell**, and its anchors are ignored. Delegate root is a plain `Item`
+  now. → [`reference/qt-patterns.md`](reference/qt-patterns.md) (top).
+- **The two gate buttons: wrench LEFT of `!`, and both renamed** — **Deeper controls** and **Values
+  that don't behave**. Neither may be named after its *size* again ("more…", "uncommon…"), which is
+  what made them read as the same button twice. → `plans/map-screen.md` §11b.
+- **Glitch contrast is the ONE named exception to the gates**, back on its own switch: Tinkerer means
+  *real but finicky*, and a glitch palette is a finished, stable render. → §11b.
+- **Map-select sorting is per-context** — By tileset everywhere; By connections only in the connection
+  picker, which used to impose it on every list in the app by writing the shared setting.
+- **The harness can ask the model questions at last** — `@map`/`@file`/any Bridge model, typed
+  `invoke` arguments, and `invoke` return values. → [`reference/dev-harness.md`](reference/dev-harness.md).
+- **Notes hygiene cleared:** August's changelog is split out into `notes/version/2026-08.md` (the
+  month table's counts were stale too), with its `\subpage`.
+
+**Owed: project leadership's live pass** on all of the above.
+
+## The 2026-08-18 round (`0.44.18-alpha`)
 
 Project leadership is running a **meticulous, multi-day UI/UX cleanup of the Map screen** in the rapid-
 prototype loop: *"the ui/ux is basically trash, for days now i have been cleaning it up, its

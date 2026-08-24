@@ -78,5 +78,11 @@ public slots:
   void setTo(MapDBEntry* map);                         ///< Rebuild the list from @p map's sprites.
 
 public:
-  QVector<SpriteData*> sprites; ///< The map's sprites/NPCs.
+  QVector<SpriteData*> sprites; ///< The map's sprites/NPCs. **Slot 0 is always the player.**
+
+private:
+  /// Take the player out of slot 0 and hand him back, so a rebuild can `reset()` without deleting
+  /// him. Makes a default player if the list is somehow empty. @see setTo, randomize -- and the
+  /// long comment above them for the bug that made this necessary.
+  SpriteData* detachPlayer();
 };

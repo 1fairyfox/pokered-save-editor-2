@@ -90,6 +90,7 @@ check-for-updates). The hub reads these on request to improve the shared standar
 \page pse_sessions_2026_08 August 2026
 \brief Daily session logs for August 2026 (`notes/sessions/2026-08/`).
 
+\subpage md_notes_2sessions_22026-08_22026-08-19 <br>
 \subpage md_notes_2sessions_22026-08_22026-08-18
 */
 
@@ -134,6 +135,7 @@ check-for-updates). The hub reads these on request to improve the shared standar
 \brief Plain-English history, one entry per commit, split by month.
 
 \subpage md_notes_2version <br>
+\subpage md_notes_2version_22026-08 <br>
 \subpage md_notes_2version_22026-07 <br>
 \subpage md_notes_2version_22026-06 <br>
 \subpage md_notes_2version_22020-03 <br>

@@ -110,10 +110,42 @@ a child's `objectName`. So you can start at a named ancestor and walk to anythin
 `list` it: `{"cmd":"list","obj":"mapRightPanel"}` → `["[0] Type name", "[1] …", …]` — pick an index,
 append it to the path.
 
-**Trigger anything (2026-07-15).**
+**Ask the MODEL, not the screen — `@name` (2026-08-19).** Any `obj` field also takes **`@<bridge
+property>`**, which resolves to one of the app's models instead of an item in the visual tree:
+
+```json
+{"cmd":"get","obj":"@map","prop":"mapInd"}
+{"cmd":"invoke","obj":"@map","method":"changeMapConstructed","args":[148]}
+{"cmd":"invoke","obj":"@map","method":"npcList"}
+{"cmd":"invoke","obj":"@map","method":"storageMissables","args":[[148]]}
+```
+
+Any Bridge `Q_PROPERTY` holding a `QObject*` works — `@map`, `@mapLayers`, `@file`, `@router`,
+`@marketModel`, … — with no allow-list to keep in sync, and paths still step down from there
+(`@map/0`). The `@` cannot collide with an `objectName`; nothing in this codebase starts with one.
+
+> **Why it had to exist.** `brg` is a **context property**, so the models are reachable from QML and
+> invisible to `findChild` and to the visual-tree walk — the harness could poke any button on the
+> screen and could not ask the model a single question. Investigating a data bug therefore meant
+> driving dropdowns by simulated taps until the answer appeared *on screen*, then reading it off a
+> screenshot. The 2026-08-19 sprite-slot bug was found and proven in three calls once this existed.
+
+**Trigger anything (2026-07-15; made to actually work 2026-08-19).**
 - `{"cmd":"invoke","obj":…,"method":"toggle","args":[…]}` — emit **any signal** or call **any**
-  slot/`Q_INVOKABLE` by name (no-arg is the always-works case: fire a signal/event; args are passed as
-  QVariant, so typed-param QML slots may not match — prefer `var`/no-arg).
+  slot/`Q_INVOKABLE` by name. **Arguments are converted to the method's own parameter types** and the
+  **return value comes back** as JSON.
+
+  ⚠️ **It used to do neither, and the failure looked like a typo.** Every argument was handed over as
+  a bare `QVariant`, and Qt matches by exact type name — so `changeMapConstructed(int)` answered
+  *"no invokable/signal (or arg types don't match)"* for a name spelled perfectly right, and **every
+  `Q_INVOKABLE(int)` on the models was unreachable**, which is most of them. Overloads are resolved by
+  name + arity, then by whichever candidate's conversions all succeed. One case is special and worth
+  knowing: **a `QVariant` parameter is not a conversion target** (`convert(QMetaType::QVariant)`
+  fails), and since **every QML `function foo(a, b)` declares QVariant parameters**, missing that case
+  meant no QML-side function was callable at all.
+
+  Queries used to answer `true` and throw the result away, so the whole *"what does the app think?"*
+  surface — `npcList()`, `storageMissables()`, `warpStateFields()` — was invisible even once callable.
 - `{"cmd":"tap",…,"double":true}` — a real **double-click**; `"button":"right"|"middle"` for the
   other buttons (right-click menus drive too). `"clicks":2` is an alias for `double`.
 

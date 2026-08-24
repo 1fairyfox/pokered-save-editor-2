@@ -1435,11 +1435,29 @@ Item {
           Repeater {
             model: missableSection.list
 
-            delegate: ColumnLayout {
+            // ⚠️ AN Item, NOT A ColumnLayout — AND THAT IS THE WHOLE POINT (fixed 2026-08-19).
+            //
+            // project leadership: *"When a panel is opened and entry highlighted the highlight is
+            // actually way too tall and creates a lot of extra space above the item until the
+            // highlight goes away which causes everything to re-flow. It looks bad."*
+            //
+            // Exactly right, and the cause is a QML trap worth knowing: **a Layout manages EVERY
+            // visible child**. The highlight was a `Rectangle` declared inside a `ColumnLayout`, so
+            // the moment it became visible the column adopted it as a second CELL — it stopped being
+            // a backdrop and became a sibling stacked above the row, adding its own height to the
+            // delegate and shoving everything below it down. Its `anchors.fill: parent` could not
+            // save it either: anchors inside a Layout are ignored (with a warning), which is why the
+            // height it took was arbitrary rather than the row's.
+            //
+            // A backdrop must therefore live somewhere that is NOT laying its children out. The
+            // delegate root is a plain `Item` now: the content is anchored, the highlight is anchored
+            // to the content, and the Item's height is the content's height and nothing else. The
+            // highlight can never move a pixel of layout again. → notes/reference/qt-patterns.md
+            delegate: Item {
               id: mrow
               required property var modelData
               Layout.fillWidth: true
-              spacing: 1
+              implicitHeight: mrowContent.implicitHeight
 
               readonly property bool hidden: {
                 panel.revision; panel.editTick;
@@ -1453,9 +1471,12 @@ Item {
               // you clicked and the row you land on are visibly the same colour -- the canvas and the
               // panel saying the same thing. It fades itself out; a highlight that stayed would just
               // become another thing to dismiss.
+              //
+              // It bleeds 3 px past the row on every side ON PURPOSE, and can afford to: as an
+              // overlay it borrows that space from its neighbours instead of demanding its own.
               Rectangle {
                 z: -1
-                anchors.fill: parent
+                anchors.fill: mrowContent
                 anchors.margins: -3
                 radius: 3
                 visible: mrow.highlighted
@@ -1467,7 +1488,10 @@ Item {
               // ONE ROW: name + switch; the oddity "!" where pret noted one; the long form (what
               // the thing is + its linked event flags with live state) behind a per-row "?".
               RowLayout {
-                Layout.fillWidth: true
+                id: mrowContent
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: parent.top
                 spacing: 6
 
                 MapWarnIcon {

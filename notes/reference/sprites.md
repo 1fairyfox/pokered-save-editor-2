@@ -40,6 +40,25 @@ Two things matter enormously and are easy to forget:
 `wSpriteStateData1` / `wSpriteStateData2` — **16 sprite slots**, `$10` bytes each. **Slot 0 is always the
 player.** Slots 1–15 are the map's object events (`MAX_OBJECT_EVENTS EQU 16`).
 
+> ⚠️ **"Slot 0 is always the player" is an invariant our own code has to keep, and it once didn't
+> (fixed 2026-08-19).** `AreaSprites::setTo()` / `randomize()` rebuilt the cast straight from the
+> cartridge's object list — `reset(); sprites = <built from ROM>;` — which put **the map's first object
+> in slot 0**. Everything downstream honours the invariant and skips slot 0 (`npcList()` starts at
+> `i = 1`; `spriteRemove` refuses `ind <= 0`; `checkMissable` is consulted only for NPC slots), so
+> after any constructed map change **the first object of every map was absent** — undrawn, undraggable,
+> and its filter flag toggled something nothing could show. It surfaced as a report about one NPC
+> (*"Rocket 1 wont appear if toggled but Rocket 2 and 3 toggle just fine"* — Rocket 1 is simply Pokémon
+> Tower 7F's first object).
+>
+> It was also a **save-fidelity** fault: `save()` writes `wNumSprites = size − 1` and stores slot `i`
+> at index `i`, so the count went out one short and the first NPC's bytes were written over **the
+> player's own sprite record**. The rebuild now *keeps the player object itself* (not a fresh one), so
+> a map change cannot edit his bytes either. Pinned by
+> `tst_map_sprites::constructingAMap_keepsThePlayerInSlotZeroAndEveryObject`.
+>
+> The generalisable bit: **an invariant that every reader assumes and only one writer establishes is a
+> bug waiting for a second writer.** `load()` established it; `setTo()` was written later and did not.
+
 The fields that matter to a renderer (`ram/wram.asm` documents all of them):
 
 | `StateData1` | |

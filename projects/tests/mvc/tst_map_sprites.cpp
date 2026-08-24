@@ -38,6 +38,10 @@
 #include <pse-savefile/expanded/area/areatileset.h>
 #include <pse-savefile/expanded/area/areasprites.h>
 #include <pse-savefile/expanded/fragments/spritedata.h>
+#include <pse-savefile/savefiletoolset.h>
+#include <pse-db/mapsdb.h>
+#include <pse-db/entries/mapdbentry.h>
+#include <pse-db/entries/mapdbentrysprite.h>
 #include <mvc/mapmodel.h>
 #include <engine/mapsim.h>
 #include <QSet>
@@ -68,6 +72,7 @@ private slots:
   void vram_indoorsThereIsNoSpriteSetAtAll();
   void vram_indoorsRunsOutOfVideoMemory();
   void sim_actuallyMovesTheWalkersAndLeavesTheRest();
+  void constructingAMap_keepsThePlayerInSlotZeroAndEveryObject();
 
 private:
   QByteArray m_orig;
@@ -714,6 +719,74 @@ void TestMapSprites::sim_actuallyMovesTheWalkersAndLeavesTheRest()
              qPrintable(QStringLiteral("slot %1 is a STAY sprite and it never TURNED -- that is a "
                                        "still picture, not a simulation").arg(slot)));
   }
+
+  delete r;
+}
+
+/**
+ * Rebuilding the cast from a map's ROM data must leave the PLAYER in slot 0 and every one of the
+ * map's own objects after him.
+ *
+ * ⚠️ THE REGRESSION THIS EXISTS FOR (project leadership, 2026-08-19: *"Some filter flags like Rocket 1
+ * wont appear if toggled but Rocket 2 and 3 toggle just fine in Pokemon Tower 7f"*). `AreaSprites::
+ * setTo()` did `reset(); sprites = <built from ROM>;` -- dropping the player and putting **the map's
+ * first object in slot 0**. Everything downstream reserves slot 0 for the player and skips it, so
+ * after a constructed map change the first object of EVERY map was invisible, undraggable, and its
+ * filter flag toggled nothing anyone could see.
+ *
+ * It was also a save-fidelity fault, which is the half that matters most here: `save()` writes
+ * `wNumSprites = size - 1` and stores slot `i` at index `i`, so the count came out one short and the
+ * first NPC's bytes landed on **the player's own sprite record**. Both halves are asserted.
+ *
+ * Pokémon Tower 7F (id 148) is the reported map and a good witness: four objects, all four
+ * flag-controlled, and the first of them is the one that vanished.
+ */
+void TestMapSprites::constructingAMap_keepsThePlayerInSlotZeroAndEveryObject()
+{
+  Rig* r = makeRig();
+
+  auto* npcs = r->sf.dataExpanded->area->sprites;
+  QVERIFY(npcs != nullptr);
+  QVERIFY(npcs->spriteCount() >= 1);
+
+  // What the player looked like before the rebuild. A map change has no business editing him.
+  SpriteData* playerBefore = npcs->spriteAt(0);
+  QVERIFY(playerBefore != nullptr);
+  const int playerPicture = playerBefore->pictureID;
+
+  MapDBEntry* tower7 = MapsDB::inst()->getIndAt(QStringLiteral("148"));
+  QVERIFY2(tower7 != nullptr, "Pokemon Tower 7F (id 148) is missing from MapsDB");
+  const int romObjects = tower7->getSpritesSize();
+  QCOMPARE(romObjects, 4);   // Rocket 1, Rocket 2, Rocket 3, Mr. Fuji
+
+  npcs->setTo(tower7);
+
+  // ── The player is still there, unchanged, and still first ────────────────────────────────────
+  QCOMPARE(npcs->spriteCount(), romObjects + 1);
+  QCOMPARE(npcs->spriteAt(0)->pictureID, playerPicture);
+  QVERIFY2(npcs->spriteAt(0)->getMissableIndex() < 0,
+           "slot 0 carries a filter-flag index -- an OBJECT is sitting in the player's slot");
+
+  // ── Every ROM object is present, in order, at its own coordinates ─────────────────────────────
+  for (int k = 0; k < romObjects; k++) {
+    const MapDBEntrySprite* romObj = tower7->getSpritesAt(k);
+    SpriteData* s = npcs->spriteAt(k + 1);
+    QVERIFY(romObj != nullptr && s != nullptr);
+
+    // mapX/mapY carry the game's +4 bias; the ROM list does not.
+    QCOMPARE(s->mapX - 4, romObj->getX());
+    QCOMPARE(s->mapY - 4, romObj->getY());
+    QCOMPARE(s->getMissableIndex(), romObj->getMissable());
+  }
+
+  // The reported one specifically: Pokémon Tower 7F's Rocket 1 is filter flag 64, at (9,11).
+  QCOMPARE(npcs->spriteAt(1)->getMissableIndex(), 64);
+  QCOMPARE(npcs->spriteAt(1)->mapX - 4, 9);
+  QCOMPARE(npcs->spriteAt(1)->mapY - 4, 11);
+
+  // ── And the save agrees: wNumSprites counts the NPCs, the player excluded ─────────────────────
+  npcs->save(&r->sf);
+  QCOMPARE(int(r->sf.toolset->getByte(0x278D)), romObjects);
 
   delete r;
 }

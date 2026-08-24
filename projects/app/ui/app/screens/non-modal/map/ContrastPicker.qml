@@ -50,17 +50,30 @@ Item {
   readonly property color glitchColor: "#c9a227"
   readonly property color glitchFill: "#f2d35c"
 
-  /// Show the six glitch values as their own segments.
+  /// The person's own "show me the glitch values" switch, at the bottom of the strip.
   ///
-  /// ⭐ NO LOCAL SWITCH ANY MORE — the 🔧 **Tinkerer** gate decides (project leadership, 2026-08-18:
-  /// *"Perhaps remove the 'Glitch contrast' switch and instead have it placed behind [the gate]."*).
-  /// It was a one-off toggle living inside one dropdown, doing exactly the job the gates now do for
-  /// the whole screen: reveal the real-but-unusual. A per-control switch for that is a second system.
+  /// ⭐ THE ONE DELIBERATE EXCEPTION TO THE GATES (project leadership, 2026-08-19): *"the glitch
+  /// palettes aren't finicky to work with, they're fun — let's bring them back out of tinkerer gate and
+  /// gate them behind the original switch it was at, I feel it's just an exception."*
   ///
-  /// ⚠️ The `contrastIsGlitch` half stays, and it is not a second gate — it is the answer to a
-  /// different question. A save ALREADY sitting on 4 has nothing to hide: refusing to draw the segment
-  /// the save is on would leave the strip unable to show its own value.
-  readonly property bool showGlitch: brg.map.showTinkerer || brg.map.contrastIsGlitch
+  /// It spent one day behind the 🔧 **Tinkerer** gate and that was the wrong home, for a reason worth
+  /// keeping: Tinkerer means *"real, but finicky to set from a save"* — a warp half-executed, a fall in
+  /// mid-air, a queued battle. A glitch palette is none of those things. It is a **finished, stable
+  /// render** the console produces happily and instantly, with no state to get wrong; the only reason
+  /// it was ever hidden is that it is not one of the four named levels. Filing it with the mid-motion
+  /// states told the person it was risky, which is a **lie about the console's behaviour**, and hiding
+  /// the fun thing behind a door labelled "difficult" is the opposite of what it deserves.
+  ///
+  /// So it keeps a switch of its own, in the same dropdown as the values it reveals. That does NOT
+  /// re-open per-control switches as a pattern — @see plans/map-screen.md §11b, where this is written
+  /// down as the single named exception, with the reason, so the next control cannot cite it as
+  /// precedent without meeting the same bar.
+  property bool showGlitchChosen: false
+
+  /// ⚠️ The `contrastIsGlitch` half is not a second gate — it is the answer to a different question. A
+  /// save ALREADY sitting on 4 has nothing to hide: refusing to draw the segment the save is on would
+  /// leave the strip unable to show its own value.
+  readonly property bool showGlitch: showGlitchChosen || brg.map.contrastIsGlitch
 
   /// Drive the drop-down open/shut by name (the DEBUG harness). @see MapPicker.
   property bool openState: false
@@ -291,9 +304,30 @@ Item {
         }
       }
 
-      // ⚠️ THE "GLITCH CONTRAST" SWITCH USED TO BE HERE. It is gone (project leadership, 2026-08-18)
-      // — the 🔧 Tinkerer gate reveals the six in-between values now, along with everything else of
-      // that character on this screen. @see root.showGlitch.
+      // ── The switch that reveals the glitch values ────────────────────────────────────────────
+      //
+      // Back where it started (project leadership, 2026-08-19) after one day behind the Tinkerer gate.
+      // The reasoning is on `root.showGlitchChosen`, and it is the one named exception to the gates —
+      // not a loophole for the next control that fancies its own switch.
+      RowLayout {
+        Layout.fillWidth: true
+        spacing: 8
+
+        MapSwitch {
+          checked: root.showGlitch
+          enabled: !brg.map.contrastIsGlitch    // a save already on one cannot hide it
+          onToggled: root.showGlitchChosen = !root.showGlitchChosen
+        }
+
+        // "Glitch contrast", not "glitch palettes" (project leadership, 2026-07-13) -- the control is
+        // called Contrast, so its unusual values are glitch CONTRAST. One word for one thing.
+        Text {
+          Layout.fillWidth: true
+          text: qsTr("Glitch contrast")
+          font.pixelSize: 11
+          color: brg.settings.textColorDark
+        }
+      }
 
       // (The COLOUR / output-palette section used to sit here. It moved to its own right-dock panel,
       //  ColourPanel.qml — project leadership, 2026-07-19: *"move the color preview out of contrast and to its

@@ -40,7 +40,14 @@
     * `listHeight`    — the internal list's height (it scrolls); the sort/search row sits above it.
 
   Sorting (`brg.map.mapSort`) is GLOBAL and shared across every instance on purpose — pick a sort once and
-  every map list in the app honours it.
+  every map list in the app honours it. It starts on **By tileset**, and that is the answer for the map
+  selector proper.
+
+  ⚠️ ONE list opts out, through `ownSort`: the CONNECTION picker opens on *By connections*, because there
+  the question is "which map should border this edge?" and no other grouping answers it. It used to get
+  there by writing the shared setting, which leaked the sort into every other list in the app for the rest
+  of the session (project leadership, 2026-08-19: *"it defaults to tileset for map select, the connections
+  default to connections sorting only here"*). `ownSort` keeps that answer local. @see ownSort.
 */
 import QtQuick
 import QtQuick.Controls
@@ -70,6 +77,32 @@ ColumnLayout {
   /// highlights a map.
   property string selectedExtra: ""
 
+  /// A sort belonging to THIS list instead of the shared one. `-1` (the default) = share it, which is
+  /// what every ordinary map picker does.
+  ///
+  /// ⭐ WHY ONE LIST GETS ITS OWN (project leadership, 2026-08-19: *"it defaults to tileset for map
+  /// select, the connections default to connections sorting only here"*). The connection picker wants
+  /// to open on *By connections*, and it used to get there by **writing the shared setting on open**.
+  /// That leaked: pick a neighbour once and every other map list in the app stayed grouped by
+  /// connections, with nothing on screen to say why or how to undo it. A shared setting that any
+  /// dropdown may silently rewrite is not a shared setting, it is a global variable.
+  ///
+  /// So the connection picker seeds `ownSort` instead. Changing the sort inside it changes only it;
+  /// the map selector everywhere else keeps its own default (**By tileset**) untouched.
+  property int ownSort: -1
+
+  /// The sort actually in force here — this list's own if it has one, otherwise the shared setting.
+  readonly property int sortMode: mapSel.ownSort >= 0 ? mapSel.ownSort : brg.map.mapSort
+
+  /// Change the sort at whichever scope this list runs under. The sort button calls this; nothing
+  /// writes `brg.map.mapSort` directly, so a list with its own sort can never leak into the shared one.
+  function setSort(mode) {
+    if (mapSel.ownSort >= 0)
+      mapSel.ownSort = mode;
+    else
+      brg.map.mapSort = mode;
+  }
+
   signal picked(int ind)
   signal pickedExtra(string key)
 
@@ -91,7 +124,7 @@ ColumnLayout {
       readonly property string currentName: {
         const l = brg.map.mapSortModes();
         for (let i = 0; i < l.length; i++)
-          if (l[i].value === brg.map.mapSort) return l[i].name;
+          if (l[i].value === mapSel.sortMode) return l[i].name;
         return qsTr("Sort");
       }
 
@@ -166,7 +199,7 @@ ColumnLayout {
             delegate: Rectangle {
               id: sortItem
               required property var modelData
-              readonly property bool active: modelData.value === brg.map.mapSort
+              readonly property bool active: modelData.value === mapSel.sortMode
 
               Layout.fillWidth: true
               implicitHeight: 24
@@ -190,7 +223,7 @@ ColumnLayout {
               HoverHandler { id: sortItemHover; cursorShape: Qt.PointingHandCursor }
               TapHandler {
                 onTapped: {
-                  brg.map.mapSort = sortItem.modelData.value;
+                  mapSel.setSort(sortItem.modelData.value);
                   sortBtn.openState = false;
                 }
               }
@@ -309,16 +342,15 @@ ColumnLayout {
       anchors.margins: 1
       clip: true
 
-      // The shared sort (mapSort) AND the search box both feed the model. Referencing mapSort makes
-      // the binding re-run when the sort changes (mapList() is otherwise a plain call). Any
-      // leadingEntries ride at the very top, before the real maps.
+      // The active sort AND the search box both feed the model. Referencing `mapSel.sortMode` makes
+      // the binding re-run when either the shared sort or this list's own one changes (mapList() is
+      // otherwise a plain call). Any leadingEntries ride at the very top, before the real maps.
       model: {
-        brg.map.mapSort;
         brg.map.showUnused;
         const q = mapSearch.text.trim().toLowerCase();
 
         // The caller's own rows always ride; only the REAL maps are narrowed. @see allowedIds
-        let maps = brg.map.mapList();
+        let maps = brg.map.mapList(mapSel.sortMode);
         if (mapSel.allowedIds.length > 0) {
           const ok = {};
           for (let k = 0; k < mapSel.allowedIds.length; k++)

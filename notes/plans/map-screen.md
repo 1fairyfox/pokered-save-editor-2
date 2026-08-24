@@ -517,10 +517,22 @@ screens/non-modal/map/
 The map screen has **two** reveal buttons at the right of the toolbar, and they answer **two different
 questions**. Keeping them apart is the point:
 
-| Button | The question it answers | Its contents |
-|---|---|---|
-| **`!`** (`mapOptionsButton`) | *Is this value real?* | **Unused & unstable** (the game acts on it, unintended result) · **No-effect edits** (rewritten on load, or write-only) · **Truly unused** (never read AND never written) |
-| **🔧** (`mapGatesButton`, Font Awesome `wrench`) | *Do I want to work at this level?* | **Tinkerer** · **Manual** · **Debug** |
+| Button | Its name on screen | The question it answers | Its contents |
+|---|---|---|---|
+| **🔧** (`mapGatesButton`, Font Awesome `wrench`) — **left** | **Deeper controls** | *Do I want to work at this level?* | **Tinkerer** · **Manual** · **Debug** |
+| **`!`** (`mapOptionsButton`) — **right** | **Values that don't behave** | *Is this value real?* | **Unused & unstable** (the game acts on it, unintended result) · **No-effect edits** (rewritten on load, or write-only) · **Truly unused** (never read AND never written) |
+
+> **Order and names, fixed 2026-08-19** (leadership: *"The wrench icon needs to be left of the
+> exclamation icon and should not show more options as a title, it should be titled something better
+> and more descriptive that sets it apart from the uncommon options, actually that should be titled
+> better too."*)
+>
+> - **The wrench sits LEFT.** Reading order carries the argument: the wrench opens up more *real*
+>   controls, and the `!` is the further, stranger step past them. Ordinary → deeper → abnormal.
+> - **Neither may be named after its SIZE again.** "More options" / "More to work with" / "Uncommon
+>   options" all described *how much* or *how often* rather than *what* — which is precisely why two
+>   buttons answering different questions read as the same button twice. The wrench is about the
+>   **controls** (how deep do you want to work); the `!` is about the **values** (is this one real).
 
 > *"Tinkerer, Debug and Manual should be their own icon next to the exclamation point icon, which should
 > still contain the 3 it has."* — project leadership, 2026-08-18
@@ -569,8 +581,21 @@ would be an empty page and its rail button is simply absent. Verified on screen:
 - `WarpStatePanel` (gated in the model) — `specialWarpDestMap` "Fly sends you to" · `whichDungeonWarp`
   "…through hole #" · `warpDest` "Arriving at warp #" · `flyOrDungeonWarp` "A special warp is in progress"
 - `MapNamePicker` — the whole **Tileset & blocks** disclosure
-- `ContrastPicker` — the six **glitch contrast** values *(its own local switch was removed: "perhaps
-  remove the 'Glitch contrast' switch and instead have it placed behind [the gate]")*
+
+⭐ **THE ONE NAMED EXCEPTION: glitch contrast keeps its own switch** (leadership, 2026-08-19: *"the
+glitch palettes aren't finicky to work with, they're fun — let's bring them back out of tinkerer gate
+and gate them behind the original switch it was at, I feel it's just an exception."*). It spent
+2026-08-18 behind Tinkerer and came straight back out, for a reason worth keeping: **Tinkerer means
+*real but finicky to set from a save*** — a warp half-executed, a fall in mid-air, a queued battle. A
+glitch palette is none of those. It is a **finished, stable render** the console produces happily,
+with no state to get wrong; the only reason it was ever hidden is that it is not one of the four named
+levels. Filing it with the mid-motion states told a lie about the console's behaviour, and put the fun
+thing behind a door labelled *difficult*.
+
+This does **not** re-open per-control switches as a pattern. It is written down here, and on
+`ContrastPicker.showGlitchChosen`, as the single exception with its reason, so the next control cannot
+cite it as precedent without meeting the same bar: *real, stable, instantly reversible, and desirable
+in its own right rather than merely permitted.*
 
 ⚠️ **Deliberately NOT gated**, named by leadership as the harmless/fun ones: "Falling drops you onto" ·
 "You fell down a hole" · "Dig / Escape Rope / blacked out" · "Warps fire without walking into them".
@@ -619,6 +644,30 @@ is the half that stops the two systems bleeding into each other.
 > mandate, in their words: *"proceed normally with everything that is required and mandated by me in as
 > many phases as needed, ensure this reaches the completion i asked for in full in as many phases
 > needed."*
+
+### ✅ Done (2026-08-19)
+
+**The bug under the bug report.** *"Some filter flags like Rocket 1 wont appear if toggled but Rocket
+2 and 3 toggle just fine in Pokemon Tower 7f."* — rebuilding a map's cast from ROM **dropped the
+player**, so the map's first object sat in slot 0, the slot everything skips. The first object of
+**every** map was absent after a constructed map change, and on save the count went out one short with
+that object's bytes landing on the player's own record. → [`sprites.md`](../reference/sprites.md)
+§ "The 16 slots"; pinned by `tst_map_sprites::constructingAMap_keepsThePlayerInSlotZeroAndEveryObject`.
+
+**The highlight that re-flowed the page.** A Layout manages every visible child, so the highlight
+rectangle became a second cell instead of a backdrop. → [`qt-patterns.md`](../reference/qt-patterns.md)
+(top).
+
+**The two gate buttons, ordered and named.** Wrench left of `!`; **Deeper controls** / **Values that
+don't behave**. → §11b.
+
+**Glitch contrast is the one named exception to the gates** — back on its own switch. → §11b.
+
+**Map-select sorting is per-context again** — By tileset everywhere, By connections only in the
+connection picker, which no longer writes the shared setting. → `MapSelectList.ownSort`.
+
+**Harness:** models reachable as `@map` / `@file` / any Bridge model; `invoke` type-converts its
+arguments and returns the result. → [`dev-harness.md`](../reference/dev-harness.md).
 
 ### ✅ Done (2026-08-18, `0.43.25` → `0.44.18-alpha`)
 
